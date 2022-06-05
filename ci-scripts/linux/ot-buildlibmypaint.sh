@@ -2,12 +2,9 @@
 cd thirdparty/libmypaint
 
 echo ">>> Cloning libmypaint"
-git clone -n https://github.com/mypaint/libmypaint brushlib
+git clone https://github.com/mypaint/libmypaint.git -b v1.4.0 brushlib
 
 cd brushlib
-
-echo ">>> Switching branch libmypaint 1.4.0"
-git checkout 477cb94 --quiet
 
 echo "*" >| .gitignore
 
