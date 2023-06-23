@@ -7,5 +7,5 @@ source /opt/qt515/bin/qt515-env.sh
 cmake ../sources \
     -DWITH_SYSTEM_SUPERLU:BOOL=OFF
 # according to https://docs.travis-ci.com/user/ci-environment/#Virtualization-environments
-# travis can offer up to 2 cores in burst, try using that
+# travis can offer up to 2 cores in burst, try using that 
 make -j 2
