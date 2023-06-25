@@ -261,7 +261,7 @@ public:
 
 public slots:
   void onCheckboxChanged(int checked);
-  void onButtonClicked(int id);
+  void onButtonPressed(int id);
 };
 
 //-----------------------------------------------------------------------------
