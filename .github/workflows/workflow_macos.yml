@@ -93,11 +93,16 @@ jobs:
             done
           done
           
+      - name: Unmount Disk Images
+        run: |
+          hdiutil detach /Volumes/OpenToonz || true
+
       - name: Create Artifact
         run: |
           cd toonz/build/toonz
           echo "Creating DMG with hdiutil..."
           if /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=1; then
+            echo "DMG created successfully."
           else
             echo "Failed to create DMG with hdiutil."
             exit 1
