@@ -72,7 +72,7 @@ jobs:
         run: |
           cd toonz/build/toonz
           cp -pr ../../../stuff OpenToonz.app/portablestuff
-          /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -verbose=1 -always-overwrite \
+          /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -verbose=0 -always-overwrite \
             -executable=OpenToonz.app/Contents/MacOS/lzocompress \
             -executable=OpenToonz.app/Contents/MacOS/lzodecompress \
             -executable=OpenToonz.app/Contents/MacOS/tcleanup \
@@ -103,23 +103,23 @@ jobs:
             echo "No volume to unmount."
           fi
 
-#      - name: Create Artifact
-#        run: |
-#          cd toonz/build/toonz
-#          echo "Creating DMG..."
-#          if /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=1; then
-#            echo "DMG created successfully."
-#          else
-#            echo "Failed to create DMG."
-#            exit 1
-#          fi
-
-      - name: Create DMG Manually
+      - name: Create Artifact
         run: |
-          mkdir -p /tmp/OpenToonz
-          cp -R toonz/build/toonz/OpenToonz.app /tmp/OpenToonz/
-          echo "Creating DMG from /tmp/OpenToonz..."
-          hdiutil create -volname "OpenToonz" -srcfolder /tmp/OpenToonz -format UDZO -o toonz/build/toonz/OpenToonz.dmg
+          cd toonz/build/toonz
+          echo "Creating DMG..."
+          if /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=0; then
+            echo "DMG created successfully."
+          else
+            echo "Failed to create DMG."
+            exit 1
+          fi
+
+#      - name: Create DMG Manually
+#        run: |
+#          mkdir -p /tmp/OpenToonz
+#          cp -R toonz/build/toonz/OpenToonz.app /tmp/OpenToonz/
+#          echo "Creating DMG from /tmp/OpenToonz..."
+#          hdiutil create -volname "OpenToonz" -srcfolder /tmp/OpenToonz -format UDZO -o toonz/build/toonz/OpenToonz.dmg
 
 
       - uses: actions/upload-artifact@v4
