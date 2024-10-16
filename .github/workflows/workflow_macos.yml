@@ -93,14 +93,23 @@ jobs:
             done
           done
 
-      - name: Unmount Disk Images
+      - name: Unmount Existing Disk Images
         run: |
           if mount | grep "/Volumes/OpenToonz"; then
+            echo "Unmounting existing volume..."
             hdiutil detach /Volumes/OpenToonz || true
+            echo "Volume unmounted."
+          else
+            echo "No volume to unmount."
           fi
 
       - name: Wait Before Creating Artifact
-        run: sleep 10  # Wait for 10 seconds before creating the DMG
+        run: sleep 15  # Wait for 15 seconds before creating the DMG
+
+      - name: Check for Open Files
+        run: |
+          echo "Checking for open files..."
+          lsof +D toonz/build/toonz/OpenToonz.app || true
 
       - name: Create Artifact
         run: |
