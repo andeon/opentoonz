@@ -92,10 +92,15 @@ jobs:
               fi
             done
           done
-          
+
       - name: Unmount Disk Images
         run: |
-          hdiutil detach /Volumes/OpenToonz || true
+          if mount | grep "/Volumes/OpenToonz"; then
+            hdiutil detach /Volumes/OpenToonz || true
+          fi
+
+      - name: Wait Before Creating Artifact
+        run: sleep 10  # Wait for 10 seconds before creating the DMG
 
       - name: Create Artifact
         run: |
