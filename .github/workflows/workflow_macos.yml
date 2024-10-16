@@ -103,9 +103,6 @@ jobs:
             echo "No volume to unmount."
           fi
 
-      - name: Wait Before Creating Artifact
-        run: sleep 15  # Wait for 15 seconds before creating the DMG
-
       - name: Check for Open Files
         run: |
           echo "Checking for open files..."
