@@ -103,11 +103,6 @@ jobs:
             echo "No volume to unmount."
           fi
 
-      - name: Check for Open Files
-        run: |
-          echo "Checking for open files..."
-          lsof +D toonz/build/toonz/OpenToonz.app || true
-
       - name: Create Artifact
         run: |
           cd toonz/build/toonz
