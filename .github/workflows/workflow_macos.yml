@@ -4,6 +4,7 @@ on: [push, pull_request]
 
 jobs:
   macOS:
+    timeout-minutes: 45
     # runs-on: macos-latest
     # avoid the headache of arm64 builds?
     runs-on: macos-13
@@ -93,11 +94,17 @@ jobs:
             done
           done
 
-      - name: Unmount Existing Disk Images
+      - name: List Mounted Volumes
         run: |
-          if mount | grep "/Volumes/OpenToonz"; then
-            echo "Unmounting existing volume..."
-            hdiutil detach /Volumes/OpenToonz || true
+            echo "Currently mounted volumes:"
+            mount
+
+      - name: Unmount Any Existing OpenToonz Disk Image
+        run: |
+          MOUNT_POINT=$(mount | grep "/Volumes/OpenToonz" | awk '{print $3}')
+          if [ -n "$MOUNT_POINT" ]; then
+            echo "Unmounting existing volume at $MOUNT_POINT..."
+            hdiutil detach "$MOUNT_POINT" -force || true
             echo "Volume unmounted."
           else
             echo "No volume to unmount."
@@ -106,7 +113,7 @@ jobs:
       - name: Create Artifact
         run: |
           cd toonz/build/toonz
-          echo "Creating DMG..."
+            echo "Creating DMG..."
           if /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=0; then
             echo "DMG created successfully."
           else
