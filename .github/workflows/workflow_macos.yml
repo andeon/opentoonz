@@ -99,7 +99,7 @@ jobs:
           cd toonz/build/toonz
           echo "Creating DMG..."
           ATTEMPT=1
-          MAX_ATTEMPTS=3
+          MAX_ATTEMPTS=5
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
             if /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=0; then
               echo "DMG created successfully."
