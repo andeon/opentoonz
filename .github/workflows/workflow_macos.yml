@@ -94,32 +94,27 @@ jobs:
             done
           done
 
-      - name: List Mounted Volumes
-        run: |
-            echo "Currently mounted volumes:"
-            mount
-
-      - name: Unmount Any Existing OpenToonz Disk Image
-        run: |
-          MOUNT_POINT=$(mount | grep "/Volumes/OpenToonz" | awk '{print $3}')
-          if [ -n "$MOUNT_POINT" ]; then
-            echo "Unmounting existing volume at $MOUNT_POINT..."
-            hdiutil detach "$MOUNT_POINT" -force || true
-            echo "Volume unmounted."
-          else
-            echo "No volume to unmount."
-          fi
-
       - name: Create Artifact
-        run: |
-          cd toonz/build/toonz
-            echo "Creating DMG..."
-          if /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=0; then
-            echo "DMG created successfully."
-          else
-            echo "Failed to create DMG."
-            exit 1
-          fi
+          run: |
+              cd toonz/build/toonz
+              echo "Creating DMG..."
+              ATTEMPT=1
+              MAX_ATTEMPTS=3
+              while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+                    if /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=0; then
+                        echo "DMG created successfully."
+                        break
+                    else
+                                echo "Failed to create DMG. Attempt $ATTEMPT of $MAX_ATTEMPTS."
+                                ATTEMPT=$((ATTEMPT + 1))
+                                sleep 5
+                    fi
+              done
+              if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
+                    echo "Failed to create DMG after $MAX_ATTEMPTS attempts."
+                    exit 1
+              fi
+
 
 #      - name: Create DMG Manually
 #        run: |
