@@ -95,25 +95,25 @@ jobs:
           done
 
       - name: Create Artifact
-          run: |
-              cd toonz/build/toonz
-              echo "Creating DMG..."
-              ATTEMPT=1
-              MAX_ATTEMPTS=3
-              while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-                    if /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=0; then
-                        echo "DMG created successfully."
-                        break
-                    else
-                                echo "Failed to create DMG. Attempt $ATTEMPT of $MAX_ATTEMPTS."
-                                ATTEMPT=$((ATTEMPT + 1))
-                                sleep 5
-                    fi
-              done
-              if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
-                    echo "Failed to create DMG after $MAX_ATTEMPTS attempts."
-                    exit 1
-              fi
+        run: |
+          cd toonz/build/toonz
+          echo "Creating DMG..."
+          ATTEMPT=1
+          MAX_ATTEMPTS=3
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            if /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=0; then
+              echo "DMG created successfully."
+              break
+            else
+              echo "Failed to create DMG. Attempt $ATTEMPT of $MAX_ATTEMPTS."
+              ATTEMPT=$((ATTEMPT + 1))
+              sleep 5
+            fi
+          done
+          if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
+            echo "Failed to create DMG after $MAX_ATTEMPTS attempts."
+            exit 1
+          fi
 
 
 #      - name: Create DMG Manually
