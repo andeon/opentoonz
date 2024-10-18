@@ -98,18 +98,26 @@ jobs:
         run: |
           cd toonz/build/toonz
           echo "Creating DMG..."
+          MAX_ATTEMPTS=10  # Set maximum number of attempts
           ATTEMPT=1
-          MAX_ATTEMPTS=5
+
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-            if /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=0; then
+            echo "Building the OpenToonz application into a DMG (Attempt $ATTEMPT of $MAX_ATTEMPTS)..."
+            DMG_OUTPUT=$(/usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=0 2>&1)
+
+            # Check if the DMG file was actually created
+            if [ -f OpenToonz.dmg ]; then
               echo "DMG created successfully."
               break
             else
-              echo "Failed to create DMG. Attempt $ATTEMPT of $MAX_ATTEMPTS."
-              ATTEMPT=$((ATTEMPT + 1))
-              sleep 5
+              echo "DMG creation failed or file not found. Retrying in 10 seconds..."
             fi
+
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 10  # Give some time before retrying
           done
+
+          # Check if all attempts have been used up
           if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
             echo "Failed to create DMG after $MAX_ATTEMPTS attempts."
             exit 1
