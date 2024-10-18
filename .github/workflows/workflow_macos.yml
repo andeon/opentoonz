@@ -7,7 +7,7 @@ jobs:
     timeout-minutes: 90
     strategy:
       matrix:
-        os: [macos-13, macos-13, macos-13]  # Run the same macOS version three times
+        os: [macos-13, macos-13]  # Run the same macOS version two times
         instance: [1, 2, 3]                 # Three instances 
     runs-on: ${{ matrix.os }}
     steps:
