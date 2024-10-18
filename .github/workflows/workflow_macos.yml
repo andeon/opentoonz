@@ -7,9 +7,8 @@ jobs:
     timeout-minutes: 90
     strategy:
       matrix:
-        os: [macos-13, macos-13]  # Run the same macOS version two times
-        instance: [1, 2, 3]                 # Three instances 
-    runs-on: ${{ matrix.os }}
+        instance: [1, 2, 3]  # Create three instances
+    runs-on: macos-13       # Use the same macOS version for all instances
     steps:
       - uses: actions/checkout@v4
 
@@ -117,5 +116,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Opentoonz-${{ matrix.os }}-instance-${{ matrix.instance }}-${{ github.sha }}
+          name: Opentoonz-macos-13-instance-${{ matrix.instance }}-${{ github.sha }}
           path: toonz/build/toonz/OpenToonz.dmg
