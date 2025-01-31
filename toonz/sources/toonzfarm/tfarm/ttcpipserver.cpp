@@ -1,5 +1,3 @@
-
-
 #include "ttcpip.h"
 #include "tconvert.h"
 
@@ -24,6 +22,9 @@
 #endif
 
 #include <string>
+#include <iostream> // Added for cout and endl
+#include <atomic>   // Added for atomic<bool>
+
 using namespace std;
 
 #define MAXHOSTNAME 1024
@@ -33,7 +34,7 @@ int get_connection(int s);
 void fireman(int);
 void do_something(int);
 
-bool Sthutdown = false;
+std::atomic<bool> shutdownFlag(false); // Changed to atomic for thread safety
 
 //#define TRACE
 
@@ -57,13 +58,13 @@ public:
 
 int TTcpIpServerImp::readData(int sock, QString &data) {
   int cnt = 0;
-  char buff[1025];
+  char buff[1024];
   memset(buff, 0, sizeof(buff));
 
 #ifdef _WIN32
   if ((cnt = recv(sock, buff, sizeof(buff) - 1, 0)) < 0) {
     int err = WSAGetLastError();
-    // GESTIRE L'ERRORE SPECIFICO
+    closesocket(sock); // Close socket on error
     return -1;
   }
 #else
@@ -81,7 +82,7 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
   cout << buff << endl << endl;
 #endif
 
-  string aa(buff);
+  string aa(buff, cnt); // Correct usage of string constructor
   int x1 = aa.find("#$#THS01.00");
   x1 += sizeof("#$#THS01.00") - 1;
   int x2 = aa.find("#$#THE");
@@ -92,7 +93,7 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
   int dataSize = std::stoi(ssize);
 
   unsigned long size = dataSize;
-  data               = QString(buff + x2 + sizeof("#$#THE") - 1);
+  data               = QString::fromUtf8(buff + x2 + sizeof("#$#THE") - 1, cnt - (x2 + sizeof("#$#THE") - 1));
   size -= data.size();
 
   while (size > 0) {
@@ -101,7 +102,7 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
 #ifdef _WIN32
     if ((cnt = recv(sock, buff, sizeof(buff) - 1, 0)) < 0) {
       int err = WSAGetLastError();
-      // GESTIRE L'ERRORE SPECIFICO
+      closesocket(sock); // Close socket on error
       return -1;
     }
 #else
@@ -116,10 +117,10 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
       break;  // break out of loop
     } else if (cnt < (int)sizeof(buff)) {
       buff[cnt] = '\0';
-      data += QString(buff);
-      // break;  // break out of loop
+      data += QString::fromUtf8(buff, cnt);
+      // No break here to ensure all data is read if possible
     } else {
-      data += QString(buff);
+      data += QString::fromUtf8(buff, sizeof(buff));
     }
 
 #ifdef TRACE
@@ -130,8 +131,7 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
   }
 
 #ifdef TRACE
-  cout << "read " << toString((int)data.length()) << " on " << dataSize << endl
-       << endl;
+  cout << "read " << toString((int)data.length()) << " on " << dataSize << endl << endl;
 #endif
 
   if (data.size() < dataSize) return -1;
@@ -158,7 +158,7 @@ int TTcpIpServerImp::readData(int sock, string &data)
     if (( cnt = recv(sock, buff, sizeof(buff), 0)) < 0 )
     {
       int err = WSAGetLastError();
-      // GESTIRE L'ERRORE SPECIFICO
+      // Handle this error specifically
       return -1;
     }
 #else
@@ -197,7 +197,7 @@ int TTcpIpServerImp::readData(int sock, string &data) {
 #ifdef _WIN32
     if ((cnt = recv(sock, buff, sizeof(buff), 0)) < 0) {
       int err = WSAGetLastError();
-      // GESTIRE L'ERRORE SPECIFICO
+      // Handle this error specifically
       return -1;
     }
 #else
@@ -263,7 +263,7 @@ int TTcpIpServer::getPort() const { return m_imp->m_port; }
 
 //---------------------------------------------------------------------
 
-static void shutdown_cb(int) { Sthutdown = true; }
+static void shutdown_cb(int) { shutdownFlag = true; }
 
 //---------------------------------------------------------------------
 
@@ -283,7 +283,7 @@ void DataReader::run() {
   int ret = m_serverImp->readData(m_clientSocket, data);
   if (ret != -1) {
     if (data == QString("shutdown"))
-      Sthutdown = true;
+      shutdownFlag = true;
     else
       m_serverImp->onReceive(m_clientSocket, data);
 #ifdef _WIN32
@@ -332,12 +332,12 @@ void TTcpIpServer::run() {
     if (!err && m_imp->m_s != -1) {
       int t;  // client socket
 
-      while (!Sthutdown) /* loop for connections */
+      while (!shutdownFlag.load()) /* loop for connections */
       {
         if ((t = get_connection(m_imp->m_s)) < 0) /* get a connection */
         {
           m_exitCode = WSAGetLastError();
-          // GESTIRE LA CONDIZIONE DI ERRORE
+          // Handle error condition properly
           return;
         }
 
@@ -345,10 +345,9 @@ void TTcpIpServer::run() {
         int ret = m_imp->readData(t, data);
         if (ret != -1 && data != "") {
           if (data == QString("shutdown")) {
-            // DebugBreak();
-            Sthutdown = true;
+            shutdownFlag = true;
           } else {
-            // creo un nuovo thread per la gestione dei dati ricevuti
+            // Create a new thread for handling received data
             TThread::Executor executor;
             executor.addTask(new DataReceiver(t, data, m_imp));
           }
@@ -377,7 +376,7 @@ void TTcpIpServer::run() {
 
       int t;
 
-      while (!Sthutdown) /* loop for connections */
+      while (!shutdownFlag.load()) /* loop for connections */
       {
         if ((t = get_connection(m_imp->m_s)) < 0) /* get a connection */
         {
@@ -473,8 +472,9 @@ int establish(unsigned short portnum, int &sock) {
     closesocket(sock);
     return err;
 #else
-    return errno;
+    int err = errno;
     close(sock);
+    return err;
 #endif
   }
 
