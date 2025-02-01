@@ -57,6 +57,11 @@ class Ruler final : public QWidget {
 
   typedef TSceneProperties::Guides Guides;
 
+  // Helper functions added for code modularization
+  int findClosestGuide(double value, double &minDist2) const;
+  void drawGuides(QPainter &p, int x0, int y0, int x1, int y1, bool vertical);
+  void drawScale(QPainter &p, int x0, int y0, int x1, int y1, bool vertical);
+
 public:
   Ruler(QWidget *parent, SceneViewer *viewer, bool vertical);
   Guides &getGuides() const;
