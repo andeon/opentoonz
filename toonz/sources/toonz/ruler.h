@@ -13,8 +13,8 @@ class SceneViewer;
 // Ruler
 //-----------------------------------------------------------------------------
 
-/*! La classe si occupa della visualizzazione e della gestione
-    di una linea guida (puo' essere orizzontale o verticale)
+/*! The Ruler class handles the display and management of a guideline 
+    (which can be horizontal or vertical)
 */
 class Ruler final : public QWidget {
   Q_OBJECT
@@ -32,8 +32,7 @@ class Ruler final : public QWidget {
   Q_PROPERTY(QColor HandleColor READ getHandleColor WRITE setHandleColor)
 
   QColor m_handleDragColor;
-  Q_PROPERTY(
-      QColor HandleDragColor READ getHandleDragColor WRITE setHandleDragColor)
+  Q_PROPERTY(QColor HandleDragColor READ getHandleDragColor WRITE setHandleDragColor)
 
   void setParentBGColor(const QColor &color) { m_parentBgColor = color; }
   QColor getParentBGColor() const { return m_parentBgColor; }
@@ -57,7 +56,7 @@ class Ruler final : public QWidget {
 
   typedef TSceneProperties::Guides Guides;
 
-  // Helper functions added for code modularization
+  // Helper functions for code modularization
   int findClosestGuide(double value, double &minDist2) const;
   void drawGuides(QPainter &p, int x0, int y0, int x1, int y1, bool vertical);
   void drawScale(QPainter &p, int x0, int y0, int x1, int y1, bool vertical);
@@ -76,11 +75,12 @@ public:
   double getZoomScale() const;
   double getPan() const;
 
-  void drawVertical(QPainter &);
-  void drawHorizontal(QPainter &);
+  // Combined drawing method to reduce duplication
+  void drawRuler(QPainter &p);
+
   void paintEvent(QPaintEvent *) override;
 
-  double posToValue(const QPoint &p) const;
+  double pointToGuideValue(const QPoint &p) const; // Renamed for clarity
 
   void mousePressEvent(QMouseEvent *e) override;
   void mouseMoveEvent(QMouseEvent *e) override;
