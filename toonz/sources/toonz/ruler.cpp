@@ -251,3 +251,6 @@ void Ruler::mouseReleaseEvent(QMouseEvent *e) {
   m_hiding = false; // Reset hiding state
 }
 
+void Ruler::contextMenuEvent(QContextMenuEvent *event) {
+    event->accept(); // If you just want to prevent context menu from appearing
+}
