@@ -17,6 +17,10 @@
 // Ruler
 //-----------------------------------------------------------------------------
 
+const int RULER_WIDTH = 12;
+const int RULER_HEIGHT = 12;
+const double CLICK_PROXIMITY_SQUARED = 25;
+
 Ruler::Ruler(QWidget *parent, SceneViewer *viewer, bool vertical)
     : QWidget(parent)
     , m_viewer(viewer)
@@ -25,11 +29,11 @@ Ruler::Ruler(QWidget *parent, SceneViewer *viewer, bool vertical)
     , m_hiding(false) {
   if (vertical) {
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
-    setFixedWidth(12);
-    setToolTip(tr("Click to create an horizontal guide"));
+    setFixedWidth(RULER_WIDTH);
+    setToolTip(tr("Click to create a horizontal guide"));
   } else {
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    setFixedHeight(12);
+    setFixedHeight(RULER_HEIGHT);
     setToolTip(tr("Click to create a vertical guide"));
   }
   setMouseTracking(true);
@@ -51,7 +55,9 @@ int Ruler::getGuideCount() const { return getGuides().size(); }
 
 double Ruler::getGuide(int index) const {
   Guides &guides = getGuides();
-  assert(0 <= index && index < (int)guides.size());
+  if (index < 0 || index >= (int)guides.size()) {
+    throw std::out_of_range("Guide index out of range");
+  }
   return guides[index];
 }
 
@@ -117,11 +123,11 @@ double Ruler::getPan() const {
 int Ruler::findClosestGuide(double value, double &minDist2) const {
   Guides &guides = getGuides();
   int selected = -1;
-  minDist2 = 0;
+  minDist2 = CLICK_PROXIMITY_SQUARED + 1; // Start with something bigger than the threshold
   for (int i = 0; i < guides.size(); i++) {
     double g = guides[i] / (double)m_viewer->getDevPixRatio();
     double dist2 = (g - value) * (g - value);
-    if (selected < 0 || dist2 < minDist2) {
+    if (dist2 < minDist2) {
       minDist2 = dist2;
       selected = i;
     }
@@ -133,7 +139,6 @@ int Ruler::findClosestGuide(double value, double &minDist2) const {
 void Ruler::drawGuides(QPainter &p, int x0, int y0, int x1, int y1, bool vertical) {
   Guides &guides = getGuides();
   int count = guides.size();
-  if (m_hiding) count--;
   double origin = vertical ? -getPan() + 0.5 * y1 : getPan() + 0.5 * x1;
   double zoom = getZoomScale();
 
@@ -142,12 +147,15 @@ void Ruler::drawGuides(QPainter &p, int x0, int y0, int x1, int y1, bool vertica
   }
 
   for (int i = 0; i < count; i++) {
-    QColor color = (m_moving && count - 1 == i ? QColor(getHandleDragColor())
-                                               : QColor(getHandleColor()));
-    double v = guides[i] / (double)m_viewer->getDevPixRatio();
-    int pos = (vertical ? (int)(origin - zoom * v) : (int)(origin + zoom * v));
-    p.fillRect(QRect(vertical ? x0 : pos - 1, vertical ? pos - 1 : y0,
-                     vertical ? x1 - x0 : 2, vertical ? 2 : y1 - y0), QBrush(color));
+    // Only draw the guide if it's not the one being hidden or moved to the back for hiding
+    if (!(m_hiding && i == count - 1)) {
+      QColor color = (m_moving && i == count - 1 ? QColor(getHandleDragColor())
+                                                : QColor(getHandleColor()));
+      double v = guides[i] / (double)m_viewer->getDevPixRatio();
+      int pos = (vertical ? (int)(origin - zoom * v) : (int)(origin + zoom * v));
+      p.fillRect(QRect(vertical ? x0 : pos - 1, vertical ? pos - 1 : y0,
+                       vertical ? x1 - x0 : 2, vertical ? 2 : y1 - y0), QBrush(color));
+    }
   }
 }
 
@@ -181,31 +189,20 @@ void Ruler::drawScale(QPainter &p, int x0, int y0, int x1, int y1, bool vertical
   }
 }
 
-void Ruler::drawVertical(QPainter &p) {
-  int w = width();
-  int h = height();
-  drawGuides(p, 0, 0, w - 1, h - 1, true);  // Draw guides for vertical ruler
-  drawScale(p, 0, 0, w - 1, h - 1, true);   // Draw scale for vertical ruler
-}
-
-void Ruler::drawHorizontal(QPainter &p) {
-  int w = width();
-  int h = height();
-  drawGuides(p, 0, 0, w - 1, h - 1, false);  // Draw guides for horizontal ruler
-  drawScale(p, 0, 0, w - 1, h - 1, false);   // Draw scale for horizontal ruler
+// Combined drawing method for both orientations
+void Ruler::drawRuler(QPainter &p) {
+  int w = width(), h = height();
+  drawGuides(p, 0, 0, w - 1, h - 1, m_vertical);
+  drawScale(p, 0, 0, w - 1, h - 1, m_vertical);
 }
 
 void Ruler::paintEvent(QPaintEvent *) {
   QPainter p(this);
-  p.fillRect(QRect(0, 0, width(), height()), QBrush(m_parentBgColor));
-
-  if (m_vertical)
-    drawVertical(p);
-  else
-    drawHorizontal(p);
+  p.fillRect(rect(), QBrush(m_parentBgColor));
+  drawRuler(p);
 }
 
-double Ruler::posToValue(const QPoint &p) const {
+double Ruler::pointToGuideValue(const QPoint &p) const {
   double v;
   if (m_vertical)
     if (m_viewer->getIsFlippedX() != m_viewer->getIsFlippedY()) {
@@ -220,36 +217,29 @@ double Ruler::posToValue(const QPoint &p) const {
 void Ruler::mousePressEvent(QMouseEvent *e) {
   if (e->button() != Qt::LeftButton && e->button() != Qt::RightButton) return;
   Guides &guides = getGuides();
-  double v = posToValue(e->pos());
-  m_hiding = false;
-  m_moving = false;
+  double v = pointToGuideValue(e->pos());
   double minDist2;
   int selected = findClosestGuide(v, minDist2);
-  if (e->button() == Qt::LeftButton) {
-    if (selected < 0 || minDist2 > 25) {
-      // Create new guide
-      guides.push_back(v * m_viewer->getDevPixRatio());
-      m_viewer->update();
-    } else if (selected < guides.size() - 1)
-      std::swap(guides[selected], guides.back());
 
+  if (e->button() == Qt::LeftButton) {
+    if (selected < 0 || minDist2 > CLICK_PROXIMITY_SQUARED) {
+      guides.push_back(v * m_viewer->getDevPixRatio());
+    } else {
+      std::swap(guides[selected], guides.back());
+    }
     m_moving = true;
     update();
-    assert(guides.size() > 0);
-  } else if (e->button() == Qt::RightButton) {
-    // Handle right-click to delete
-    if (selected >= 0) {
-      guides.erase(guides.begin() + selected);
-      m_viewer->update();
-      update();
-    }
+  } else if (e->button() == Qt::RightButton && selected >= 0) {
+    guides.erase(guides.begin() + selected);
   }
+  m_viewer->update();
+  update();
 }
 
 void Ruler::mouseMoveEvent(QMouseEvent *e) {
   if (m_moving) {
     Guides &guides = getGuides();
-    double v = posToValue(e->pos());
+    double v = pointToGuideValue(e->pos());
     guides.back() = v * m_viewer->getDevPixRatio();
     update();
   }
@@ -258,5 +248,6 @@ void Ruler::mouseMoveEvent(QMouseEvent *e) {
 void Ruler::mouseReleaseEvent(QMouseEvent *e) {
   if (e->button() != Qt::LeftButton) return;
   m_moving = false;
+  m_hiding = false; // Reset hiding state
 }
 
