@@ -1,15 +1,11 @@
-
-
 #include "ruler.h"
 #include "sceneviewer.h"
 #include "tapp.h"
 #include "toonz/tscenehandle.h"
 #include "toonzqt/gutil.h"
-
 #include "toonz/toonzscene.h"
 #include "toonz/stage.h"
 #include "tunit.h"
-
 #include <QPainter>
 #include <QMouseEvent>
 
@@ -148,13 +144,25 @@ void Ruler::drawGuides(QPainter &p, int x0, int y0, int x1, int y1, bool vertica
 
   for (int i = 0; i < count; i++) {
     // Only draw the guide if it's not the one being hidden or moved to the back for hiding
-    if (!(m_hiding && i == count - 1)) {
-      QColor color = (m_moving && i == count - 1 ? QColor(getHandleDragColor())
+    QColor color = (m_moving && i == count - 1 ? QColor(getHandleDragColor())
                                                 : QColor(getHandleColor()));
-      double v = guides[i] / (double)m_viewer->getDevPixRatio();
-      int pos = (vertical ? (int)(origin - zoom * v) : (int)(origin + zoom * v));
-      p.fillRect(QRect(vertical ? x0 : pos - 1, vertical ? pos - 1 : y0,
-                       vertical ? x1 - x0 : 2, vertical ? 2 : y1 - y0), QBrush(color));
+    double v = guides[i] / (double)m_viewer->getDevPixRatio();
+    int pos = (vertical ? (int)(origin - zoom * v) : (int)(origin + zoom * v));
+    p.fillRect(QRect(vertical ? x0 : pos - 1, vertical ? pos - 1 : y0,
+                     vertical ? x1 - x0 : 2, vertical ? 2 : y1 - y0), QBrush(color));
+  }
+
+  // Draw the moving guide in a distinct color
+  if (m_moving) {
+    double v = guides.back() / (double)m_viewer->getDevPixRatio();
+    int pos = (vertical ? (int)(origin - zoom * v) : (int)(origin + zoom * v));
+    QColor movingColor(255, 0, 0); // Red color for the moving guide
+    p.setPen(movingColor);
+    p.setBrush(Qt::NoBrush);
+    if (vertical) {
+      p.drawLine(x0, pos, x1, pos);
+    } else {
+      p.drawLine(pos, y0, pos, y1);
     }
   }
 }
@@ -252,5 +260,5 @@ void Ruler::mouseReleaseEvent(QMouseEvent *e) {
 }
 
 void Ruler::contextMenuEvent(QContextMenuEvent *event) {
-    event->accept(); // If you just want to prevent context menu from appearing
+    event->accept(); // Prevent context menu
 }
