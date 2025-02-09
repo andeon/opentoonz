@@ -1,5 +1,3 @@
-
-
 #include "histogrampopup.h"
 
 // Tnz6 includes
@@ -23,9 +21,8 @@
 // Qt includes
 #include <QTimer>
 #include <QMainWindow>
-#include <QDesktopWidget>
+#include <QScreen>  // Modern API replacing QDesktopWidget
 #include <QFocusEvent>
-#include <QScreen>
 
 using namespace DVGui;
 
@@ -126,30 +123,30 @@ void HistogramPopup::moveNextToWidget(QWidget *widget) {
   if (minimumSize().isEmpty()) grab();
   QSize popupSize = frameSize();
 
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 14, 0))
+  // Get the screen geometry using QScreen
   QRect screenRect = widget->screen()->availableGeometry();
-#else
-  int currentScreen = QApplication::desktop()->screenNumber(widget);
-  QRect screenRect  = QApplication::desktop()->availableGeometry(currentScreen);
-#endif
+  
   QRect viewerRect = widget->rect();
   viewerRect.moveTo(widget->mapToGlobal(QPoint(0, 0)));
-  // decide which side to open the popup
+
+  // Decide which side to open the popup (left or right)
   QPoint popupPos = widget->mapToGlobal(QPoint(0, 0));
-  // open at the left
+  
+  // Open at the left
   if (viewerRect.left() - screenRect.left() >
       screenRect.right() - viewerRect.right())
     popupPos.setX(std::max(viewerRect.left() - popupSize.width() - margin, 0));
-  // open at the right
+  // Open at the right
   else
     popupPos.setX(std::min(viewerRect.right() + margin,
                            screenRect.right() - popupSize.width()));
-  // adjust vertical position
+
+  // Adjust vertical position
   popupPos.setY(std::min(std::max(popupPos.y(), screenRect.top()),
                          screenRect.bottom() - popupSize.height() - margin));
+
   move(popupPos);
 }
-
 //=============================================================================
 /*! \class ViewerHistogramPopup
                 \brief The ViewerHistogramPopup show the histogram pertain to
@@ -191,8 +188,7 @@ void ViewerHistogramPopup::setCurrentRaster() {
   TRasterP ras         = 0;
   if (previewer->isActive()) {
     int currentFrame = app->getCurrentFrame()->getFrameIndex();
-    // Se il preview del frame non e' pronto richiamo questo metodo dopo un
-    // intervallo di 10 ms
+    // If preview frame is not ready, retry after 10 ms
     if (!previewer->isFrameReady(currentFrame)) {
       QTimer::singleShot(10, this, SLOT(setCurrentRaster()));
       return;
