@@ -1,4 +1,4 @@
-name: Linux Build and Code Analysis
+name: Linux Code Analysis
 
 on: [push, pull_request]
 
@@ -40,13 +40,6 @@ jobs:
         CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
         make -j $(nproc)
 
-    - name: Configure CMake with compile_commands.json
-      run: |
-        cd toonz
-        mkdir -p build
-        cd build
-        cmake ../sources -G Ninja -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCMAKE_C_COMPILER=${{ matrix.cc }} -DWITH_TRANSLATION=OFF -DCMAKE_EXPORT_COMPILE_COMMANDS=YES
-
     - name: Build
       run: |
         export CCACHE_DIR=/home/runner/.ccache
@@ -59,22 +52,18 @@ jobs:
         ninja
 
     - name: Run Static Analysis (Clang-Tidy)
+      if: matrix.compiler == 'clang'
       run: |
-        if [ "${{ matrix.compiler }}" = "clang" ]; then
-          echo "Executando análise estática do código com clang-tidy..."
-          clang-tidy toonz/sources/**/*.cpp -p=toonz/build
-        fi
+        echo "Executando análise estática do código com clang-tidy..."
+        clang-tidy toonz/sources/**/*.cpp -p=toonz/build
 
     - name: Run Static Analysis (GCC - Wall)
+      if: matrix.compiler == 'gcc'
       run: |
-        if [ "${{ matrix.compiler }}" = "gcc" ]; then
-          # Executando análise estática com gcc
-          echo "Executando análise estática do código com GCC..."
-          gcc -Wall -Wextra -Werror -o /dev/null toonz/sources/**/*.cpp
-        fi
+        echo "Executando análise estática do código com GCC..."
+        gcc -Wall -Wextra -Werror -o /dev/null toonz/sources/**/*.cpp
 
     - name: Run Static Analysis (Cppcheck)
       run: |
-        # Executando cppcheck
         echo "Executando análise estática com cppcheck..."
         cppcheck --enable=all --inconclusive --force toonz/sources/
