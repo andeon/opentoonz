@@ -1,0 +1,43 @@
+name: Code Analysis
+
+on: [push, pull_request]
+
+jobs:
+  Ubuntu:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+        include:
+          - compiler: gcc
+            cc: gcc
+            cxx: g++
+          - compiler: clang
+            cc: clang
+            cxx: clang++
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install libraries
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake pkg-config ninja-build ccache libboost-all-dev qtbase5-dev qt5-qmake qtscript5-dev qttools5-dev qttools5-dev-tools qtmultimedia5-dev qtwayland5 libqt5svg5-dev libqt5opengl5-dev libqt5multimedia5-plugins libqt5serialport5-dev libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev libpng-dev libjpeg-dev libglew-dev freeglut3-dev libfreetype6-dev libjson-c-dev libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2 clang-tidy
+
+    - name: Set up cache
+      run: mkdir -p /home/runner/.ccache
+
+    - uses: actions/cache@v4
+      with:
+        path: /home/runner/.ccache
+        key: ${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
+        restore-keys: | 
+          ${{ runner.os }}-${{ matrix.compiler }}-
+          ${{ runner.os }}-
+
+    - name: Run Static Analysis (Clang-Tidy)
+      run: |
+        if [ "${{ matrix.compiler }}" = "clang" ]; then
+          # Executando análise estática com clang-tidy
+          echo "Executando análise estática do código com clang-tidy..."
+          clang-tidy toonz/sources/**/*.cpp --checks=*-*,clang-analyzer-* --extra-arg=-std=c++11
+        fi
