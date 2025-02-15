@@ -6,50 +6,37 @@
 
 #include <QtCore>
 #include <memory>
-
-#include "tsystem.h"
-//#include "tunicode.h"
-#include "tfilepath_io.h"
-#include "tconvert.h"
-
 #include <time.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <errno.h>
 #include <set>
-#include <tenv.h>
 
-#undef PLATFORM
-
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
-
+// Windows-specific headers
 #ifdef _WIN32
-#define PLATFORM WIN32
+#include <windows.h>
 #include <process.h>
 #include <psapi.h>
 #include <io.h>
 #include <stdlib.h>
 #include <direct.h>
 #include <shellapi.h>
-// gmt: sulla mia macchina cosi' non compila!!!
-// #include "winsock2.h"
-// #include "lmcons.h"
 #include <sys/utime.h>
 #include <lm.h>
 #endif
 
-#ifdef LINUX
-#define PLATFORM LINUX
-#include <grp.h>
-#include <utime.h>
-#include <sys/param.h>
+// Common headers for Unix-like systems
+#if defined(LINUX) || defined(FREEBSD) || defined(MACOSX) || defined(__sgi) || defined(HAIKU)
 #include <unistd.h>
 #include <sys/types.h>
-#include <stdio.h>
-#include <unistd.h>
+#include <sys/stat.h>
 #include <dirent.h>
+#include <utime.h>
+#endif
+
+// Linux-specific headers
+#ifdef LINUX
+#include <grp.h>
+#include <sys/param.h>
+#include <stdio.h>
 #include <sys/dir.h>
 #include <sys/sysinfo.h>
 #include <sys/swap.h>
@@ -57,7 +44,6 @@
 #include <pwd.h>
 #include <mntent.h>
 #include <dlfcn.h>
-#include <utime.h>
 #include <sys/time.h>
 #include <QDir>
 #include <QFileInfo>
@@ -66,79 +52,57 @@
 #include <QUrl>
 #endif
 
+// FreeBSD-specific headers
 #ifdef FREEBSD
-#define PLATFORM FREEBSD
 #include <sys/param.h>
 #include <sys/sched.h>
 #include <sys/sysctl.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/proc.h>
 #include <sys/vmmeter.h>
 #include <vm/vm_param.h>
 #include <grp.h>
-#include <utime.h>
 #include <stdio.h>
-#include <dirent.h>
 #include <sys/mount.h>
 #include <pwd.h>
 #include <dlfcn.h>
 #define pagetok(__nb) ((__nb) * (getpagesize()))
 #endif
 
-
-#if defined(MACOSX)
-#define PLATFORM MACOSX
+// macOS-specific headers
+#ifdef MACOSX
 #include <grp.h>
-#include <utime.h>
 #include <sys/param.h>
-#include <unistd.h>
-#include <sys/types.h>
 #include <stdio.h>
-#include <unistd.h>
-#include <dirent.h>
 #include <sys/dir.h>
-#include <sys/param.h>  // for getfsstat
 #include <sys/ucred.h>
 #include <sys/mount.h>
 #include <pwd.h>
 #include <dlfcn.h>
-
-#include "Carbon/Carbon.h"
-
+#include <Carbon/Carbon.h>
 #endif
 
+// SGI-specific headers
 #ifdef __sgi
-#define PLATFORM SGI
 #include <sys/param.h>
-#include <unistd.h>
 #include <grp.h>
-#include <sys/dir.h>  // dirent.h
+#include <sys/dir.h>
 #include <sys/utime.h>
 #include <sys/swap.h>
 #include <sys/statfs.h>
 #include <pwd.h>
 #include <mntent.h>
-
 #include <dlfcn.h>
-
 #endif
 
+// Haiku-specific headers
 #ifdef HAIKU
-#define PLATFORM HAIKU
 #include <grp.h>
-#include <utime.h>
 #include <sys/param.h>
-#include <unistd.h>
-#include <sys/types.h>
 #include <stdio.h>
-#include <unistd.h>
-#include <dirent.h>
 #include <pwd.h>
 #include <dlfcn.h>
-#include <utime.h>
 #include <sys/time.h>
-
 #endif
 
 #ifndef PLATFORM
