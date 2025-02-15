@@ -281,7 +281,7 @@ TINT64 TSystem::getFreeMemorySize(bool onlyPhysicalMemory) {
   }
 
   free(table);
-  totalFree = virtualFree << 4 + physicalFree;
+  totalFree = (virtualFree << 4) + physicalFree;
 
 #elif defined(LINUX)
 
