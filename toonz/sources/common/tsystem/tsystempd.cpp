@@ -1,18 +1,38 @@
+// Enable Unicode on Windows
 #ifdef _WIN32
 #ifndef UNICODE
 #define UNICODE
 #endif
 #endif
 
-#include <QtCore>
+// Standard C++ headers
 #include <memory>
-#include <time.h>
-#include <errno.h>
 #include <set>
 
-// Windows-specific headers
+// Standard C headers
+#include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <errno.h>
+
+// Project-specific headers
+#include "tsystem.h"
+//#include "tunicode.h"  // Uncomment if needed
+#include "tfilepath_io.h"
+#include "tconvert.h"
+#include "tenv.h"
+
+// Undefine PLATFORM to avoid conflicts
+#undef PLATFORM
+
+// Disable specific warnings on MSVC
+#ifdef _MSC_VER
+#pragma warning(disable : 4996)
+#endif
+
+// Platform-specific headers and definitions
 #ifdef _WIN32
-#include <windows.h>
+#define PLATFORM WIN32
 #include <process.h>
 #include <psapi.h>
 #include <io.h>
@@ -21,22 +41,19 @@
 #include <shellapi.h>
 #include <sys/utime.h>
 #include <lm.h>
+// gmt: On my machine, this doesn't compile!!!
+// #include "winsock2.h"
+// #include "lmcons.h"
 #endif
 
-// Common headers for Unix-like systems
-#if defined(LINUX) || defined(FREEBSD) || defined(MACOSX) || defined(__sgi) || defined(HAIKU)
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <utime.h>
-#endif
-
-// Linux-specific headers
 #ifdef LINUX
+#define PLATFORM LINUX
 #include <grp.h>
+#include <utime.h>
 #include <sys/param.h>
+#include <unistd.h>
 #include <stdio.h>
+#include <dirent.h>
 #include <sys/dir.h>
 #include <sys/sysinfo.h>
 #include <sys/swap.h>
@@ -45,6 +62,8 @@
 #include <mntent.h>
 #include <dlfcn.h>
 #include <sys/time.h>
+
+// Qt headers for Linux
 #include <QDir>
 #include <QFileInfo>
 #include <QStorageInfo>
@@ -52,41 +71,50 @@
 #include <QUrl>
 #endif
 
-// FreeBSD-specific headers
 #ifdef FREEBSD
+#define PLATFORM FREEBSD
 #include <sys/param.h>
 #include <sys/sched.h>
 #include <sys/sysctl.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/proc.h>
 #include <sys/vmmeter.h>
 #include <vm/vm_param.h>
 #include <grp.h>
+#include <utime.h>
 #include <stdio.h>
+#include <dirent.h>
 #include <sys/mount.h>
 #include <pwd.h>
 #include <dlfcn.h>
 #define pagetok(__nb) ((__nb) * (getpagesize()))
 #endif
 
-// macOS-specific headers
 #ifdef MACOSX
+#define PLATFORM MACOSX
 #include <grp.h>
+#include <utime.h>
 #include <sys/param.h>
+#include <unistd.h>
 #include <stdio.h>
+#include <dirent.h>
 #include <sys/dir.h>
 #include <sys/ucred.h>
 #include <sys/mount.h>
 #include <pwd.h>
 #include <dlfcn.h>
-#include <Carbon/Carbon.h>
+
+// macOS-specific headers
+#include "Carbon/Carbon.h"
 #endif
 
-// SGI-specific headers
 #ifdef __sgi
+#define PLATFORM SGI
 #include <sys/param.h>
+#include <unistd.h>
 #include <grp.h>
-#include <sys/dir.h>
+#include <sys/dir.h>  // dirent.h
 #include <sys/utime.h>
 #include <sys/swap.h>
 #include <sys/statfs.h>
@@ -95,11 +123,15 @@
 #include <dlfcn.h>
 #endif
 
-// Haiku-specific headers
 #ifdef HAIKU
+#define PLATFORM HAIKU
 #include <grp.h>
+#include <utime.h>
 #include <sys/param.h>
+#include <unistd.h>
+#include <sys/types.h>
 #include <stdio.h>
+#include <dirent.h>
 #include <pwd.h>
 #include <dlfcn.h>
 #include <sys/time.h>
