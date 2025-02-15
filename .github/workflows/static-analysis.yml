@@ -21,7 +21,7 @@ jobs:
     - name: Install libraries
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake pkg-config ninja-build ccache libboost-all-dev qtbase5-dev qt5-qmake qtscript5-dev qttools5-dev qttools5-dev-tools qtmultimedia5-dev qtwayland5 libqt5svg5-dev libqt5opengl5-dev libqt5multimedia5-plugins libqt5serialport5-dev libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev libpng-dev libjpeg-dev libglew-dev freeglut3-dev libfreetype6-dev libjson-c-dev libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2 clang-tidy
+        sudo apt-get install -y build-essential cmake pkg-config ninja-build ccache libboost-all-dev qtbase5-dev qt5-qmake qtscript5-dev qttools5-dev qttools5-dev-tools qtmultimedia5-dev qtwayland5 libqt5svg5-dev libqt5opengl5-dev libqt5multimedia5-plugins libqt5serialport5-dev libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev libpng-dev libjpeg-dev libglew-dev freeglut3-dev libfreetype6-dev libjson-c-dev libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2 clang-tidy pkg-config
 
     - name: Set up cache
       run: mkdir -p /home/runner/.ccache
@@ -62,14 +62,16 @@ jobs:
       if: matrix.compiler == 'clang'
       run: |
         echo "Executando análise estática do código com clang-tidy..."
-        find toonz/sources -name "*.cpp" | xargs clang-tidy -p=toonz/build
+        QT_INCLUDES=$(pkg-config --cflags Qt5Core)
+        find toonz/sources -name "*.cpp" | xargs clang-tidy -p=toonz/build $QT_INCLUDES
 
     - name: Run Static Analysis (GCC - Wall)
       if: matrix.compiler == 'gcc'
       run: |
         echo "Executando análise estática do código com GCC..."
         INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | xargs -I{} echo -I{})
-        find toonz/sources -name "*.cpp" | xargs gcc -Wall -Wextra -Werror $INCLUDES -o /dev/null
+        QT_INCLUDES=$(pkg-config --cflags Qt5Core)
+        find toonz/sources -name "*.cpp" | xargs gcc -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES -o /dev/null
         
     - name: Run Static Analysis (Cppcheck)
       run: |
