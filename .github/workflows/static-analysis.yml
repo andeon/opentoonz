@@ -50,8 +50,13 @@ jobs:
         cd toonz
         mkdir build
         cd build
-        cmake ../sources -G Ninja -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCMAKE_C_COMPILER=${{ matrix.cc }} -DWITH_TRANSLATION=OFF
+        cmake ../sources -G Ninja -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCMAKE_C_COMPILER=${{ matrix.cc }} -DWITH_TRANSLATION=OFF -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
         ninja
+
+    - name: Create Artifact
+      run: |
+        cd toonz/build
+        sudo ninja install
 
     - name: Run Static Analysis (Clang-Tidy)
       if: matrix.compiler == 'clang'
@@ -63,8 +68,9 @@ jobs:
       if: matrix.compiler == 'gcc'
       run: |
         echo "Executando análise estática do código com GCC..."
-        find toonz/sources -name "*.cpp" | xargs gcc -Wall -Wextra -Werror -Itoonz/sources -Itoonz/sources/toonzqt -o /dev/null
-
+        INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | xargs -I{} echo -I{})
+        find toonz/sources -name "*.cpp" | xargs gcc -Wall -Wextra -Werror $INCLUDES -o /dev/null
+        
     - name: Run Static Analysis (Cppcheck)
       run: |
         echo "Executando análise estática com cppcheck..."
