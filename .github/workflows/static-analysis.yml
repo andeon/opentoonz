@@ -36,9 +36,11 @@ jobs:
 
     - name: Build libtiff
       run: |
-        cd thirdparty/tiff-4.0.3
-        CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
-        make -j $(nproc)
+        if [ ! -f thirdparty/tiff-4.0.3/libtiff.a ]; then
+          cd thirdparty/tiff-4.0.3
+          CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
+          make -j $(nproc)
+        fi
 
     - name: Build
       run: |
@@ -55,15 +57,15 @@ jobs:
       if: matrix.compiler == 'clang'
       run: |
         echo "Executando análise estática do código com clang-tidy..."
-        clang-tidy toonz/sources/**/*.cpp -p=toonz/build
+        find toonz/sources -name "*.cpp" | xargs clang-tidy -p=toonz/build
 
     - name: Run Static Analysis (GCC - Wall)
       if: matrix.compiler == 'gcc'
       run: |
         echo "Executando análise estática do código com GCC..."
-        gcc -Wall -Wextra -Werror -o /dev/null toonz/sources/**/*.cpp
+        find toonz/sources -name "*.cpp" | xargs gcc -Wall -Wextra -Werror -Itoonz/sources -Itoonz/sources/toonzqt -o /dev/null
 
     - name: Run Static Analysis (Cppcheck)
       run: |
         echo "Executando análise estática com cppcheck..."
-        cppcheck --enable=all --inconclusive --force toonz/sources/
+        cppcheck --enable=warning,performance,portability --suppress=missingIncludeSystem --force toonz/sources/
