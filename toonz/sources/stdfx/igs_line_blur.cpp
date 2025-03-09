@@ -511,10 +511,9 @@ int brush_curve_blur::save(double d_xp, double d_yp, const char *cp_fname) {
   int32_t ii;
 
   /* ファイル開く */
-  FILE* fp = nullptr;
-  errno_t err = fopen_s(&fp, cp_fname, "w");
-  if (err != 0) {
-    pri_funct_err_bttvr("Error : fopen_s(%s, w) failed with error code %d", cp_fname, err);
+  fp = fopen(cp_fname, "w");
+  if (NULL == fp) {
+    pri_funct_err_bttvr("Error : fopen(%s,w) returns NULL", cp_fname);
     return NG;
   }
 
@@ -1240,10 +1239,9 @@ int pixel_point_root::save(const char *cp_fname) {
   assert(NULL != cp_fname);
 
   /* ファイル開く */
-  FILE* fp = nullptr;
-  errno_t err = fopen_s(&fp, cp_fname, "w");
-  if (err != 0) {
-    pri_funct_err_bttvr("Error : fopen_s(%s, w) failed with error code %d", cp_fname, err);
+  fp = fopen(cp_fname, "w");
+  if (NULL == fp) {
+    pri_funct_err_bttvr("Error : fopen(%s) returns NULL.", cp_fname);
     return NG;
   }
 
@@ -3185,10 +3183,9 @@ int pixel_line_root::save_not_include(pixel_point_root *clp_pixel_point_root,
   int32_t i32_not_include_line;
 
   /* ファイル開く */
-  FILE* fp = nullptr;
-  errno_t err = fopen_s(&fp, cp_fname, "w");
-  if (err != 0) {
-    pri_funct_err_bttvr("Error : fopen_s(%s, w) failed with error code %d", cp_fname, err);
+  fp = fopen(cp_fname, "w");
+  if (NULL == fp) {
+    pri_funct_err_bttvr("Error : fopen(%s,w) returns NULL", cp_fname);
     return NG;
   }
 
@@ -3239,10 +3236,9 @@ int pixel_line_root::save_lines(const char *cp_fname) {
   pixel_line_node *clp_line;
 
   /* ファイル開く */
-  FILE* fp = nullptr;
-  errno_t err = fopen_s(&fp, cp_fname, "w");
-  if (err != 0) {
-    pri_funct_err_bttvr("Error : fopen_s(%s, w) failed with error code %d", cp_fname, err);
+  fp = fopen(cp_fname, "w");
+  if (NULL == fp) {
+    pri_funct_err_bttvr("Error : fopen(%s,w) returns NULL", cp_fname);
     return NG;
   }
 
@@ -3297,10 +3293,9 @@ int pixel_line_root::save_one_point(const char *cp_fname) {
   pixel_line_node *clp_line;
 
   /* ファイル開く */
-  FILE* fp = nullptr;
-  errno_t err = fopen_s(&fp, cp_fname, "w");
-  if (err != 0) {
-    pri_funct_err_bttvr("Error : fopen_s(%s, w) failed with error code %d", cp_fname, err);
+  fp = fopen(cp_fname, "w");
+  if (NULL == fp) {
+    pri_funct_err_bttvr("Error : fopen(%s,w) returns NULL", cp_fname);
     return NG;
   }
 
@@ -3343,10 +3338,9 @@ int pixel_line_root::save_middle_point(const char *cp_fname) {
   pixel_line_node *clp_line;
 
   /* ファイル開く */
-  FILE* fp = nullptr;
-  errno_t err = fopen_s(&fp, cp_fname, "w");
-  if (err != 0) {
-    pri_funct_err_bttvr("Error : fopen_s(%s, w) failed with error code %d", cp_fname, err);
+  fp = fopen(cp_fname, "w");
+  if (NULL == fp) {
+    pri_funct_err_bttvr("Error : fopen(%s,w) returns NULL", cp_fname);
     return NG;
   }
 
@@ -3390,10 +3384,9 @@ int pixel_line_root::save_another_point(const char *cp_fname) {
   pixel_line_node *clp_line;
 
   /* ファイル開く */
-  FILE* fp = nullptr;
-  errno_t err = fopen_s(&fp, cp_fname, "w");
-  if (err != 0) {
-    pri_funct_err_bttvr("Error : fopen_s(%s, w) failed with error code %d", cp_fname, err);
+  fp = fopen(cp_fname, "w");
+  if (NULL == fp) {
+    pri_funct_err_bttvr("Error : fopen(%s,w) returns NULL", cp_fname);
     return NG;
   }
 
@@ -3437,10 +3430,9 @@ int pixel_line_root::save_expand_lines(const char *cp_fname) {
   pixel_line_node *clp_line;
 
   /* ファイル開く */
-  FILE* fp = nullptr;
-  errno_t err = fopen_s(&fp, cp_fname, "w");
-  if (err != 0) {
-    pri_funct_err_bttvr("Error : fopen_s(%s, w) failed with error code %d", cp_fname, err);
+  fp = fopen(cp_fname, "w");
+  if (NULL == fp) {
+    pri_funct_err_bttvr("Error : fopen(%s,w) returns NULL", cp_fname);
     return NG;
   }
 
@@ -3495,10 +3487,9 @@ int pixel_line_root::save_one_expand_point(const char *cp_fname) {
   pixel_line_node *clp_line;
 
   /* ファイル開く */
-  FILE* fp = nullptr;
-  errno_t err = fopen_s(&fp, cp_fname, "w");
-  if (err != 0) {
-    pri_funct_err_bttvr("Error : fopen_s(%s, w) failed with error code %d", cp_fname, err);
+  fp = fopen(cp_fname, "w");
+  if (NULL == fp) {
+    pri_funct_err_bttvr("Error : fopen(%s,w) returns NULL", cp_fname);
     return NG;
   }
 
@@ -3542,10 +3533,9 @@ int pixel_line_root::save_another_expand_point(const char *cp_fname) {
   pixel_line_node *clp_line;
 
   /* ファイル開く */
-  FILE* fp = nullptr;
-  errno_t err = fopen_s(&fp, cp_fname, "w");
-  if (err != 0) {
-    pri_funct_err_bttvr("Error : fopen_s(%s, w) failed with error code %d", cp_fname, err);
+  fp = fopen(cp_fname, "w");
+  if (NULL == fp) {
+    pri_funct_err_bttvr("Error : fopen(%s,w) returns NULL", cp_fname);
     return NG;
   }
 
@@ -3589,10 +3579,9 @@ int pixel_line_root::save_expand_vector(const char *cp_fname) {
   pixel_line_node *clp_line;
 
   /* ファイル開く */
-  FILE* fp = nullptr;
-  errno_t err = fopen_s(&fp, cp_fname, "w");
-  if (err != 0) {
-    pri_funct_err_bttvr("Error : fopen_s(%s, w) failed with error code %d", cp_fname, err);
+  fp = fopen(cp_fname, "w");
+  if (NULL == fp) {
+    pri_funct_err_bttvr("Error : fopen(%s,w) returns NULL", cp_fname);
     return NG;
   }
 
@@ -4022,10 +4011,9 @@ int pixel_select_curve_blur_root::save(double d_xp, double d_yp,
   pixel_point_node *clp_point;
 
   /* ファイル開く */
-  FILE* fp = nullptr;
-  errno_t err = fopen_s(&fp, cp_fname, "w");
-  if (err != 0) {
-    pri_funct_err_bttvr("Error : fopen_s(%s, w) failed with error code %d", cp_fname, err);
+  fp = fopen(cp_fname, "w");
+  if (NULL == fp) {
+    pri_funct_err_bttvr("Error : fopen(%s,w) returns NULL", cp_fname);
     return NG;
   }
 
