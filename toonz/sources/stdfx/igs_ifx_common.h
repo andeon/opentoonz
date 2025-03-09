@@ -60,6 +60,10 @@ namespace color {
 template <class T>
 double ref_value(const T *ref, const int cc, const int ref_max,
                  const int ref_mode) {
+  if (ref_max == 0) {
+    return 0.0; // Return 0.0 for invalid ref_max
+  }
+
   if (igs::image::rgba::siz == cc) {
     using namespace igs::image::rgba;
     switch (ref_mode) {
@@ -110,7 +114,7 @@ double ref_value(const T *ref, const int cc, const int ref_max,
   } else if (1 == cc) {
     return static_cast<double>(ref[0]) / static_cast<double>(ref_max);
   }
-  return 1.0;
+  return 1.0; // Default return value for valid ref_max
 }
 }  // namespace color
 }  // namespace igs
