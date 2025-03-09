@@ -1,7 +1,7 @@
 #include "jpgconverter.h"
-
 #include <QFile>
 #include <QDataStream>
+
 //=============================================================================
 //=============================================================================
 
@@ -14,63 +14,60 @@ void JpgConverter::setStream(EdsStreamRef stream) { m_stream = stream; }
 
 void JpgConverter::convertFromJpg() {
 #ifdef MACOSX
-  UInt64 mySize = 0;
+    UInt64 mySize = 0;
 #else
-  unsigned __int64 mySize = 0;
+    unsigned __int64 mySize = 0;
 #endif
-  unsigned char* data = NULL;
-  EdsError err        = EdsGetPointer(m_stream, (EdsVoid**)&data);
-  err                 = EdsGetLength(m_stream, &mySize);
+    unsigned char* data = nullptr;
+    EdsError err = EdsGetPointer(m_stream, (EdsVoid**)&data);
+    err = EdsGetLength(m_stream, &mySize);
 
-  int width, height, pixelFormat;
-  int inSubsamp, inColorspace;
-  tjhandle tjInstance   = NULL;
-  unsigned char* imgBuf = NULL;
-  tjInstance            = tjInitDecompress();
-  tjDecompressHeader3(tjInstance, data, mySize, &width, &height, &inSubsamp,
-                      &inColorspace);
+    int width, height, pixelFormat;
+    int inSubsamp, inColorspace;
+    tjhandle tjInstance = nullptr;
+    unsigned char* imgBuf = nullptr;
+    tjInstance = tjInitDecompress();
+    
+    if (tjDecompressHeader3(tjInstance, data, mySize, &width, &height, &inSubsamp, &inColorspace) < 0) {
+        emit(imageReady(false));
+        tjDestroy(tjInstance);
+        return;
+    }
 
-  if (width < 0 || height < 0) {
-    emit(imageReady(false));
-    return;
-  }
+    if (width <= 0 || height <= 0) {
+        emit(imageReady(false));
+        tjDestroy(tjInstance);
+        return;
+    }
 
-  pixelFormat = TJPF_BGRX;
-  imgBuf = (unsigned char*)tjAlloc(width * height * tjPixelSize[pixelFormat]);
-  int flags = 0;
-  flags |= TJFLAG_BOTTOMUP;
+    pixelFormat = TJPF_BGRX;
+    imgBuf = (unsigned char*)tjAlloc(width * height * tjPixelSize[pixelFormat]);
+    int flags = TJFLAG_BOTTOMUP;
 
-  int factorsNum;
-  tjscalingfactor scalingFactor = {1, 1};
-  tjscalingfactor* factor       = tjGetScalingFactors(&factorsNum);
-  int i                         = 0;
-  int tempWidth, tempHeight;
-  while (i < factorsNum) {
-    scalingFactor = factor[i];
-    i++;
-    tempWidth  = TJSCALED(width, scalingFactor);
-    tempHeight = TJSCALED(height, scalingFactor);
-  }
-  tjDecompress2(tjInstance, data, mySize, imgBuf, width,
-                width * tjPixelSize[pixelFormat], height, pixelFormat, flags);
+    // Scaling logic, omitted for brevity, can be added if required.
 
-  m_finalImage = TRaster32P(width, height);
-  m_finalImage->lock();
-  uchar* rawData = m_finalImage->getRawData();
-  memcpy(rawData, imgBuf, width * height * tjPixelSize[pixelFormat]);
-  m_finalImage->unlock();
+    if (tjDecompress2(tjInstance, data, mySize, imgBuf, width, width * tjPixelSize[pixelFormat], height, pixelFormat, flags) < 0) {
+        emit(imageReady(false));
+        tjFree(imgBuf);
+        tjDestroy(tjInstance);
+        return;
+    }
 
-  tjFree(imgBuf);
-  imgBuf = NULL;
-  tjDestroy(tjInstance);
-  tjInstance = NULL;
+    m_finalImage = TRaster32P(width, height);
+    m_finalImage->lock();
+    uchar* rawData = m_finalImage->getRawData();
+    memcpy(rawData, imgBuf, width * height * tjPixelSize[pixelFormat]);
+    m_finalImage->unlock();
 
-  if (m_stream != NULL) {
-    EdsRelease(m_stream);
-    m_stream = NULL;
-  }
-  data = NULL;
-  emit(imageReady(true));
+    tjFree(imgBuf);
+    tjDestroy(tjInstance);
+
+    if (m_stream != nullptr) {
+        EdsRelease(m_stream);
+        m_stream = nullptr;
+    }
+
+    emit(imageReady(true));
 }
 
 void JpgConverter::run() { convertFromJpg(); }
@@ -80,100 +77,121 @@ void JpgConverter::run() { convertFromJpg(); }
 //-----------------------------------------------------------------------------
 
 void JpgConverter::saveJpg(TRaster32P image, TFilePath path) {
-  unsigned char* jpegBuf = NULL; /* Dynamically allocate the JPEG buffer */
-  unsigned long jpegSize = 0;
-  int pixelFormat        = TJPF_BGRX;
-  int outQual            = 95;
-  int subSamp            = TJSAMP_411;
-  bool success           = false;
-  tjhandle tjInstance;
+    unsigned char* jpegBuf = nullptr;
+    unsigned long jpegSize = 0;
+    int pixelFormat = TJPF_BGRX;
+    int outQual = 95;
+    int subSamp = TJSAMP_411;
+    bool success = false;
+    tjhandle tjInstance = nullptr;
 
-  int width  = image->getLx();
-  int height = image->getLy();
-  int flags  = 0;
-  flags |= TJFLAG_BOTTOMUP;
+    int width = image->getLx();
+    int height = image->getLy();
+    int flags = TJFLAG_BOTTOMUP;
 
-  image->lock();
-  uchar* rawData = image->getRawData();
-  if ((tjInstance = tjInitCompress()) != NULL) {
-    if (tjCompress2(tjInstance, rawData, width, 0, height, pixelFormat,
-                    &jpegBuf, &jpegSize, subSamp, outQual, flags) >= 0) {
-      success = true;
+    image->lock();
+    uchar* rawData = image->getRawData();
+
+    if ((tjInstance = tjInitCompress()) != nullptr) {
+        if (tjCompress2(tjInstance, rawData, width, 0, height, pixelFormat, &jpegBuf, &jpegSize, subSamp, outQual, flags) >= 0) {
+            success = true;
+        }
     }
-  }
-  image->unlock();
-  tjDestroy(tjInstance);
-  tjInstance = NULL;
+    image->unlock();
+    tjDestroy(tjInstance);
 
-  if (success) {
-    /* Write the JPEG image to disk. */
-    QFile fullImage(path.getQString());
-    fullImage.open(QIODevice::WriteOnly);
-    QDataStream dataStream(&fullImage);
-    dataStream.writeRawData((const char*)jpegBuf, jpegSize);
-    fullImage.close();
-  }
-  tjFree(jpegBuf);
-  jpegBuf = NULL;
+    if (success) {
+        // Write the JPEG image to disk.
+        QFile fullImage(path.getQString());
+        if (fullImage.open(QIODevice::WriteOnly)) {
+            QDataStream dataStream(&fullImage);
+            dataStream.writeRawData((const char*)jpegBuf, jpegSize);
+            fullImage.close();
+        }
+    }
+
+    tjFree(jpegBuf);
 }
 
 //-----------------------------------------------------------------------------
 
 bool JpgConverter::loadJpg(TFilePath path, TRaster32P& image) {
-  long size;
-  int inSubsamp, inColorspace, width, height;
-  unsigned long jpegSize;
-  unsigned char* jpegBuf;
-  FILE* jpegFile;
-  QString qPath      = path.getQString();
-  QByteArray ba      = qPath.toLocal8Bit();
-  const char* c_path = ba.data();
-  bool success       = true;
-  tjhandle tjInstance;
+    long size;
+    int inSubsamp, inColorspace, width, height;
+    unsigned long jpegSize;
+    unsigned char* jpegBuf = nullptr;
+    FILE* jpegFile = nullptr;
+    QString qPath = path.getQString();
+    QByteArray ba = qPath.toLocal8Bit();
+    const char* c_path = ba.data();
+    bool success = true;
+    tjhandle tjInstance = nullptr;
 
-  /* Read the JPEG file into memory. */
-  if ((jpegFile = fopen(c_path, "rb")) == NULL) success = false;
-  if (success && fseek(jpegFile, 0, SEEK_END) < 0 ||
-      ((size = ftell(jpegFile)) < 0) || fseek(jpegFile, 0, SEEK_SET) < 0)
-    success = false;
-  if (success && size == 0) success = false;
-  jpegSize = (unsigned long)size;
-  if (success && (jpegBuf = (unsigned char*)tjAlloc(jpegSize)) == NULL)
-    success = false;
-  if (success && fread(jpegBuf, jpegSize, 1, jpegFile) < 1) success = false;
-  fclose(jpegFile);
-  jpegFile = NULL;
+    // Read the JPEG file into memory using fopen_s for safety.
+    errno_t err = fopen_s(&jpegFile, c_path, "rb");
+    if (err != 0 || jpegFile == nullptr) {
+        success = false;
+    }
 
-  if (success && (tjInstance = tjInitDecompress()) == NULL) success = false;
+    if (success && fseek(jpegFile, 0, SEEK_END) < 0 ||
+        (size = ftell(jpegFile)) < 0 ||
+        fseek(jpegFile, 0, SEEK_SET) < 0) {
+        success = false;
+    }
 
-  if (success && tjDecompressHeader3(tjInstance, jpegBuf, jpegSize, &width,
-                                     &height, &inSubsamp, &inColorspace) < 0)
-    success = false;
+    if (success && size == 0) {
+        success = false;
+    }
 
-  int pixelFormat       = TJPF_BGRX;
-  unsigned char* imgBuf = NULL;
-  if (success &&
-      (imgBuf = tjAlloc(width * height * tjPixelSize[pixelFormat])) == NULL)
-    success = false;
+    jpegSize = static_cast<unsigned long>(size);
 
-  int flags = 0;
-  flags |= TJFLAG_BOTTOMUP;
-  if (success && tjDecompress2(tjInstance, jpegBuf, jpegSize, imgBuf, width, 0,
-                               height, pixelFormat, flags) < 0)
-    success = false;
-  tjFree(jpegBuf);
-  jpegBuf = NULL;
-  tjDestroy(tjInstance);
-  tjInstance = NULL;
+    if (success && (jpegBuf = static_cast<unsigned char*>(tjAlloc(jpegSize))) == nullptr) {
+        success = false;
+    }
 
-  image = TRaster32P(width, height);
-  image->lock();
-  uchar* rawData = image->getRawData();
-  memcpy(rawData, imgBuf, width * height * tjPixelSize[pixelFormat]);
-  image->unlock();
+    if (success && fread(jpegBuf, jpegSize, 1, jpegFile) < 1) {
+        success = false;
+    }
 
-  tjFree(imgBuf);
-  imgBuf = NULL;
+    if (jpegFile) {
+        fclose(jpegFile);
+        jpegFile = nullptr;
+    }
 
-  return success;
+    if (success && (tjInstance = tjInitDecompress()) == nullptr) {
+        success = false;
+    }
+
+    if (success && tjDecompressHeader3(tjInstance, jpegBuf, jpegSize, &width, &height, &inSubsamp, &inColorspace) < 0) {
+        success = false;
+    }
+
+    int pixelFormat = TJPF_BGRX;
+    unsigned char* imgBuf = nullptr;
+    if (success && (imgBuf = tjAlloc(width * height * tjPixelSize[pixelFormat])) == nullptr) {
+        success = false;
+    }
+
+    int flags = TJFLAG_BOTTOMUP;
+    if (success && tjDecompress2(tjInstance, jpegBuf, jpegSize, imgBuf, width, 0, height, pixelFormat, flags) < 0) {
+        success = false;
+    }
+
+    tjFree(jpegBuf);
+    jpegBuf = nullptr;
+    tjDestroy(tjInstance);
+    tjInstance = nullptr;
+
+    if (success) {
+        image = TRaster32P(width, height);
+        image->lock();
+        uchar* rawData = image->getRawData();
+        memcpy(rawData, imgBuf, width * height * tjPixelSize[pixelFormat]);
+        image->unlock();
+    }
+
+    tjFree(imgBuf);
+    imgBuf = nullptr;
+
+    return success;
 }
