@@ -1,9 +1,8 @@
 #include "jpgconverter.h"
 #include <QFile>
 #include <QDataStream>
-#include <cstdint>  // For uint64_t
-#include <cstdio>   // For fopen, fclose
-#include <cstring>  // For memcpy
+#include <cstdint>  // Para uint64_t
+#include <cstring>  // Para memcpy
 
 //=============================================================================
 // Constructor and Destructor
@@ -134,82 +133,59 @@ void JpgConverter::saveJpg(TRaster32P image, TFilePath path) {
 }
 
 //=============================================================================
-// Load JPEG
+// Carregar JPEG
 //=============================================================================
 
 bool JpgConverter::loadJpg(TFilePath path, TRaster32P& image) {
-    long size;
-    int inSubsamp, inColorspace, width, height;
-    unsigned long jpegSize;
-    unsigned char* jpegBuf = nullptr;
-    FILE* jpegFile = nullptr;
-    QString qPath = path.getQString();
-    QByteArray ba = qPath.toLocal8Bit();
-    const char* c_path = ba.data();
-    bool success = true;
-    tjhandle tjInstance = nullptr;
-
-    // Open the JPEG file
-    jpegFile = fopen(c_path, "rb");
-    if (!jpegFile) {
-        success = false;
+    QFile jpegFile(path.getQString());
+    if (!jpegFile.open(QIODevice::ReadOnly)) {
+        return false; // Falha ao abrir o arquivo
     }
 
-    if (success && (fseek(jpegFile, 0, SEEK_END) < 0 || (size = ftell(jpegFile)) < 0 || fseek(jpegFile, 0, SEEK_SET) < 0)) {
-        success = false;
+    // Lê o arquivo inteiro em um QByteArray
+    QByteArray jpegData = jpegFile.readAll();
+    jpegFile.close();
+
+    if (jpegData.isEmpty()) {
+        return false; // Arquivo vazio ou falha na leitura
     }
 
-    if (success && size == 0) {
-        success = false;
+    unsigned long jpegSize = static_cast<unsigned long>(jpegData.size());
+    unsigned char* jpegBuf = reinterpret_cast<unsigned char*>(jpegData.data());
+
+    tjhandle tjInstance = tjInitDecompress();
+    if (!tjInstance) {
+        return false;
     }
 
-    jpegSize = static_cast<unsigned long>(size);
-
-    if (success && !(jpegBuf = static_cast<unsigned char*>(tjAlloc(jpegSize)))) {
-        success = false;
-    }
-
-    if (success && fread(jpegBuf, jpegSize, 1, jpegFile) != 1) {
-        success = false;
-    }
-
-    if (jpegFile) {
-        fclose(jpegFile);
-    }
-
-    if (success && !(tjInstance = tjInitDecompress())) {
-        success = false;
-    }
-
-    if (success && tjDecompressHeader3(tjInstance, jpegBuf, jpegSize, &width, &height, &inSubsamp, &inColorspace) < 0) {
-        success = false;
+    int width, height, inSubsamp, inColorspace;
+    if (tjDecompressHeader3(tjInstance, jpegBuf, jpegSize, &width, &height, &inSubsamp, &inColorspace) < 0) {
+        tjDestroy(tjInstance);
+        return false;
     }
 
     int pixelFormat = TJPF_BGRX;
-    unsigned char* imgBuf = nullptr;
-    if (success && !(imgBuf = tjAlloc(width * height * tjPixelSize[pixelFormat])))) {
-        success = false;
+    unsigned char* imgBuf = tjAlloc(width * height * tjPixelSize[pixelFormat]);
+    if (!imgBuf) {
+        tjDestroy(tjInstance);
+        return false;
     }
 
     int flags = TJFLAG_BOTTOMUP;
-    if (success && tjDecompress2(tjInstance, jpegBuf, jpegSize, imgBuf, width, 0, height, pixelFormat, flags) < 0) {
-        success = false;
+    if (tjDecompress2(tjInstance, jpegBuf, jpegSize, imgBuf, width, 0, height, pixelFormat, flags) < 0) {
+        tjFree(imgBuf);
+        tjDestroy(tjInstance);
+        return false;
     }
 
-    tjFree(jpegBuf);
+    image = TRaster32P(width, height);
+    image->lock();
+    uchar* rawData = image->getRawData();
+    memcpy(rawData, imgBuf, width * height * tjPixelSize[pixelFormat]);
+    image->unlock();
+
+    tjFree(imgBuf);
     tjDestroy(tjInstance);
 
-    if (success) {
-        image = TRaster32P(width, height);
-        image->lock();
-        uchar* rawData = image->getRawData();
-        memcpy(rawData, imgBuf, width * height * tjPixelSize[pixelFormat]);
-        image->unlock();
-    }
-
-    if (imgBuf) {
-        tjFree(imgBuf);
-    }
-
-    return success;
+    return true;
 }
