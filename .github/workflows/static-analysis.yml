@@ -56,15 +56,21 @@ jobs:
         cmake ../sources -G Ninja -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCMAKE_C_COMPILER=${{ matrix.cc }} -DWITH_TRANSLATION=OFF -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
         ninja
 
+    # Explicitly build tests (if applicable)
+    - name: Build tests
+      run: |
+        cd toonz/build
+        ninja tests  # Replace 'tests' with the actual name of your test target if it's different
+
     - name: Run Tests with AddressSanitizer
       run: |
         cd toonz/build
-        ctest --output-on-failure
+        ctest -V --output-on-failure
 
-    - name: Create Artifact
-      run: |
-        cd toonz/build
-        sudo ninja install
+    #    - name: Create Artifact
+    #      run: |
+    #        cd toonz/build
+    #        sudo ninja install
 
     # Temporarily disable clang-tidy
     # - name: Run Static Analysis (Clang-Tidy)
