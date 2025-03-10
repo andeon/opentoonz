@@ -23,27 +23,12 @@
 
 #include "tipc.h"
 
-/*
-PLATFORM-SPECIFIC REMINDERS:
-- On Windows, QLocalSocket::waitForBytesWritten requires data to be read on the other end.
-- On macOS, shared memory settings are restrictive (4 MB max per segment).
-*/
-
-//********************************************************
-//    Diagnostics Stuff
-//********************************************************
-
-// #define TIPC_DEBUG
-
+// Debugging macro
 #ifdef TIPC_DEBUG
 #define tipc_debug(expr) expr
 #else
 #define tipc_debug(expr)
 #endif
-
-//********************************************************
-//    Local namespace Stuff
-//********************************************************
 
 namespace {
 int shm_max = -1;
@@ -53,126 +38,137 @@ int shm_mni = -1;
 }  // namespace
 
 //********************************************************
-//    tipc Stream Implementation
+//    Helper Functions
+//********************************************************
+
+// Helper function for reading data from a socket
+bool tipc::readSocketData(QLocalSocket *socket, char *data, qint64 dataSize, int msecs, QEventLoop *loop, QEventLoop::ProcessEventsFlag flag) {
+    qint64 dataRead = 0;
+    char *currData = data;
+
+    while (dataRead < dataSize) {
+        if (socket->bytesAvailable() == 0) {
+            if (loop) {
+                loop->exec(flag);
+                if (socket->bytesAvailable() == 0) {
+                    return false;
+                }
+            } else if (!socket->waitForReadyRead(msecs)) {
+                return false;
+            }
+        }
+
+        qint64 bytesRead = socket->read(currData, dataSize - dataRead);
+        currData += bytesRead;
+        dataRead += bytesRead;
+    }
+
+    return true;
+}
+
+// Helper function for shared memory operations
+bool tipc::handleSharedMemory(QSharedMemory &shmem, int size, bool strictSize) {
+    static QSemaphore sem(tipc::shm_maxSegmentCount());
+    sem.acquire(1);
+
+    if (tipc::create(shmem, size, strictSize) <= 0) {
+        sem.release(1);
+        return false;
+    }
+
+    return true;
+}
+
+// Helper function for reading a message from a stream
+QString tipc::readMessageHelper(Stream &stream, Message &msg, int msecs, QEventLoop::ProcessEventsFlag flag) {
+    msg.clear();
+    if (!stream.readMessage(msg, msecs, flag)) return QString();
+
+    QString res;
+    msg >> res;
+    return res;
+}
+
+//********************************************************
+//    tipc::Stream Implementation
 //********************************************************
 
 int tipc::Stream::readSize() {
     if (m_socket->bytesAvailable() < sizeof(TINT32)) return -1;
 
     TINT32 msgSize = -1;
-    m_socket->peek(reinterpret_cast<char*>(&msgSize), sizeof(TINT32));
+    m_socket->peek((char *)&msgSize, sizeof(TINT32));
+
     return msgSize;
 }
 
-//-------------------------------------------------------------
-
 bool tipc::Stream::messageReady() {
-    TINT32 msgSize;
-    return (msgSize = readSize()) >= 0 && m_socket->bytesAvailable() >= msgSize;
+    TINT32 msgSize = readSize();
+    return msgSize >= 0 && m_socket->bytesAvailable() >= msgSize;
 }
 
-//-------------------------------------------------------------
+bool tipc::Stream::readData(char *data, qint64 dataSize, int msecs) {
+    tipc_debug(qDebug("tipc::Stream::readData entry"));
+    bool result = readSocketData(m_socket, data, dataSize, msecs, nullptr, QEventLoop::AllEvents);
+    tipc_debug(qDebug("tipc::Stream::readData exit"));
+    return result;
+}
 
-bool tipc::Stream::readDataHelper(char* data, qint64 dataSize, int msecs, bool nonBlocking, QEventLoop::ProcessEventsFlag flag) {
-    tipc_debug(qDebug() << "tipc::Stream::readDataHelper entry");
-    qint64 dataRead = 0;
-    char* currData = data;
-
+bool tipc::Stream::readDataNB(char *data, qint64 dataSize, int msecs, QEventLoop::ProcessEventsFlag flag) {
+    tipc_debug(qDebug("tipc::Stream::readDataNB entry"));
     QEventLoop loop;
-    if (nonBlocking) {
-        QObject::connect(m_socket, &QLocalSocket::readyRead, &loop, &QEventLoop::quit);
-        QObject::connect(m_socket, &QLocalSocket::errorOccurred, &loop, &QEventLoop::quit);
-        if (msecs >= 0) QTimer::singleShot(msecs, &loop, &QEventLoop::quit);
-    }
-
-    while (dataRead < dataSize) {
-        if (m_socket->bytesAvailable() == 0) {
-            if (nonBlocking) {
-                loop.exec(flag);
-                if (m_socket->bytesAvailable() == 0) {
-                    tipc_debug(qDebug() << "tipc::Stream::readDataHelper exit (unexpected loss of data)");
-                    return false;
-                }
-            } else if (!m_socket->waitForReadyRead(msecs)) {
-                tipc_debug(qDebug() << "tipc::Stream::readDataHelper exit (unexpected loss of data)");
-                return false;
-            }
-        }
-
-        qint64 r = m_socket->read(currData, dataSize - dataRead);
-        currData += r;
-        dataRead += r;
-    }
-
-    tipc_debug(qDebug() << "tipc::Stream::readDataHelper exit");
-    return true;
+    bool result = readSocketData(m_socket, data, dataSize, msecs, &loop, flag);
+    tipc_debug(qDebug("tipc::Stream::readDataNB exit"));
+    return result;
 }
 
-bool tipc::Stream::readData(char* data, qint64 dataSize, int msecs) {
-    return readDataHelper(data, dataSize, msecs, false, QEventLoop::AllEvents);
-}
-
-bool tipc::Stream::readDataNB(char* data, qint64 dataSize, int msecs, QEventLoop::ProcessEventsFlag flag) {
-    return readDataHelper(data, dataSize, msecs, true, flag);
-}
-
-//-------------------------------------------------------------
-
-bool tipc::Stream::readMessageHelper(Message& msg, int msecs, bool nonBlocking, QEventLoop::ProcessEventsFlag flag) {
+bool tipc::Stream::readMessage(Message &msg, int msecs) {
     TINT32 msgSize = 0;
-    if (!readDataHelper(reinterpret_cast<char*>(&msgSize), sizeof(TINT32), msecs, nonBlocking, flag)) return false;
+    if (!readData((char *)&msgSize, sizeof(TINT32), msecs)) return false;
 
     msg.ba().resize(msgSize);
-    if (!readDataHelper(msg.ba().data(), msgSize, msecs, nonBlocking, flag)) return false;
-
-    return true;
+    return readData(msg.ba().data(), msgSize, msecs);
 }
 
-bool tipc::Stream::readMessage(Message& msg, int msecs) {
-    return readMessageHelper(msg, msecs, false, QEventLoop::AllEvents);
-}
+bool tipc::Stream::readMessageNB(Message &msg, int msecs, QEventLoop::ProcessEventsFlag flag) {
+    TINT32 msgSize = 0;
+    if (!readDataNB((char *)&msgSize, sizeof(TINT32), msecs, flag)) return false;
 
-bool tipc::Stream::readMessageNB(Message& msg, int msecs, QEventLoop::ProcessEventsFlag flag) {
-    return readMessageHelper(msg, msecs, true, flag);
+    msg.ba().resize(msgSize);
+    return readDataNB(msg.ba().data(), msgSize, msecs, flag);
 }
-
-//-------------------------------------------------------------
 
 bool tipc::Stream::flush(int msecs) {
-    tipc_debug(qDebug() << "tipc:flush entry");
+    tipc_debug(qDebug("tipc:flush entry"));
 
     while (m_socket->bytesToWrite() > 0) {
-        tipc_debug(qDebug() << "bytes to write:" << m_socket->bytesToWrite());
-        bool ok = m_socket->flush();
-        tipc_debug(qDebug() << "flush success:" << ok << "bytes to write:" << m_socket->bytesToWrite());
-        if (m_socket->bytesToWrite() > 0 && !m_socket->waitForBytesWritten(msecs))
-            return false;
+        if (!m_socket->waitForBytesWritten(msecs)) return false;
     }
 
-    tipc_debug(qDebug() << "tipc:flush exit - bytes to write:" << m_socket->bytesToWrite());
-    return (m_socket->bytesToWrite() == 0);
+    tipc_debug(qDebug("tipc:flush exit"));
+    return true;
 }
 
 //********************************************************
 //    tipc Stream Operators
 //********************************************************
 
-tipc::Stream& operator>>(tipc::Stream& stream, tipc::Message& msg) {
-    QLocalSocket* socket = stream.socket();
+tipc::Stream &operator>>(tipc::Stream &stream, tipc::Message &msg) {
+    QLocalSocket *socket = stream.socket();
     msg.clear();
 
     TINT32 msgSize;
-    socket->read(reinterpret_cast<char*>(&msgSize), sizeof(TINT32));
+    socket->read((char *)&msgSize, sizeof(TINT32));
     msg.ba().resize(msgSize);
     socket->read(msg.ba().data(), msgSize);
     return stream;
 }
 
-tipc::Stream& operator<<(tipc::Stream& stream, tipc::Message& msg) {
-    QLocalSocket* socket = stream.socket();
+tipc::Stream &operator<<(tipc::Stream &stream, tipc::Message &msg) {
+    QLocalSocket *socket = stream.socket();
 
     TINT32 size = msg.ba().size();
-    socket->write(reinterpret_cast<char*>(&size), sizeof(TINT32));
+    socket->write((char *)&size, sizeof(TINT32));
     socket->write(msg.ba().data(), size);
 
     return stream;
@@ -182,35 +178,33 @@ tipc::Stream& operator<<(tipc::Stream& stream, tipc::Message& msg) {
 //    tipc Utilities
 //********************************************************
 
-QString tipc::applicationSpecificServerName(const QString& srvName) {
+QString tipc::applicationSpecificServerName(QString srvName) {
     return srvName + QString::number(QCoreApplication::applicationPid());
 }
 
-//-------------------------------------------------------------
-
-bool tipc::startBackgroundProcess(const QString& cmdlineProgram, const QStringList& cmdlineArguments) {
+bool tipc::startBackgroundProcess(QString cmdlineProgram, QStringList cmdlineArguments) {
 #ifdef _WIN32
-    QProcess* proc = new QProcess;
+    QProcess *proc = new QProcess;
     proc->start(cmdlineProgram, cmdlineArguments);
     if (proc->state() == QProcess::NotRunning) {
         delete proc;
         return false;
     }
-    QObject::connect(proc, &QProcess::finished, proc, &QProcess::deleteLater);
-    QObject::connect(proc, &QProcess::errorOccurred, proc, &QProcess::deleteLater);
+
+    QObject::connect(proc, SIGNAL(finished(int, QProcess::ExitStatus)), proc, SLOT(deleteLater()));
+    QObject::connect(proc, SIGNAL(error(QProcess::ProcessError)), proc, SLOT(deleteLater()));
     return true;
 #else
     return QProcess::startDetached(cmdlineProgram, cmdlineArguments);
 #endif
 }
 
-//-------------------------------------------------------------
+bool tipc::startSlaveServer(QString srvName, QString cmdlineProgram, QStringList cmdlineArguments) {
+    if (!tipc::startBackgroundProcess(cmdlineProgram, cmdlineArguments)) return false;
 
-bool tipc::startSlaveServer(const QString& srvName, const QString& cmdlineProgram, const QStringList& cmdlineArguments) {
-    if (!startBackgroundProcess(cmdlineProgram, cmdlineArguments)) return false;
-
-    QString mainSrvName = srvName + "_main";
-    QLocalSocket* dummySock = new QLocalSocket;
+    QString mainSrvName(srvName + "_main");
+    QLocalSocket *dummySock = new QLocalSocket;
+    dummySock->connectToServer(mainSrvName);
 
     while (dummySock->state() == QLocalSocket::UnconnectedState) {
 #ifdef _WIN32
@@ -225,9 +219,9 @@ bool tipc::startSlaveServer(const QString& srvName, const QString& cmdlineProgra
 
     tipc::Stream stream(dummySock);
     tipc::Message msg;
-    stream << (msg << QString("$quit_on_error"));
 
-    if (tipc::readMessage(stream, msg, 3000) == QString()) {
+    stream << (msg << QString("$quit_on_error"));
+    if (readMessageHelper(stream, msg, 3000) == QString()) {
         std::cout << "tipc::startSlaveServer - tipc::readMessage TIMEOUT" << std::endl;
         return false;
     }
@@ -236,19 +230,17 @@ bool tipc::startSlaveServer(const QString& srvName, const QString& cmdlineProgra
         dummySock->moveToThread(QCoreApplication::instance()->thread());
     }
 
-    QObject::connect(dummySock, &QLocalSocket::errorOccurred, dummySock, &QLocalSocket::deleteLater);
+    QObject::connect(dummySock, SIGNAL(error(QLocalSocket::LocalSocketError)), dummySock, SLOT(deleteLater()));
     return true;
 }
 
-//-------------------------------------------------------------
-
-bool tipc::startSlaveConnection(QLocalSocket* socket, const QString& srvName, int msecs, const QString& cmdlineProgram, const QStringList& cmdlineArguments, const QString& threadName) {
+bool tipc::startSlaveConnection(QLocalSocket *socket, QString srvName, int msecs, QString cmdlineProgram, QStringList cmdlineArguments, QString threadName) {
     QElapsedTimer time;
     time.start();
 
-    if (msecs == -1) msecs = std::numeric_limits<int>::max();
+    if (msecs == -1) msecs = (std::numeric_limits<int>::max)();
 
-    QString fullSrvName = srvName + threadName;
+    QString fullSrvName(srvName + threadName);
     socket->connectToServer(fullSrvName);
 
     if (socket->state() == QLocalSocket::UnconnectedState && !cmdlineProgram.isEmpty()) {
@@ -258,7 +250,7 @@ bool tipc::startSlaveConnection(QLocalSocket* socket, const QString& srvName, in
         socket->connectToServer(fullSrvName);
         if (socket->state() != QLocalSocket::UnconnectedState) goto connecting;
 
-        if (!startSlaveServer(srvName, cmdlineProgram, cmdlineArguments)) return false;
+        if (!tipc::startSlaveServer(srvName, cmdlineProgram, cmdlineArguments)) return false;
 
         socket->connectToServer(fullSrvName);
         if (socket->state() == QLocalSocket::UnconnectedState) return false;
@@ -266,182 +258,171 @@ bool tipc::startSlaveConnection(QLocalSocket* socket, const QString& srvName, in
 
 connecting:
     socket->waitForConnected(msecs - time.elapsed());
-    return (socket->state() == QLocalSocket::ConnectedState);
+    return socket->state() == QLocalSocket::ConnectedState;
 }
 
-//-------------------------------------------------------------
-
-QString tipc::readMessage(Stream& stream, Message& msg, int msecs) {
-    msg.clear();
-    stream.flush();
-    if (!stream.readMessage(msg, msecs)) return QString();
-
-    QString res;
-    msg >> res;
-    return res;
+QString tipc::readMessage(Stream &stream, Message &msg, int msecs) {
+    return readMessageHelper(stream, msg, msecs);
 }
 
-//-------------------------------------------------------------
-
-QString tipc::readMessageNB(Stream& stream, Message& msg, int msecs, QEventLoop::ProcessEventsFlag flag) {
-    msg.clear();
-    if (!stream.readMessageNB(msg, msecs, flag)) return QString();
-
-    QString res;
-    msg >> res;
-    return res;
+QString tipc::readMessageNB(Stream &stream, Message &msg, int msecs, QEventLoop::ProcessEventsFlag flag) {
+    return readMessageHelper(stream, msg, msecs, flag);
 }
-
-//-------------------------------------------------------------
 
 QString tipc::uniqueId() {
     static QAtomicInt count;
     count.ref();
-    return QString::number(QCoreApplication::applicationPid()) + "_" +
-           QString::number(static_cast<int>(count));
-}
-
-//-------------------------------------------------------------
-
-int tipc::getShmParameter(const char* name) {
-#ifdef MACOSX
-    size_t valSize = sizeof(TINT64);
-    TINT64 val;
-    if (sysctlbyname(name, &val, &valSize, nullptr, 0) != 0) {
-        qWarning() << "Failed to retrieve" << name << ":" << strerror(errno);
-        return -1;
-    }
-    return std::min(val, static_cast<TINT64>(std::numeric_limits<int>::max()));
-#else
-    return std::numeric_limits<int>::max();
-#endif
+    return QString::number(QCoreApplication::applicationPid()) + "_" + QString::number((int)count);
 }
 
 int tipc::shm_maxSegmentSize() {
-    if (shm_max < 0) shm_max = getShmParameter("kern.sysv.shmmax");
+    if (shm_max < 0) {
+#ifdef MACOSX
+        size_t valSize = sizeof(TINT64);
+        TINT64 val;
+        sysctlbyname("kern.sysv.shmmax", &val, &valSize, NULL, 0);
+        shm_max = std::min(val, (TINT64)(std::numeric_limits<int>::max)());
+#else
+        shm_max = (std::numeric_limits<int>::max)();
+#endif
+    }
     return shm_max;
 }
 
 int tipc::shm_maxSegmentCount() {
-    if (shm_seg < 0) shm_seg = getShmParameter("kern.sysv.shmseg");
+    if (shm_seg < 0) {
+#ifdef MACOSX
+        size_t valSize = sizeof(TINT64);
+        TINT64 val;
+        sysctlbyname("kern.sysv.shmseg", &val, &valSize, NULL, 0);
+        shm_seg = std::min(val, (TINT64)(std::numeric_limits<int>::max)());
+#else
+        shm_seg = (std::numeric_limits<int>::max)();
+#endif
+    }
     return shm_seg;
 }
 
 int tipc::shm_maxSharedPages() {
-    if (shm_all < 0) shm_all = getShmParameter("kern.sysv.shmall");
+    if (shm_all < 0) {
+#ifdef MACOSX
+        size_t valSize = sizeof(TINT64);
+        TINT64 val;
+        sysctlbyname("kern.sysv.shmall", &val, &valSize, NULL, 0);
+        shm_all = std::min(val, (TINT64)(std::numeric_limits<int>::max)());
+#else
+        shm_all = (std::numeric_limits<int>::max)();
+#endif
+    }
     return shm_all;
 }
 
 int tipc::shm_maxSharedCount() {
-    if (shm_mni < 0) shm_mni = getShmParameter("kern.sysv.shmmni");
+    if (shm_mni < 0) {
+#ifdef MACOSX
+        size_t valSize = sizeof(TINT64);
+        TINT64 val;
+        sysctlbyname("kern.sysv.shmmni", &val, &valSize, NULL, 0);
+        shm_mni = std::min(val, (TINT64)(std::numeric_limits<int>::max)());
+#else
+        shm_mni = (std::numeric_limits<int>::max)();
+#endif
+    }
     return shm_mni;
 }
 
-//-------------------------------------------------------------
-
 void tipc::shm_set(int shmmax, int shmseg, int shmall, int shmmni) {
-    tipc_debug(qDebug() << "shmmax:" << shmmax << "shmseg:" << shmseg << "shmall:" << shmall << "shmmni:" << shmmni);
+    tipc_debug(qDebug("shmmax: %i, shmseg: %i, shmall: %i, shmmni: %i", shmmax, shmseg, shmall, shmmni));
 #ifdef MACOSX
     TINT64 val;
     int err;
     if (shmmax > 0) {
         val = shmmax;
-        err = sysctlbyname("kern.sysv.shmmax", nullptr, nullptr, &val, sizeof(TINT64));
+        err = sysctlbyname("kern.sysv.shmmax", NULL, NULL, &val, sizeof(TINT64));
         if (!err) shm_max = shmmax;
     }
     if (shmseg > 0) {
         val = shmseg;
-        err = sysctlbyname("kern.sysv.shmseg", nullptr, nullptr, &val, sizeof(TINT64));
+        err = sysctlbyname("kern.sysv.shmseg", NULL, NULL, &val, sizeof(TINT64));
         if (!err) shm_seg = shmseg;
     }
     if (shmall > 0) {
         val = shmall;
-        err = sysctlbyname("kern.sysv.shmall", nullptr, nullptr, &val, sizeof(TINT64));
+        err = sysctlbyname("kern.sysv.shmall", NULL, NULL, &val, sizeof(TINT64));
         if (!err) shm_all = shmall;
     }
     if (shmmni > 0) {
         val = shmmni;
-        err = sysctlbyname("kern.sysv.shmmni", nullptr, nullptr, &val, sizeof(TINT64));
+        err = sysctlbyname("kern.sysv.shmmni", NULL, NULL, &val, sizeof(TINT64));
         if (!err) shm_mni = shmmni;
     }
 #endif
 }
 
-//-------------------------------------------------------------
+int tipc::create(QSharedMemory &shmem, int size, bool strictSize) {
+    bool retried = false;
 
-int tipc::create(QSharedMemory& shmem, int size, bool strictSize) {
     if (!strictSize) size = std::min(size, shm_maxSegmentSize());
 
     tipc_debug(qDebug() << "shMem create: size =" << size);
 
-    bool ok = shmem.create(size);
-    if (!ok && shmem.error() == QSharedMemory::AlreadyExists) {
-        shmem.attach();
-        shmem.detach();
-        ok = shmem.create(size);
-    }
+retry:
+    if (!shmem.create(size)) {
+        tipc_debug(qDebug() << "Error: Shared Segment could not be created: #" << shmem.errorString());
 
-    if (!ok) {
-        tipc_debug(qDebug() << "Error: Shared Segment could not be created:" << shmem.errorString());
+        if (shmem.error() == QSharedMemory::AlreadyExists && !retried) {
+            retried = true;
+            shmem.attach();
+            shmem.detach();
+            goto retry;
+        }
+
         return -1;
     }
 
     return size;
 }
 
-//-------------------------------------------------------------
-
-bool tipc::writeShMemBuffer(Stream& stream, Message& msg, int bufSize, ShMemWriter* dataWriter) {
+bool tipc::writeShMemBuffer(Stream &stream, Message &msg, int bufSize, ShMemWriter *dataWriter) {
     tipc_debug(QElapsedTimer time; time.start());
-    tipc_debug(qDebug() << "tipc::writeShMemBuffer entry");
+    tipc_debug(qDebug("tipc::writeShMemBuffer entry"));
 
-    static QSemaphore sem(tipc::shm_maxSegmentCount());
-    sem.acquire(1);
+    QSharedMemory shmem(tipc::uniqueId());
+    if (!handleSharedMemory(shmem, bufSize, false)) goto err;
 
-    {
-        QSharedMemory shmem(tipc::uniqueId());
-        if (tipc::create(shmem, bufSize) <= 0) goto err;
+    msg << QString("shm") << shmem.key() << bufSize;
 
-        msg << QString("shm") << shmem.key() << bufSize;
+    int remainingData = bufSize;
+    while (remainingData > 0) {
+        shmem.lock();
+        int chunkData = dataWriter->write((char *)shmem.data(), std::min(shmem.size(), remainingData));
+        shmem.unlock();
+        remainingData -= chunkData;
 
-        int remainingData = bufSize;
-        while (remainingData > 0) {
-            tipc_debug(QElapsedTimer xchTime; xchTime.start());
-            shmem.lock();
-            int chunkData = dataWriter->write(static_cast<char*>(shmem.data()), std::min(shmem.size(), remainingData));
-            shmem.unlock();
-            tipc_debug(qDebug() << "exchange time:" << xchTime.elapsed());
+        stream << (msg << QString("chk") << chunkData);
 
-            remainingData -= chunkData;
-            stream << (msg << QString("chk") << chunkData);
+        if (readMessageHelper(stream, msg, 3000) != "ok") goto err;
 
-            if (tipc::readMessage(stream, msg) != "ok") goto err;
-
-            msg.clear();
-        }
+        msg.clear();
     }
 
-    sem.release(1);
-    tipc_debug(qDebug() << "tipc::writeShMemBuffer exit");
+    tipc_debug(qDebug("tipc::writeShMemBuffer exit"));
     tipc_debug(qDebug() << "tipc::writeShMemBuffer time:" << time.elapsed());
     return true;
 
 err:
-    tipc_debug(qDebug() << "tipc::writeShMemBuffer exit (error)");
+    tipc_debug(qDebug("tipc::writeShMemBuffer exit (error)"));
     msg.clear();
-    sem.release(1);
     return false;
 }
 
-//-------------------------------------------------------------
-
-bool tipc::readShMemBuffer(Stream& stream, Message& msg, ShMemReader* dataReader) {
+bool tipc::readShMemBuffer(Stream &stream, Message &msg, ShMemReader *dataReader) {
     tipc_debug(QElapsedTimer time; time.start());
-    tipc_debug(qDebug() << "tipc::readShMemBuffer entry");
+    tipc_debug(qDebug("tipc::readShMemBuffer entry"));
 
-    QString res(tipc::readMessage(stream, msg));
+    QString res = readMessageHelper(stream, msg, 3000);
     if (res != "shm") {
-        tipc_debug(qDebug() << "tipc::readShMemBuffer exit (res != \"shm\")");
+        tipc_debug(qDebug("tipc::readShMemBuffer exit (res != \"shm\")"));
         return false;
     }
 
@@ -450,9 +431,8 @@ bool tipc::readShMemBuffer(Stream& stream, Message& msg, ShMemReader* dataReader
     msg >> id >> bufSize >> chkStr;
 
     QSharedMemory shmem(id);
-    shmem.attach();
-    if (!shmem.isAttached()) {
-        tipc_debug(qDebug() << "tipc::readShMemBuffer exit (shmem not attached)");
+    if (!shmem.attach()) {
+        tipc_debug(qDebug("tipc::readShMemBuffer exit (shmem not attached)"));
         return false;
     }
 
@@ -460,25 +440,23 @@ bool tipc::readShMemBuffer(Stream& stream, Message& msg, ShMemReader* dataReader
     while (true) {
         msg >> chunkData;
 
-        tipc_debug(QElapsedTimer xchTime; xchTime.start());
         shmem.lock();
-        remainingData -= dataReader->read(static_cast<const char*>(shmem.data()), remainingData);
+        remainingData -= dataReader->read((const char *)shmem.data(), chunkData);
         shmem.unlock();
-        tipc_debug(qDebug() << "exchange time:" << xchTime.elapsed());
 
-        stream << (msg << QString("ok"));
+        stream << (msg << clr << QString("ok"));
         stream.flush();
 
         if (remainingData <= 0) break;
 
-        if (tipc::readMessage(stream, msg) != "chk") {
-            tipc_debug(qDebug() << "tipc::readShMemBuffer exit (unexpected chunk absence)");
+        if (readMessageHelper(stream, msg, 3000) != "chk") {
+            tipc_debug(qDebug("tipc::readShMemBuffer exit (unexpected chunk absence)"));
             return false;
         }
     }
 
     shmem.detach();
-    tipc_debug(qDebug() << "tipc::readShMemBuffer exit");
+    tipc_debug(qDebug("tipc::readShMemBuffer exit"));
     tipc_debug(qDebug() << "tipc::readShMemBuffer time:" << time.elapsed());
     return true;
 }
