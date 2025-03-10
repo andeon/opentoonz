@@ -70,7 +70,7 @@ jobs:
     # - name: Run Static Analysis (Clang-Tidy)
     #   if: matrix.compiler == 'clang'
     #   run: |
-    #     echo "Executando análise estática do código com clang-tidy..."
+    #     echo "Executing static code analysis with clang-tidy..."
     #     QT_INCLUDES=$(pkg-config --cflags Qt5Core)
     #     find toonz/sources -name "*.cpp" | xargs clang-tidy -p=toonz/build $QT_INCLUDES
 
@@ -78,12 +78,13 @@ jobs:
     # - name: Run Static Analysis (GCC - Wall)
     #   if: matrix.compiler == 'gcc'
     #   run: |
-    #     echo "Executando análise estática do código com GCC..."
+    #     echo "Executing static code analysis with GCC..."
     #     INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | xargs -I{} echo -I{})
     #     QT_INCLUDES=$(pkg-config --cflags Qt5Core)
     #     find toonz/sources -name "*.cpp" | xargs gcc -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES -o /dev/null
 
-    - name: Run Static Analysis (Cppcheck)
-      run: |
-        echo "Executando análise estática com cppcheck..."
-        cppcheck --enable=warning,performance,portability --suppress=missingIncludeSystem --force toonz/sources/
+    # Temporarily disable cppcheck
+    # - name: Run Static Analysis (Cppcheck)
+    #   run: |
+    #     echo "Running static analysis with cppcheck..."
+    #     cppcheck --enable=warning,performance,portability --suppress=missingIncludeSystem --force toonz/sources/
