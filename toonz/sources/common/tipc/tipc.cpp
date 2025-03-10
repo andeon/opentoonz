@@ -10,7 +10,7 @@
 #include <QEventLoop>
 #include <QTimer>
 #include <QDebug>
-#include <QCommandLineParser> // For better command-line argument handling
+#include <memory> // For std::unique_ptr
 
 // System-specific includes
 #if defined(_WIN32)
@@ -27,8 +27,8 @@
 
 /*
 PLATFORM-SPECIFIC REMINDERS:
-- Windows: QLocalSocket::waitForBytesWritten requires data to be read on the other end.
-- MACOSX: Shared memory settings are restrictive (4 MB max per segment).
+- On Windows, QLocalSocket::waitForBytesWritten requires data to be read on the other end.
+- On macOS, shared memory settings are restrictive (4 MB max per segment).
 */
 
 //********************************************************
@@ -41,10 +41,6 @@ PLATFORM-SPECIFIC REMINDERS:
 #define tipc_debug(expr) expr
 #else
 #define tipc_debug(expr)
-#endif
-
-#ifdef TIPC_DEBUG
-#include <QTime>
 #endif
 
 //********************************************************
@@ -349,7 +345,10 @@ int tipc::shm_maxSegmentSize() {
 #ifdef MACOSX
     size_t valSize = sizeof(TINT64);
     TINT64 val;
-    sysctlbyname("kern.sysv.shmmax", &val, &valSize, nullptr, 0);
+    if (sysctlbyname("kern.sysv.shmmax", &val, &valSize, nullptr, 0) != 0) {
+      qWarning() << "Failed to retrieve shmmax:" << strerror(errno);
+      return -1;
+    }
     shm_max = std::min(val, static_cast<TINT64>(std::numeric_limits<int>::max()));
 #else
     shm_max = std::numeric_limits<int>::max();
@@ -366,7 +365,10 @@ int tipc::shm_maxSegmentCount() {
 #ifdef MACOSX
     size_t valSize = sizeof(TINT64);
     TINT64 val;
-    sysctlbyname("kern.sysv.shmseg", &val, &valSize, nullptr, 0);
+    if (sysctlbyname("kern.sysv.shmseg", &val, &valSize, nullptr, 0) != 0) {
+      qWarning() << "Failed to retrieve shmseg:" << strerror(errno);
+      return -1;
+    }
     shm_seg = std::min(val, static_cast<TINT64>(std::numeric_limits<int>::max()));
 #else
     shm_seg = std::numeric_limits<int>::max();
@@ -383,7 +385,10 @@ int tipc::shm_maxSharedPages() {
 #ifdef MACOSX
     size_t valSize = sizeof(TINT64);
     TINT64 val;
-    sysctlbyname("kern.sysv.shmall", &val, &valSize, nullptr, 0);
+    if (sysctlbyname("kern.sysv.shmall", &val, &valSize, nullptr, 0) != 0) {
+      qWarning() << "Failed to retrieve shmall:" << strerror(errno);
+      return -1;
+    }
     shm_all = std::min(val, static_cast<TINT64>(std::numeric_limits<int>::max()));
 #else
     shm_all = std::numeric_limits<int>::max();
@@ -400,7 +405,10 @@ int tipc::shm_maxSharedCount() {
 #ifdef MACOSX
     size_t valSize = sizeof(TINT64);
     TINT64 val;
-    sysctlbyname("kern.sysv.shmmni", &val, &valSize, nullptr, 0);
+    if (sysctlbyname("kern.sysv.shmmni", &val, &valSize, nullptr, 0) != 0) {
+      qWarning() << "Failed to retrieve shmmni:" << strerror(errno);
+      return -1;
+    }
     shm_mni = std::min(val, static_cast<TINT64>(std::numeric_limits<int>::max()));
 #else
     shm_mni = std::numeric_limits<int>::max();
@@ -443,25 +451,23 @@ void tipc::shm_set(int shmmax, int shmseg, int shmall, int shmmni) {
 //-------------------------------------------------------------
 
 int tipc::create(QSharedMemory& shmem, int size, bool strictSize) {
-  bool ok, retried = false;
-
   if (!strictSize) size = std::min(size, shm_maxSegmentSize());
 
-  tipc_debug(qDebug() << "shMem create: size =" << size);
-
-retry:
-  ok = shmem.create(size);
-  if (!ok) {
-    tipc_debug(qDebug() << "Error: Shared Segment could not be created:" << shmem.errorString());
-
-    if (shmem.error() == QSharedMemory::AlreadyExists && !retried) {
-      retried = true;
-      shmem.attach();
+  if (!shmem.create(size)) {
+    if (shmem.error() == QSharedMemory::AlreadyExists) {
+      if (!shmem.attach()) {
+        qDebug() << "Failed to attach to existing shared memory:" << shmem.errorString();
+        return -1;
+      }
       shmem.detach();
-      goto retry;
+      if (!shmem.create(size)) {
+        qDebug() << "Failed to recreate shared memory:" << shmem.errorString();
+        return -1;
+      }
+    } else {
+      qDebug() << "Failed to create shared memory:" << shmem.errorString();
+      return -1;
     }
-
-    return -1;
   }
 
   return size;
@@ -517,7 +523,7 @@ err:
 
 bool tipc::readShMemBuffer(Stream& stream, Message& msg,
                            ShMemReader* dataReader) {
-  tipc_debug(QElapsedTimer time; time.start());
+  tipc_debug(QElapsedTimer time; time.start(););
   tipc_debug(qDebug() << "tipc::readShMemBuffer entry");
 
   QString res(tipc::readMessage(stream, msg));
