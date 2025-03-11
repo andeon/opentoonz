@@ -633,14 +633,15 @@ inline bool param_read_value_<tpbind_dbl_t>(TParam *p,
                                             const toonz_param_desc_t *desc,
                                             void *ptr, double frame,
                                             size_t isize, size_t &osize) {
+  // TODO: Consider reintroducing input validation for safety.
   // if (isize == sizeof(tpbind_dbl_t::traittype::iovaluetype)) {
   auto r = reinterpret_cast<tpbind_dbl_t::realtype *>(p);
   auto v = r->getValue(frame);
   *reinterpret_cast<tpbind_dbl_t::traittype::iovaluetype *>(ptr) = v;
   osize                                                          = 1;
   return true;
-  //}
-  return false;
+  // }
+  // return false; // Unreachable code, removed for clarity.
 }
 
 template <>
