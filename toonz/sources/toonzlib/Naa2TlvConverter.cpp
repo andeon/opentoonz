@@ -549,18 +549,23 @@ void Naa2TlvConverter::findThinInks() {
     RegionInfo &region = m_regions[i];
     if (region.type != RegionInfo::Unknown) continue;
     QList<int> &bs = region.boundaries;
-    if (bs.count() == 2)
+    if (bs.count() == 2) {
       region.type = RegionInfo::ThinInk;
-    else if (bs.count() == 3) {
-      continue;
-      if (bs[2] * 5 < bs[1]) region.type = RegionInfo::ThinInk;
+    } else if (bs.count() == 3) {
+      // Remove the continue statement and evaluate the condition
+      if (bs[2] * 5 < bs[1]) {
+        region.type = RegionInfo::ThinInk;
+      }
     } else {
-      continue;
+      // Remove the continue statement and execute the logic
       int k = 1;
       int s = 0;
-      while (k < bs.count() && s * 100 < region.pixelCount * 90) s += bs[k++];
-      if (region.pixelCount > 100 && k <= 3)
-        region.type = RegionInfo::ThinInk;  // era Ink per qualche ragione
+      while (k < bs.count() && s * 100 < region.pixelCount * 90) {
+        s += bs[k++];
+      }
+      if (region.pixelCount > 100 && k <= 3) {
+        region.type = RegionInfo::ThinInk; // era Ink per qualche ragione
+      }
     }
   }
 }
