@@ -93,7 +93,7 @@ jobs:
         name: gcc-logs
         path: /tmp/*.log
 
-    # Temporarily disable clang-tidy
+    # Temporarily disabl clang-tidy
     # - name: Run Static Analysis (Clang-Tidy)
     #   if: matrix.compiler == 'clang'
     #   run: |
