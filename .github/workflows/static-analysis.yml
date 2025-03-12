@@ -92,13 +92,6 @@ jobs:
         # Analyze the entire codebase
         find toonz/sources -name "*.cpp" | xargs gcc -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES -o /dev/null
         
-    - name: Upload GCC logs
-      if: matrix.compiler == 'gcc'
-      uses: actions/upload-artifact@v3
-      with:
-        name: gcc-logs
-        path: /tmp/*.log
-
     # Temporarily disable clang-tidy
     # - name: Run Static Analysis (Clang-Tidy)
     #   if: matrix.compiler == 'clang'
