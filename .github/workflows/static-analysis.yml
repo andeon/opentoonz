@@ -56,7 +56,7 @@ jobs:
         echo "Executing static code analysis with GCC on fixed files..."
         INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | xargs -I{} echo -I{})
         QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-        
+
         # Print the contents of test_files.txt for debugging
         echo "Files to be analyzed:"
         cat ci-scripts/linux/test_files.txt
@@ -66,8 +66,15 @@ jobs:
           echo "Analyzing file: $file"
           if [ -f "toonz/sources/$file" ]; then
             echo "File exists, running GCC on $file"
+            
+            # Create a unique log file for each file being analyzed
+            output_file="/tmp/$(basename "$file").log"
+            
             # Run GCC with verbose output and capture stderr
-            gcc -Wall -Wextra -Werror -v $INCLUDES $QT_INCLUDES "toonz/sources/$file" -o /dev/null -v 2>&1
+            gcc -Wall -Wextra -Werror -v $INCLUDES $QT_INCLUDES "toonz/sources/$file" -o /dev/null 2>&1 | tee "$output_file"
+            
+            # Optionally, print the output file path for further inspection
+            echo "GCC output for $file saved to: $output_file"
           else
             echo "File $file not found!"
           fi
