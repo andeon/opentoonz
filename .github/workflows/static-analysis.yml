@@ -50,21 +50,29 @@ jobs:
         cmake ../sources -G Ninja -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCMAKE_C_COMPILER=${{ matrix.cc }} -DWITH_TRANSLATION=OFF -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
         ninja
 
-    # Run Static Analysis (GCC - Wall) on fixed files first
     - name: Run Static Analysis (GCC - Wall) on fixed files
       if: matrix.compiler == 'gcc'
       run: |
         echo "Executing static code analysis with GCC on fixed files..."
         INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | xargs -I{} echo -I{})
         QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-
+        
+        # Print the contents of test_files.txt for debugging
+        echo "Files to be analyzed:"
+        cat ci-scripts/linux/test_files.txt
+        
         # Loop over the fixed files listed in test_files.txt
         while IFS= read -r file; do
+          echo "Analyzing file: $file"
           if [ -f "toonz/sources/$file" ]; then
-            echo "Analyzing $file"
-            gcc -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES "toonz/sources/$file" -o /dev/null
+            echo "File exists, running GCC on $file"
+            # Run GCC with verbose output and capture stderr
+            gcc -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES "toonz/sources/$file" -o /dev/null -v 2>&1
+          else
+            echo "File $file not found!"
           fi
         done < ci-scripts/linux/test_files.txt
+
 
     # Run Static Analysis (GCC - Wall) on entire codebase after testing fixed files
     - name: Run Static Analysis (GCC - Wall) on all files
