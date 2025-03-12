@@ -67,7 +67,7 @@ jobs:
           if [ -f "toonz/sources/$file" ]; then
             echo "File exists, running GCC on $file"
             # Run GCC with verbose output and capture stderr
-            gcc -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES "toonz/sources/$file" -o /dev/null -v 2>&1
+            gcc -Wall -Wextra -Werror -v $INCLUDES $QT_INCLUDES "toonz/sources/$file" -o /dev/null -v 2>&1
           else
             echo "File $file not found!"
           fi
