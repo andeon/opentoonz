@@ -64,7 +64,7 @@ jobs:
             echo "Analyzing $file"
             gcc -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES "toonz/sources/$file" -o /dev/null
           fi
-        done < opentoonz/ci-scripts/linux/test_files.txt
+        done < ci-scripts/linux/test_files.txt
 
     # Run Static Analysis (GCC - Wall) on entire codebase after testing fixed files
     - name: Run Static Analysis (GCC - Wall) on all files
