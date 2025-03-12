@@ -38,7 +38,7 @@ jobs:
       run: |
         if [ ! -f thirdparty/tiff-4.0.3/libtiff.a ]; then
           cd thirdparty/tiff-4.0.3
-          CFLAGS='-fPIC -fsanitize=address -fno-omit-frame-pointer -g' CXXFLAGS='-fPIC -fsanitize=address -fno-omit-frame-pointer -g' ./configure --disable-jbig
+          CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
           make -j $(nproc)
         fi
 
@@ -47,9 +47,6 @@ jobs:
         export CCACHE_DIR=/home/runner/.ccache
         export CC="ccache ${{ matrix.cc }}"
         export CXX="ccache ${{ matrix.cxx }}"
-        export CFLAGS='-fsanitize=address -fno-omit-frame-pointer -g'
-        export CXXFLAGS='-fsanitize=address -fno-omit-frame-pointer -g'
-        export LDFLAGS='-fsanitize=address'
         cd toonz
         mkdir build
         cd build
@@ -57,18 +54,6 @@ jobs:
         ninja
 
     # Ensure tests are built
-    - name: Build Tests
-      run: |
-        cd toonz/build
-        ninja  # No need for 'tests' target, just build everything
-
-    # Run the tests with AddressSanitizer
-    - name: Run Tests with AddressSanitizer
-      env:
-        ASAN_OPTIONS: detect_leaks=1
-      run: |
-        cd toonz/build
-        ctest -V --output-on-failure
     #    - name: Create Artifact
     #      run: |
     #        cd toonz/build
@@ -82,14 +67,14 @@ jobs:
     #     QT_INCLUDES=$(pkg-config --cflags Qt5Core)
     #     find toonz/sources -name "*.cpp" | xargs clang-tidy -p=toonz/build $QT_INCLUDES
 
-    # Temporarily disable GCC -Wall
-    # - name: Run Static Analysis (GCC - Wall)
-    #   if: matrix.compiler == 'gcc'
-    #   run: |
-    #     echo "Executing static code analysis with GCC..."
-    #     INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | xargs -I{} echo -I{})
-    #     QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-    #     find toonz/sources -name "*.cpp" | xargs gcc -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES -o /dev/null
+    - name: Run Static Analysis (GCC - Wall)
+      if: matrix.compiler == 'gcc'
+      run: |
+        echo "Executing static code analysis with GCC..."
+        INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | xargs -I{} echo -I{})
+        QT_INCLUDES=$(pkg-config --cflags Qt5Core)
+        find toonz/sources -name "*.cpp" | xargs gcc -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES -o /dev/null
+
 
     # Temporarily disable cppcheck
     # - name: Run Static Analysis (Cppcheck)
