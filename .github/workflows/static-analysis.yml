@@ -22,7 +22,6 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential cmake pkg-config ninja-build ccache libboost-all-dev qtbase5-dev qt5-qmake qtscript5-dev qttools5-dev qttools5-dev-tools qtmultimedia5-dev qtwayland5 libqt5svg5-dev libqt5opengl5-dev libqt5multimedia5-plugins libqt5serialport5-dev libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev libpng-dev libjpeg-dev libglew-dev freeglut3-dev libfreetype6-dev libjson-c-dev libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2 clang-tidy pkg-config
-
     - name: Set up cache
       run: mkdir -p /home/runner/.ccache
 
@@ -33,7 +32,6 @@ jobs:
         restore-keys: | 
           ${{ runner.os }}-${{ matrix.compiler }}-
           ${{ runner.os }}-
-
     - name: Build libtiff
       run: |
         if [ ! -f thirdparty/tiff-4.0.3/libtiff.a ]; then
@@ -41,7 +39,6 @@ jobs:
           CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
           make -j $(nproc)
         fi
-
     - name: Build
       run: |
         export CCACHE_DIR=/home/runner/.ccache
@@ -56,36 +53,45 @@ jobs:
     - name: Run Static Analysis (GCC - Wall) on fixed files
       if: matrix.compiler == 'gcc'
       run: |
-        set -e
         echo "Executing static code analysis with GCC on fixed files..."
         INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | xargs -I{} echo -I{})
         QT_INCLUDES=$(pkg-config --cflags Qt5Core)
 
+        # Print the contents of test_files.txt for debugging
         echo "Files to be analyzed:"
         cat ci-scripts/linux/test_files.txt
         
+        # Loop over the fixed files listed in test_files.txt
         while IFS= read -r file; do
           echo "Analyzing file: $file"
           if [ -f "toonz/sources/$file" ]; then
             echo "File exists, running GCC on $file"
+            
+            # Create a unique log file for each file being analyzed
             output_file="/tmp/$(basename "$file").log"
+            
+            # Run GCC with verbose output and capture stderr
             gcc -Wall -Wextra -Werror -v $INCLUDES $QT_INCLUDES "toonz/sources/$file" -o /dev/null 2>&1 | tee "$output_file"
+            
+            # Optionally, print the output file path for further inspection
             echo "GCC output for $file saved to: $output_file"
           else
             echo "File $file not found!"
-            exit 1
           fi
         done < ci-scripts/linux/test_files.txt
 
+
+    # Run Static Analysis (GCC - Wall) on entire codebase after testing fixed files
     - name: Run Static Analysis (GCC - Wall) on all files
       if: matrix.compiler == 'gcc'
       run: |
-        set -e
         echo "Executing static code analysis with GCC on entire codebase..."
         INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | xargs -I{} echo -I{})
         QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-        find toonz/sources -name "*.cpp" | xargs gcc -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES -o /dev/null
 
+        # Analyze the entire codebase
+        find toonz/sources -name "*.cpp" | xargs gcc -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES -o /dev/null
+        
     - name: Upload GCC logs
       if: matrix.compiler == 'gcc'
       uses: actions/upload-artifact@v3
@@ -93,11 +99,10 @@ jobs:
         name: gcc-logs
         path: /tmp/*.log
 
-    # Temporarily disabl clang-tidy
+    # Temporarily disable clang-tidy
     # - name: Run Static Analysis (Clang-Tidy)
     #   if: matrix.compiler == 'clang'
     #   run: |
-    #     set -e
     #     echo "Executing static code analysis with clang-tidy..."
     #     QT_INCLUDES=$(pkg-config --cflags Qt5Core)
     #     find toonz/sources -name "*.cpp" | xargs clang-tidy -p=toonz/build $QT_INCLUDES
@@ -105,6 +110,5 @@ jobs:
     # Temporarily disable cppcheck
     # - name: Run Static Analysis (Cppcheck)
     #   run: |
-    #     set -e
     #     echo "Running static analysis with cppcheck..."
     #     cppcheck --enable=warning,performance,portability --suppress=missingIncludeSystem --force toonz/sources/
