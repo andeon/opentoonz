@@ -62,29 +62,27 @@ bool isCuspPoint(const TPointD &p0, const TPointD &p1, const TPointD &p2) {
  * indexB. */
 void insertPoint(TStroke *stroke, int indexA, int indexB) {
   assert(stroke);
-  assert(indexA >= 0 && indexB <= stroke->getChunkCount());
-
+  int j          = 0;
   int chunkCount = indexB - indexA;
-  if (chunkCount % 2 == 0 || chunkCount == 0) return;  // No need to insert a point
-
+  if (chunkCount % 2 == 0) return;
   double length = 0;
-  double firstW = stroke->getW(stroke->getChunk(indexA)->getP0());  // Initialize firstW
-  double lastW  = stroke->getW(stroke->getChunk(indexA)->getP2());  // Initialize lastW
-
-  for (int j = indexA; j < indexB; j++) {
-    // Find the longest chunk
+  double firstW = 0.0, lastW = 0.0;  // Initialize the variables
+  for (j = indexA; j < indexB; j++) {
+    // search for the longest chunk
     double w0 = stroke->getW(stroke->getChunk(j)->getP0());
-    double w1 = (j == stroke->getChunkCount() - 1) ? 1 : stroke->getW(stroke->getChunk(j)->getP2());
+    double w1;
+    if (j == stroke->getChunkCount() - 1)
+      w1 = 1;
+    else
+      w1 = stroke->getW(stroke->getChunk(j)->getP2());
     double length0 = stroke->getLength(w0);
     double length1 = stroke->getLength(w1);
-
     if (length < length1 - length0) {
-      firstW = w0;  // Update firstW if this chunk is longer
-      lastW  = w1;  // Update lastW if this chunk is longer
+      firstW = w0;
+      lastW  = w1;
       length = length1 - length0;
     }
   }
-
   // Insert a control point at the midpoint of the longest chunk
   stroke->insertControlPoints((firstW + lastW) * 0.5);
 }
