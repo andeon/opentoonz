@@ -1,9 +1,8 @@
-cmake_minimum_required(VERSION 2.8.11)
+cmake_minimum_required(VERSION 3.10)
 
 set(CMAKE_BUILD_TYPE_INIT Release)
 
-project(OpenToonz)
-
+project(OpenToonz LANGUAGES C CXX)
 
 #-----------------------------------------------------------------------------
 # Platform Specific Defaults
@@ -22,6 +21,8 @@ if(WIN32)
 elseif(APPLE)
     set(BUILD_TARGET_APPLE  ON)
     message(STATUS "Target system is APPLE")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum OS X deployment version")
+    set(CMAKE_OSX_ARCHITECTURES "x86_64" CACHE STRING "Target architectures")
 elseif(UNIX)
     set(BUILD_TARGET_UNIX   ON)
     message(STATUS "Target system is UNIX")
@@ -59,7 +60,6 @@ else()
     message(ERROR "Unsupported build environment, only MSVC, APPLE and UNIXLIKE are supported")
 endif()
 
-
 # initialize to ON
 macro(option_defaults_init)
     foreach(_var ${ARGV})
@@ -94,7 +94,6 @@ elseif(BUILD_ENV_UNIXLIKE)
     set(_init_SYSTEM_LZO                     ON)
     set(_init_SYSTEM_SUPERLU                 ON)
 endif()
-
 
 #-----------------------------------------------------------------------------
 # Build Options
@@ -292,7 +291,6 @@ if(BUILD_ENV_MSVC)
         -DGLUT_NO_LIB_PRAGMA
     )
 endif()
-
 
 if(PLATFORM EQUAL 64)
     if(BUILD_ENV_UNIXLIKE)
@@ -509,7 +507,6 @@ elseif(BUILD_ENV_UNIXLIKE)
     endif()
 endif()
 
-
 include(TestBigEndian)
 test_big_endian(_SYSTEM_BIG_ENDIAN)
 if(_SYSTEM_BIG_ENDIAN)
@@ -518,7 +515,6 @@ else()
     add_definitions(-DTNZ_LITTLE_ENDIAN=1)
 endif()
 unset(_SYSTEM_BIG_ENDIAN)
-
 
 set(C_WARNINGS)
 set(CXX_WARNINGS)
@@ -532,7 +528,6 @@ if(CMAKE_COMPILER_IS_GNUCC)
     ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_UNDEF -Wundef)
     ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_MISSING_DECLARATIONS -Wmissing-declarations)
 endif()
-
 
 include_directories(
     SYSTEM
