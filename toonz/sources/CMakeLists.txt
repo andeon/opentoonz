@@ -168,11 +168,6 @@ if(BUILD_ENV_MSVC)
     set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};${QT_PATH}/lib/cmake/")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4251")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4251")
-    target_compile_definitions(OpenToonz PRIVATE
-        -DVC_EXTRALEAN
-        -DNOMINMAX
-        -D_USE_MATH_DEFINES
-    )
 elseif(BUILD_ENV_APPLE)
     set(QT_PATH "~/Qt5.9.2/5.9.2/clang_${PLATFORM}/lib" CACHE PATH "Qt installation directory")
     set(QT_LIB_PATH "${QT_PATH}/")
@@ -180,20 +175,6 @@ elseif(BUILD_ENV_APPLE)
     foreach(path ${CMAKE_PREFIX_PATH})
         message("CMAKE_PREFIX_PATH: " ${path})
     endforeach(path)
-endif()
-
-# Define the OpenToonz target
-add_executable(OpenToonz
-    # List your source files here
-    ${CMAKE_SOURCE_DIR}/toonz/sources/toonz/main.cpp
-)
-
-# Set compile definitions for OpenToonz
-target_compile_definitions(OpenToonz PRIVATE
-    -DMACOSX
-    -Di386
-    -D__MACOS__
-)
     if(PLATFORM EQUAL 64)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -std=c++17 -stdlib=libc++ -fno-implicit-templates")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m64")
@@ -208,13 +189,13 @@ elseif(BUILD_ENV_UNIXLIKE)
     # Needed for correct Qt detection
     set(PRELOAD_VARIABLE "LD_LIBRARY_PATH")
     if(CMAKE_SYSTEM_NAME MATCHES "Linux")
-        target_compile_definitions(OpenToonz PRIVATE -DLINUX)
+        add_definitions(-DLINUX)
     elseif(CMAKE_SYSTEM_NAME MATCHES "Haiku")
-        target_compile_definitions(OpenToonz PRIVATE -DHAIKU)
+        add_definitions(-DHAIKU)
         set(PRELOAD_VARIABLE "LIBRARY_PATH")
     elseif(CMAKE_SYSTEM_NAME MATCHES "^.*BSD$|DragonFly")
         set(BUILD_TARGET_BSD ON)
-        target_compile_definitions(OpenToonz PRIVATE -D_BSD_SOURCE -DFREEBSD)
+        add_definitions(-D_BSD_SOURCE -DFREEBSD)
         include_directories("/usr/local/include/")
         message(STATUS "Configuring for BSD system")
     elseif(NOT BUILD_TARGET_WIN)
@@ -232,13 +213,6 @@ elseif(BUILD_ENV_UNIXLIKE)
     endif()
 endif()
 
-target_compile_definitions(OpenToonz PRIVATE
-    -DQT_GUI_LIB
-    -DQT_NETWORK_LIB
-    -DQT_CORE_LIB
-    -DQT_SHARED
-)
-
 # Find includes in corresponding build directories
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -254,8 +228,6 @@ if(BUILD_ENV_APPLE)
         set(CMAKE_INSTALL_RPATH "${QT_LIB_PATH}")
     endif()
 endif()
-
-target_include_directories(OpenToonz PRIVATE include)
 
 # Find the QtWidgets library
 find_package(Qt5 REQUIRED COMPONENTS
@@ -283,12 +255,15 @@ endif()
 unset(QT_MINIMUM_VERSION)
 
 if(BUILD_ENV_MSVC)
-    target_include_directories(OpenToonz SYSTEM PRIVATE
+    include_directories(
+        SYSTEM
         ${SDKROOT}/glut/3.7.6/include
         ${SDKROOT}/zlib-1.2.8
         ${SDKROOT}/libjpeg-turbo/include
     )
-    target_compile_definitions(OpenToonz PRIVATE -DGLUT_NO_LIB_PRAGMA)
+    add_definitions(
+        -DGLUT_NO_LIB_PRAGMA
+    )
 endif()
 
 if(PLATFORM EQUAL 64)
@@ -298,7 +273,9 @@ if(PLATFORM EQUAL 64)
         find_package(OpenCV 4.1 REQUIRED)
     endif()
     if(WITH_CANON)
-        target_include_directories(OpenToonz PRIVATE ${SDKROOT}/canon/Header)
+        include_directories(
+            ${SDKROOT}/canon/Header
+        )
     endif()
 endif()
 
@@ -397,7 +374,7 @@ elseif(BUILD_ENV_APPLE)
     message("**************** lz4 lib:" ${LZ4_LIB_INCLUDE_DIRS})
     find_path(LZ4_STATIC lz4frame_static.h PATH ${LZ4_LIB_INCLUDE_DIRS})
     if(LZ4_STATIC-FOUND)
-        target_compile_definitions(OpenToonz PRIVATE -DLZ4_STATIC)
+        add_definitions(-DLZ4_STATIC)
     endif()
 
     pkg_check_modules(USB_LIB REQUIRED libusb-1.0)
@@ -464,7 +441,7 @@ elseif(BUILD_ENV_UNIXLIKE)
     message("**************** lz4 lib:" ${LZ4_LIB_INCLUDE_DIRS})
     find_path(LZ4_STATIC lz4frame_static.h PATH ${LZ4_LIB_INCLUDE_DIRS})
     if(LZ4_STATIC-FOUND)
-        target_compile_definitions(OpenToonz PRIVATE -DLZ4_STATIC)
+        add_definitions(-DLZ4_STATIC)
     endif()
 
     find_library(OPENBLAS_LIB NAMES cblas gslcblas openblas blas)
@@ -496,9 +473,9 @@ endif()
 include(TestBigEndian)
 test_big_endian(_SYSTEM_BIG_ENDIAN)
 if(_SYSTEM_BIG_ENDIAN)
-    target_compile_definitions(OpenToonz PRIVATE -DTNZ_LITTLE_ENDIAN=0)
+    add_definitions(-DTNZ_LITTLE_ENDIAN=0)
 else()
-    target_compile_definitions(OpenToonz PRIVATE -DTNZ_LITTLE_ENDIAN=1)
+    add_definitions(-DTNZ_LITTLE_ENDIAN=1)
 endif()
 unset(_SYSTEM_BIG_ENDIAN)
 
@@ -515,7 +492,9 @@ if(CMAKE_COMPILER_IS_GNUCC)
     ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_MISSING_DECLARATIONS -Wmissing-declarations)
 endif()
 
-target_include_directories(OpenToonz SYSTEM PRIVATE
+include_directories(
+    SYSTEM
+    BEFORE
     ${TIFF_INCLUDE_DIR}
     ${PNG_INCLUDE_DIRS}
 )
@@ -543,7 +522,8 @@ else()
     find_package(Boost)
 endif()
 
-target_include_directories(OpenToonz SYSTEM PRIVATE
+include_directories(
+    SYSTEM
     ${Boost_INCLUDE_DIR}
     ${LZ4_LIB_INCLUDE_DIRS}
     ${USB_LIB_INCLUDE_DIRS}
@@ -553,7 +533,7 @@ target_include_directories(OpenToonz SYSTEM PRIVATE
 )
 
 if(PLATFORM EQUAL 64)
-    target_compile_definitions(OpenToonz PRIVATE -Dx64)
+    add_definitions(-Dx64)
 endif()
 
 if(BUILD_ENV_MSVC)
@@ -582,7 +562,7 @@ endif()
 if(BUILD_ENV_MSVC AND MSVC_VERSION EQUAL 1800)
     # Visual C++ 2013 cannot handle UTF-8 without BOM
     # Non-ascii characters in comments would not be a problem
-    target_compile_options(OpenToonz PRIVATE "/wd4819")
+    add_compile_options("/wd4819")
 endif()
 
 if(WITH_TRANSLATION)
@@ -611,6 +591,69 @@ endif()
 set(CMAKE_C_FLAGS "${C_WARNINGS} ${CMAKE_C_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CXX_WARNINGS} ${CMAKE_CXX_FLAGS}")
 
+# Define the OpenToonz target
+add_executable(OpenToonz
+    ${CMAKE_SOURCE_DIR}/toonz/sources/toonz/main.cpp
+    # Add other source files here if needed
+)
+
+# Set properties for the OpenToonz target
+target_compile_definitions(OpenToonz PRIVATE
+    -DQT_GUI_LIB
+    -DQT_NETWORK_LIB
+    -DQT_CORE_LIB
+    -DQT_SHARED
+)
+
+target_include_directories(OpenToonz PRIVATE
+    include
+    ${TIFF_INCLUDE_DIR}
+    ${PNG_INCLUDE_DIRS}
+    ${Boost_INCLUDE_DIR}
+    ${LZ4_LIB_INCLUDE_DIRS}
+    ${USB_LIB_INCLUDE_DIRS}
+    ${SUPERLU_INCLUDE_DIR}
+    ${JPEG_INCLUDE_DIR}
+    ${MYPAINT_LIB_INCLUDE_DIRS}
+)
+
+target_compile_options(OpenToonz PRIVATE
+    ${C_WARNINGS}
+    ${CXX_WARNINGS}
+)
+
+# Link libraries to the OpenToonz target
+target_link_libraries(OpenToonz
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Network
+    Qt5::OpenGL
+    Qt5::Svg
+    Qt5::Xml
+    Qt5::Script
+    Qt5::Widgets
+    Qt5::PrintSupport
+    Qt5::LinguistTools
+    Qt5::Multimedia
+    Qt5::MultimediaWidgets
+    Qt5::SerialPort
+    Qt5::UiTools
+    ${GLUT_LIB}
+    ${GL_LIB}
+    ${Z_LIB}
+    ${JPEG_LIB}
+    ${TIFF_LIB}
+    ${PNG_LIB}
+    ${GLEW_LIB}
+    ${LZ4_LIB}
+    ${SUPERLU_LIB}
+    ${OPENBLAS_LIB}
+    ${USB_LIB}
+    ${MYPAINT_LIB_LDFLAGS}
+    ${TURBOJPEG_LIB}
+)
+
+# Add subdirectories after defining the OpenToonz target
 add_subdirectory(tnzcore)
 add_subdirectory(tnzbase)
 add_subdirectory(tnzext)
@@ -640,12 +683,12 @@ if((PLATFORM EQUAL 32) AND ((BUILD_TARGET_WIN AND BUILD_ENV_MSVC) OR BUILD_TARGE
 endif()
 
 if(BUILD_ENV_APPLE)
-    add_custom_command(TARGET executable
+    add_custom_command(TARGET OpenToonz
         POST_BUILD COMMAND
         ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH}
-        $<TARGET_FILE:executable>
+        $<TARGET_FILE:OpenToonz>
     )
-    # add capability for retina displays
+    # Add capability for retina displays
     set_target_properties(OpenToonz PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/../cmake/BundleInfo.plist.in)
 endif()
 
