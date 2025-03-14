@@ -4,6 +4,10 @@ set(CMAKE_BUILD_TYPE_INIT Release)
 
 project(OpenToonz LANGUAGES C CXX)
 
+# Set policies to suppress warnings
+cmake_policy(SET CMP0167 NEW)  # Use BoostConfig.cmake instead of FindBoost
+cmake_policy(SET CMP0175 NEW)  # Reject invalid arguments in add_custom_command
+
 #-----------------------------------------------------------------------------
 # Platform Specific Defaults
 
@@ -201,7 +205,6 @@ elseif(BUILD_ENV_APPLE)
     endif()
 elseif(BUILD_ENV_UNIXLIKE)
     # Needed for correct Qt detection
-    cmake_minimum_required(VERSION 2.8.12)
     set(PRELOAD_VARIABLE "LD_LIBRARY_PATH")
     if(CMAKE_SYSTEM_NAME MATCHES "Linux")
         add_definitions(-DLINUX)
@@ -308,20 +311,17 @@ if(PLATFORM EQUAL 64)
     endif()
 endif()
 
-get_target_property(QtCore_location Qt5::Core LOCATION)
-get_target_property(QtWidget_location Qt5::Widgets LOCATION)
+# Use generator expression instead of get_target_property(LOCATION)
+set(QtCore_location $<TARGET_FILE:Qt5::Core>)
+set(QtWidget_location $<TARGET_FILE:Qt5::Widgets>)
 message(STATUS "Qt Core Location:" ${QtCore_location})
 
 macro(_find_toonz_library OUT_LIB_LIST IN_LIB_LIST)
     set(OUTLIST "")
     foreach(arg ${IN_LIB_LIST})
         unset(COREPATH CACHE)
-        # find しても cmake が走るときにはできていないので完全なパス名を生成して返すだけ
-        if(BUILD_ENV_APPLE)
-            set(LIBPATH "\$<TARGET_FILE:${arg}>")
-        else()
-            set(LIBPATH ${arg})
-        endif()
+        # Use generator expression for target file path
+        set(LIBPATH $<TARGET_FILE:${arg}>)
         set(OUTLIST ${OUTLIST} ${LIBPATH})
     endforeach()
     set(${OUT_LIB_LIST} ${OUTLIST})
@@ -657,6 +657,8 @@ if((PLATFORM EQUAL 32) AND ((BUILD_TARGET_WIN AND BUILD_ENV_MSVC) OR BUILD_TARGE
 endif()
 
 if(BUILD_ENV_APPLE)
+    # Define the executable target before using it in add_custom_command
+    add_executable(executable main.cpp)
     add_custom_command(TARGET executable
         POST_BUILD COMMAND
         ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH}
