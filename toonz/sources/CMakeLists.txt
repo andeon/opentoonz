@@ -180,11 +180,20 @@ elseif(BUILD_ENV_APPLE)
     foreach(path ${CMAKE_PREFIX_PATH})
         message("CMAKE_PREFIX_PATH: " ${path})
     endforeach(path)
-    target_compile_definitions(OpenToonz PRIVATE
-        -DMACOSX
-        -Di386
-        -D__MACOS__
-    )
+endif()
+
+# Define the OpenToonz target
+add_executable(OpenToonz
+    # List your source files here
+    ${CMAKE_SOURCE_DIR}/toonz/sources/toonz/main.cpp
+)
+
+# Set compile definitions for OpenToonz
+target_compile_definitions(OpenToonz PRIVATE
+    -DMACOSX
+    -Di386
+    -D__MACOS__
+)
     if(PLATFORM EQUAL 64)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -std=c++17 -stdlib=libc++ -fno-implicit-templates")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m64")
