@@ -1,3 +1,4 @@
+# Define headers
 set(HEADERS
     ../include/ext/ContextStatus.h
     ../include/ext/ExtUtil.h
@@ -37,6 +38,7 @@ set(HEADERS
     ../include/tlin/tlin_vector.h
 )
 
+# Define source files
 set(SOURCES
     ContextStatus.cpp
     DeformationSelector.cpp
@@ -69,67 +71,96 @@ set(SOURCES
     tlin/tlin_superlu_wrap.cpp
 )
 
-set(OBJCSOURCES
-)
+# Define Objective-C sources (empty in this case)
+set(OBJCSOURCES)
 
+# Set linker flags for MSVC on 32-bit platforms
 if(BUILD_ENV_MSVC AND PLATFORM EQUAL 32)
-    # can not link libopenblas_32.lib with SAFESEH
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /SAFESEH:NO")
 endif()
 
-add_library(tnzext SHARED ${HEADERS} ${SOURCES} ${OBJCSOURCES})
+# Create the shared library
+add_library(tnzext SHARED
+    ${HEADERS}
+    ${SOURCES}
+    ${OBJCSOURCES}
+)
 
+# Set linker flags for Apple
 if(BUILD_ENV_APPLE)
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-install_name,@executable_path/libtnzext.dylib")
+    set_target_properties(tnzext PROPERTIES
+        LINK_FLAGS "-Wl,-install_name,@executable_path/libtnzext.dylib"
+    )
     add_dependencies(tnzext tnzcore tnzbase)
 endif()
 
-add_definitions(
-    -DTNZEXT_EXPORTS
+# Add definitions
+target_compile_definitions(tnzext PRIVATE
+    TNZEXT_EXPORTS
 )
 
-message("subdir: tnzext")
-message("Bin: " ${CMAKE_CURRENT_BINARY_DIR})
+# Debug messages
+message(STATUS "Subdirectory: tnzext")
+message(STATUS "Binary dir: ${CMAKE_CURRENT_BINARY_DIR}")
 
+# Platform-specific libraries and includes
 if(BUILD_ENV_APPLE)
     find_library(ACCE_LIB Accelerate)
 endif()
 
+# Include directories
 if(BUILD_ENV_MSVC OR BUILD_ENV_APPLE)
-    # Warning, this looks wrong,
-    # should _only_ use SUPERLU_INCLUDE_DIR, for now do this with Linux.
-    include_directories(
-        SYSTEM
+    target_include_directories(tnzext SYSTEM PRIVATE
         ${SDKROOT}/superlu/SuperLU_4.1/SRC
     )
 else()
-    include_directories(
-        SYSTEM
+    target_include_directories(tnzext SYSTEM PRIVATE
         ${SUPERLU_INCLUDE_DIR}
     )
 endif()
 
+# Define and link libraries
 if(BUILD_ENV_MSVC)
     target_link_libraries(tnzext
-        Qt5::Core Qt5::Gui Qt5::OpenGL Qt5::Network
-        ${GLUT_LIB} ${GL_LIB} ${SUPERLU_LIB} ${OPENBLAS_LIB} ${EXTRA_LIBS}
-        tnzcore tnzbase
+        Qt5::Core
+        Qt5::Gui
+        Qt5::OpenGL
+        Qt5::Network
+        ${GLUT_LIB}
+        ${GL_LIB}
+        ${SUPERLU_LIB}
+        ${OPENBLAS_LIB}
+        ${EXTRA_LIBS}
+        tnzcore
+        tnzbase
     )
 elseif(BUILD_ENV_APPLE)
     set(EXTRA_LIBS
         "$<TARGET_FILE:tnzcore>"
         "$<TARGET_FILE:tnzbase>"
     )
-
     target_link_libraries(tnzext
-        Qt5::Core Qt5::Gui Qt5::OpenGL Qt5::Network
-        ${ACCE_LIB} ${GLUT_LIB} ${GL_LIB} ${SUPERLU_LIB} ${EXTRA_LIBS}
+        Qt5::Core
+        Qt5::Gui
+        Qt5::OpenGL
+        Qt5::Network
+        ${ACCE_LIB}
+        ${GLUT_LIB}
+        ${GL_LIB}
+        ${SUPERLU_LIB}
+        ${EXTRA_LIBS}
     )
 elseif(BUILD_ENV_UNIXLIKE)
     _find_toonz_library(EXTRA_LIBS "tnzcore;tnzbase")
-
     target_link_libraries(tnzext
-        Qt5::Core Qt5::Gui Qt5::OpenGL Qt5::Network
-        ${GLUT_LIB} ${GL_LIB} ${SUPERLU_LIB} ${OPENBLAS_LIB} ${EXTRA_LIBS}
+        Qt5::Core
+        Qt5::Gui
+        Qt5::OpenGL
+        Qt5::Network
+        ${GLUT_LIB}
+        ${GL_LIB}
+        ${SUPERLU_LIB}
+        ${OPENBLAS_LIB}
+        ${EXTRA_LIBS}
     )
 endif()
