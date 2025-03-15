@@ -1,3 +1,4 @@
+# Define MOC headers for Qt processing
 set(MOC_HEADERS
     ../include/toonz/fullcolorpalette.h
     ../include/toonz/movierenderer.h
@@ -32,6 +33,7 @@ set(MOC_HEADERS
     ../include/toonz/txshsoundcolumn.h
 )
 
+# Define headers
 set(HEADERS
     ${MOC_HEADERS}
     autoadjust.h
@@ -167,6 +169,7 @@ set(HEADERS
     ../include/toonz/navigationtags.h
 )
 
+# Define source files
 set(SOURCES
     autoadjust.cpp
     autoclose.cpp
@@ -205,7 +208,7 @@ set(SOURCES
     Naa2TlvConverter.cpp
     observer.cpp
     onionskinmask.cpp
-	orientation.cpp
+    orientation.cpp
     outputproperties.cpp
     preferences.cpp
     rasterbrush.cpp
@@ -328,67 +331,108 @@ set(SOURCES
     navigationtags.cpp
 )
 
+# Platform-specific sources
 if(BUILD_TARGET_WIN)
-    set(SOURCES ${SOURCES}
-        avicodecrestrictions.cpp
-    )
+    list(APPEND SOURCES avicodecrestrictions.cpp)
 endif()
 
+# Translation support
 if(WITH_TRANSLATION)
     add_translation(toonzlib ${HEADERS} ${SOURCES})
 endif()
 
-qt5_wrap_cpp(SOURCES ${MOC_HEADERS})
+# Process MOC headers
+qt5_wrap_cpp(MOC_SOURCES ${MOC_HEADERS})
 
-add_library(toonzlib SHARED ${HEADERS} ${SOURCES})
+# Create the shared library
+add_library(toonzlib SHARED
+    ${HEADERS}
+    ${SOURCES}
+    ${MOC_SOURCES}
+)
+
+# Set linker flags for Apple
 if(BUILD_ENV_APPLE)
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-install_name,@executable_path/libtoonzlib.dylib")
+    set_target_properties(toonzlib PROPERTIES
+        LINK_FLAGS "-Wl,-install_name,@executable_path/libtoonzlib.dylib"
+    )
     add_dependencies(toonzlib tnzcore tnzbase tnzext)
 endif()
 
-add_definitions(
-    -DTOONZLIB_EXPORTS
+# Add definitions
+target_compile_definitions(toonzlib PRIVATE
+    TOONZLIB_EXPORTS
 )
 
-message("subdir: toonzlib")
-message("Bin: " ${CMAKE_CURRENT_BINARY_DIR})
+# Debug messages
+message(STATUS "Subdirectory: toonzlib")
+message(STATUS "Binary dir: ${CMAKE_CURRENT_BINARY_DIR}")
 
+# Include directories
 if(GLEW_FOUND)
-    include_directories(${GLEW_INCLUDE_DIRS})
+    target_include_directories(toonzlib PRIVATE ${GLEW_INCLUDE_DIRS})
 else()
-    include_directories(${SDKROOT}/glew/glew-1.9.0/include)
+    target_include_directories(toonzlib PRIVATE ${SDKROOT}/glew/glew-1.9.0/include)
 endif()
 
-include_directories(
-    SYSTEM
+target_include_directories(toonzlib SYSTEM PRIVATE
     ${SDKROOT}/libusb/libusb-1.0.9/include
 )
-include_directories(
+target_include_directories(toonzlib PRIVATE
     ../toonzfarm/include
 )
 
+# Define and link libraries
 if(BUILD_ENV_MSVC)
     target_link_libraries(toonzlib
-        Qt5::Core Qt5::Gui Qt5::OpenGL Qt5::Script Qt5::Multimedia
-        ${GLUT_LIB} ${GL_LIB} ${MYPAINT_LIB_LDFLAGS} ${GLEW_LIB} vfw32.lib
-        tnzcore tnzbase tnzext
+        Qt5::Core
+        Qt5::Gui
+        Qt5::OpenGL
+        Qt5::Script
+        Qt5::Multimedia
+        ${GLUT_LIB}
+        ${GL_LIB}
+        ${MYPAINT_LIB_LDFLAGS}
+        ${GLEW_LIB}
+        vfw32.lib
+        tnzcore
+        tnzbase
+        tnzext
     )
 elseif(BUILD_ENV_APPLE)
     set(EXTRA_LIBS
         "$<TARGET_FILE:tnzcore>"
-	    "$<TARGET_FILE:tnzbase>"
-	    "$<TARGET_FILE:tnzext>"
+        "$<TARGET_FILE:tnzbase>"
+        "$<TARGET_FILE:tnzext>"
         ${USB_LIB}
         ${MYPAINT_LIB_LDFLAGS}
     )
-
-    target_link_libraries(toonzlib Qt5::Core Qt5::Gui Qt5::OpenGL Qt5::Script Qt5::Multimedia ${GLUT_LIB} ${GL_LIB} ${GLEW_LIB} ${EXTRA_LIBS})
+    target_link_libraries(toonzlib
+        Qt5::Core
+        Qt5::Gui
+        Qt5::OpenGL
+        Qt5::Script
+        Qt5::Multimedia
+        ${GLUT_LIB}
+        ${GL_LIB}
+        ${GLEW_LIB}
+        ${EXTRA_LIBS}
+    )
 elseif(BUILD_ENV_UNIXLIKE)
     _find_toonz_library(EXTRA_LIBS "tnzcore;tnzbase;tnzext")
-
     if(BUILD_TARGET_WIN)
-        set(EXTRA_LIBS ${EXTRA_LIBS} -lvfw32)
+        list(APPEND EXTRA_LIBS -lvfw32)
     endif()
-
-    target_link_libraries(toonzlib Qt5::Core Qt5::Gui Qt5::OpenGL Qt5::Script Qt5::Multimedia ${GLUT_LIB} ${GL_LIB} ${GLEW_LIB} ${EXTRA_LIBS} ${MYPAINT_LIB_LDFLAGS})
+    target_link_libraries(toonzlib
+        Qt5::Core
+        Qt5::Gui
+        Qt5::OpenGL
+        Qt5::Script
+        Qt5::Multimedia
+        ${GLUT_LIB}
+        ${GL_LIB}
+        ${GLEW_LIB}
+        ${EXTRA_LIBS}
+        ${MYPAINT_LIB_LDFLAGS}
+    )
 endif()
