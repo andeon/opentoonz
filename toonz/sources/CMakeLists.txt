@@ -631,18 +631,6 @@ if((PLATFORM EQUAL 32) AND ((BUILD_TARGET_WIN AND BUILD_ENV_MSVC) OR BUILD_TARGE
     add_subdirectory(t32bitsrv)
 endif()
 
-if(BUILD_ENV_APPLE)
-    # Ensure the target exists before referencing it
-    if(TARGET OpenToonz)
-        add_custom_command(TARGET OpenToonz
-            POST_BUILD COMMAND
-            ${CMAKE_INSTALL_NAME_TOOL} -add_rpath "${CMAKE_INSTALL_RPATH}"
-            "$<TARGET_FILE:OpenToonz>"
-        )
-        set_target_properties(OpenToonz PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/../cmake/BundleInfo.plist.in)
-    endif()
-endif()
-
 if(BUILD_ENV_UNIXLIKE AND NOT BUILD_TARGET_WIN)
     add_subdirectory(xdg-data)
 endif()
