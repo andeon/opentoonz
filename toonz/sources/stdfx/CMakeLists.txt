@@ -1,3 +1,6 @@
+cmake_minimum_required(VERSION 3.10)
+
+# Define headers
 set(HEADERS
     ../include/stdfx/shaderfx.h
     ../include/stdfx/shaderinterface.h
@@ -97,6 +100,7 @@ if(OpenCV_FOUND)
     list(APPEND HEADERS iwa_bloomfx.h)
 endif()
 
+# Define source files
 set(SOURCES
     adjustlevelsfx.cpp
     artcontourfx.cpp
@@ -296,42 +300,63 @@ if(OpenCV_FOUND)
     list(APPEND SOURCES iwa_bloomfx.cpp)
 endif()
 
+# Define Objective-C sources (empty in this case)
 set(OBJCSOURCES
 )
 
-add_library(tnzstdfx SHARED ${HEADERS} ${SOURCES} ${OBJCSOURCES})
-add_definitions(
-    -D_USRDLL
-    -DTNZSTDFX_EXPORTS
+# Create the shared library
+add_library(tnzstdfx SHARED
+    ${HEADERS}
+    ${SOURCES}
+    ${OBJCSOURCES}
 )
 
+# Add definitions
+target_compile_definitions(tnzstdfx PRIVATE
+    _USRDLL
+    TNZSTDFX_EXPORTS
+)
+
+# Set linker flags for Apple
 if(BUILD_ENV_APPLE)
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-install_name,@executable_path/libtnzstdfx.dylib")
+    set_target_properties(tnzstdfx PROPERTIES
+        LINK_FLAGS "-Wl,-install_name,@executable_path/libtnzstdfx.dylib"
+    )
     add_dependencies(tnzstdfx tnzcore tnzbase toonzlib)
 endif()
 
-message("subdir: tnzstdfx")
-message("Bin: " ${CMAKE_CURRENT_BINARY_DIR})
+# Debug messages
+message(STATUS "Subdirectory: tnzstdfx")
+message(STATUS "Binary dir: ${CMAKE_CURRENT_BINARY_DIR}")
 
+# Include directories
 if(GLEW_FOUND)
-    include_directories(
-        SYSTEM
+    target_include_directories(tnzstdfx SYSTEM PRIVATE
         ${GLEW_INCLUDE_DIRS}
     )
 else()
-    include_directories(
-        SYSTEM
+    target_include_directories(tnzstdfx SYSTEM PRIVATE
         ${SDKROOT}/glew/glew-1.9.0/include
     )
 endif()
 
-include_directories(
+target_include_directories(tnzstdfx PRIVATE
     ${SDKROOT}/kiss_fft130
 )
 
+# Find dependent Toonz libraries
 _find_toonz_library(TNZLIBS "tnzcore;tnzbase;toonzlib")
 
-target_link_libraries(tnzstdfx Qt5::Core Qt5::Gui Qt5::OpenGL ${GL_LIB} ${GLEW_LIB} ${TNZLIBS} ${PTHREAD_LIBRARY})
+# Link libraries
+target_link_libraries(tnzstdfx
+    Qt5::Core
+    Qt5::Gui
+    Qt5::OpenGL
+    ${GL_LIB}
+    ${GLEW_LIB}
+    ${TNZLIBS}
+    ${PTHREAD_LIBRARY}
+)
 
 if(OpenCV_FOUND)
     target_link_libraries(tnzstdfx ${OpenCV_LIBS})

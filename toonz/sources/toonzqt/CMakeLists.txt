@@ -1,3 +1,4 @@
+# Define headers requiring MOC
 set(MOC_HEADERS
     palettesscanpopup.h
     pluginhost.h
@@ -73,6 +74,7 @@ set(MOC_HEADERS
     ../include/toonzqt/validatedchoicedialog.h
 )
 
+# Define all headers (MOC headers + additional headers)
 set(HEADERS
     ${MOC_HEADERS}
     ../include/tools/cursormanager.h
@@ -105,6 +107,7 @@ set(HEADERS
     ../include/toonzqt/viewcommandids.h
 )
 
+# Define source files
 set(SOURCES
     ../tnztools/cursormanager.cpp
     checkbox.cpp
@@ -201,55 +204,69 @@ set(SOURCES
     plugin_param_view_interface.cpp
     plugin_ui_page_interface.cpp
     toonz_params.cpp
-	lutcalibrator.cpp
+    lutcalibrator.cpp
 )
 
+# Define resources
 set(RESOURCES toonzqt.qrc)
 
+# Handle translations if enabled
 if(WITH_TRANSLATION)
     add_translation(toonzqt ${HEADERS} ${SOURCES})
 endif()
 
-get_target_property(QW_LOC Qt5::Widgets INTERFACE_INCLUDE_DIRECTORIES)
-
+# Enable automatic MOC and RCC processing
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-set(incs)
-foreach(dir ${Qt5Widgets_INCLUDE_DIRS})
-    set(incs ${incs} -I${dir})
-endforeach()
+# Process Qt resources
+qt5_add_resources(SRCC ${RESOURCES})
 
-qt5_add_resources(SOURCES ${RESOURCES})
+# Create the shared library
+add_library(toonzqt SHARED
+    ${HEADERS}
+    ${SOURCES}
+    ${SRCC}
+)
 
-qt5_wrap_cpp(SOURCES ${MOC_HEADERS} OPTIONS ${incs})
+# Add definitions
+target_compile_definitions(toonzqt PRIVATE
+    QT_WIDGETS_LIB
+    TOONZQT_EXPORTS
+)
 
-add_library(toonzqt SHARED ${HEADERS} ${SOURCES} ${RESOURCES})
+# Set linker flags for Apple
 if(BUILD_ENV_APPLE)
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-install_name,@executable_path/libtoonzqt.dylib")
+    set_target_properties(toonzqt PROPERTIES
+        LINK_FLAGS "-Wl,-install_name,@executable_path/libtoonzqt.dylib"
+    )
     add_dependencies(toonzqt tnzcore tnzbase tnzext toonzlib sound)
 endif()
 
-add_definitions(
-    -DQT_WIDGETS_LIB
-    -DTOONZQT_EXPORTS
-)
+# Debug messages
+message(STATUS "Subdirectory: toonzqt")
+message(STATUS "Shared library suffix: ${CMAKE_SHARED_LIBRARY_SUFFIX}")
+message(STATUS "Binary dir: ${CMAKE_CURRENT_BINARY_DIR}")
 
-message("subdir: toonzqt")
-message("type:" ${CMAKE_SHARED_LIBRARY_SUFFIX})
-message("Bin: " ${CMAKE_CURRENT_BINARY_DIR})
-
+# Find dependent Toonz libraries
 _find_toonz_library(EXTRA_LIBS "tnzcore;tnzbase;tnzext;toonzlib;sound")
 
+# Platform-specific extra libraries
 if(BUILD_ENV_MSVC)
-    set(EXTRA_LIBS ${EXTRA_LIBS}
-        advapi32.lib
-    )
-elseif(BUILD_ENV_UNIXLIKE)
-    if(BUILD_TARGET_WIN)
-        set(EXTRA_LIBS ${EXTRA_LIBS}
-            -ladvapi32
-        )
-    endif()
+    list(APPEND EXTRA_LIBS advapi32.lib)
+elseif(BUILD_ENV_UNIXLIKE AND BUILD_TARGET_WIN)
+    list(APPEND EXTRA_LIBS -ladvapi32)
 endif()
 
-target_link_libraries(toonzqt Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network Qt5::OpenGL Qt5::Svg ${EXTRA_LIBS} ${GL_LIB})
+# Link libraries
+target_link_libraries(toonzqt
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Network
+    Qt5::OpenGL
+    Qt5::Svg
+    ${EXTRA_LIBS}
+    ${GL_LIB}
+)
