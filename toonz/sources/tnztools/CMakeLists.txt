@@ -1,3 +1,4 @@
+# Define MOC headers for Qt processing
 set(MOC_HEADERS
     controlpointselection.h
     edittoolgadgets.h
@@ -19,6 +20,7 @@ set(MOC_HEADERS
     ../include/tools/tooloptions.h
 )
 
+# Define headers
 set(HEADERS
     ${MOC_HEADERS}
     autofill.h
@@ -66,6 +68,7 @@ set(HEADERS
     ../include/tools/assistants/guidelineellipse.h
 )
 
+# Define source files
 set(SOURCES
     autofillpli.cpp
     autofilltlv.cpp
@@ -157,37 +160,59 @@ set(SOURCES
     editassistantstool.cpp
 )
 
+# Resource files
 set(RESOURCES tnztools.qrc)
+qt5_add_resources(RESOURCES_RCC ${RESOURCES})
 
-qt5_add_resources(SOURCES ${RESOURCES})
-
+# Translation support
 if(WITH_TRANSLATION)
     add_translation(tnztools ${HEADERS} ${SOURCES})
 endif()
 
-qt5_wrap_cpp(SOURCES ${MOC_HEADERS})
+# Process MOC headers
+qt5_wrap_cpp(MOC_SOURCES ${MOC_HEADERS})
 
-add_library(tnztools SHARED ${HEADERS} ${SOURCES} ${RESOURCES})
-add_definitions(
-    -DTNZTOOLS_EXPORTS
+# Create the shared library
+add_library(tnztools SHARED
+    ${HEADERS}
+    ${SOURCES}
+    ${MOC_SOURCES}
+    ${RESOURCES_RCC}
 )
 
+# Add definitions
+target_compile_definitions(tnztools PRIVATE TNZTOOLS_EXPORTS)
+
+# Set linker flags for Apple
 if(BUILD_ENV_APPLE)
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-install_name,@executable_path/libtnztools.dylib")
+    set_target_properties(tnztools PROPERTIES
+        LINK_FLAGS "-Wl,-install_name,@executable_path/libtnztools.dylib"
+    )
     add_dependencies(tnztools tnzcore tnzbase tnzext toonzlib toonzqt)
 endif()
 
-message("subdir: tnztools")
-message("Bin: " ${CMAKE_CURRENT_BINARY_DIR})
+# Debug messages
+message(STATUS "Subdirectory: tnztools")
+message(STATUS "Binary dir: ${CMAKE_CURRENT_BINARY_DIR}")
 
-include_directories(
-    SYSTEM
+# Include directories
+target_include_directories(tnztools SYSTEM PRIVATE
     ${SDKROOT}/superlu/SupperLU_4.1/SRC
 )
-include_directories(
+target_include_directories(tnztools PRIVATE
     ../include/tools
 )
 
+# Define and link extra libraries
 _find_toonz_library(EXTRA_LIBS "tnzcore;tnzbase;tnzext;toonzlib;toonzqt")
-
-target_link_libraries(tnztools Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network Qt5::OpenGL ${GLUT_LIB} ${EXTRA_LIBS} ${GL_LIB} ${MYPAINT_LIB_LDFLAGS})
+target_link_libraries(tnztools
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Network
+    Qt5::OpenGL
+    ${GLUT_LIB}
+    ${GL_LIB}
+    ${EXTRA_LIBS}
+    ${MYPAINT_LIB_LDFLAGS}
+)
