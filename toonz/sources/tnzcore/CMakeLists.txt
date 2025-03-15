@@ -1,3 +1,4 @@
+# Define MOC headers for Qt processing
 set(MOC_HEADERS
     ../include/tundo.h
     ../include/tthread.h
@@ -8,7 +9,9 @@ set(MOC_HEADERS
     ../include/tfunctorinvoker.h
 )
 
-set(HEADERS ${MOC_HEADERS}
+# Define headers
+set(HEADERS
+    ${MOC_HEADERS}
     ../common/trop/loop_macros.h
     ../common/trop/optimize_for_lp64.h
     ../common/trop/quickputP.h
@@ -125,6 +128,7 @@ set(HEADERS ${MOC_HEADERS}
     ../include/tmetaimage.h
 )
 
+# Define source files
 set(SOURCES
     ../common/tcore/tdata.cpp
     ../common/tcore/tdebugmessage.cpp
@@ -250,79 +254,90 @@ set(SOURCES
     ../common/tvariant.cpp
 )
 
+# Platform-specific source files
 if(BUILD_TARGET_WIN)
-    set(SOURCES ${SOURCES}
-        ../common/tsound/tsound_nt.cpp
-    )
+    list(APPEND SOURCES ../common/tsound/tsound_nt.cpp)
 elseif(BUILD_TARGET_APPLE)
-    set(SOURCES ${SOURCES}
-        ../common/tsound/tsound_qt.cpp
-    )
+    list(APPEND SOURCES ../common/tsound/tsound_qt.cpp)
 elseif(BUILD_TARGET_UNIX)
-    set(SOURCES ${SOURCES}
-        ../common/tsound/tsound_qt.cpp
-    )
+    list(APPEND SOURCES ../common/tsound/tsound_qt.cpp)
 endif()
 
+# Translation support
 if(WITH_TRANSLATION)
     add_translation(tnzcore ${HEADERS} ${SOURCES})
 endif()
 
-qt5_wrap_cpp(SOURCES ${MOC_HEADERS})
+# Process MOC headers
+qt5_wrap_cpp(MOC_SOURCES ${MOC_HEADERS})
 
-add_library(tnzcore SHARED ${HEADERS} ${SOURCES})
-
-if(BUILD_ENV_APPLE)
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-install_name,@executable_path/libtnzcore.dylib")
-endif()
-
-add_definitions(
-    -DTNZCORE_EXPORTS
-    -DTCOLOR_EXPORTS
-    -DTGEOMETRY_EXPORTS
-    -DTRASTER_EXPORTS
-    -DTIMAGE_EXPORTS
-    -DTSYSTEM_EXPORTS
-    -DTVECTORIMAGE_EXPORTS
-    -DTGL_EXPORTS
-    -DTSOUND_EXPORTS
-    -DTIMAGE_IO_EXPORTS
-    -DTRASTERIMAGE_EXPORTS
-    -DTMETAIMAGE_EXPORTS
-    -DTVRENDER_EXPORTS
-    -DTFLASH_EXPORTS
-    -DTROP_EXPORTS
-    -DTSTREAM_EXPORTS
-    -DTSTRINGID_EXPORTS
-    -DTVARIANT_EXPORTS
+# Create the shared library
+add_library(tnzcore SHARED
+    ${HEADERS}
+    ${SOURCES}
+    ${MOC_SOURCES}
 )
 
-if(BUILD_TARGET_WIN)
-    add_definitions(
-        -DUNICODE
-        -D_UNICODE
+# Set linker flags for Apple
+if(BUILD_ENV_APPLE)
+    set_target_properties(tnzcore PROPERTIES
+        LINK_FLAGS "-Wl,-install_name,@executable_path/libtnzcore.dylib"
     )
 endif()
 
-message("subdir: tnzcore")
-#message("Sources:" ${SOURCES})
+# Add definitions
+target_compile_definitions(tnzcore PRIVATE
+    TNZCORE_EXPORTS
+    TCOLOR_EXPORTS
+    TGEOMETRY_EXPORTS
+    TRASTER_EXPORTS
+    TIMAGE_EXPORTS
+    TSYSTEM_EXPORTS
+    TVECTORIMAGE_EXPORTS
+    TGL_EXPORTS
+    TSOUND_EXPORTS
+    TIMAGE_IO_EXPORTS
+    TRASTERIMAGE_EXPORTS
+    TMETAIMAGE_EXPORTS
+    TVRENDER_EXPORTS
+    TFLASH_EXPORTS
+    TROP_EXPORTS
+    TSTREAM_EXPORTS
+    TSTRINGID_EXPORTS
+    TVARIANT_EXPORTS
+)
 
-include_directories(
-    SYSTEM
+# Platform-specific definitions
+if(BUILD_TARGET_WIN)
+    target_compile_definitions(tnzcore PRIVATE
+        UNICODE
+        _UNICODE
+    )
+endif()
+
+# Debug messages
+message(STATUS "Subdirectory: tnzcore")
+message(STATUS "Binary dir: ${CMAKE_CURRENT_BINARY_DIR}")
+
+# Include directories
+target_include_directories(tnzcore SYSTEM PRIVATE
     ../common/flash
     ${SDKROOT}/Lz4/Lz4_131/lib/
 )
 
-if(BUILD_TARGET_WIN)
-    if(PLATFORM EQUAL 32)
-        include_directories(
-            SYSTEM
-            ${SDKROOT}/quicktime/QT73SDK/CIncludes
-        )
-    endif()
+if(BUILD_TARGET_WIN AND PLATFORM EQUAL 32)
+    target_include_directories(tnzcore SYSTEM PRIVATE
+        ${SDKROOT}/quicktime/QT73SDK/CIncludes
+    )
 endif()
 
+if(BUILD_ENV_UNIXLIKE AND NOT BUILD_TARGET_WIN)
+    target_include_directories(tnzcore SYSTEM PRIVATE
+        ${FREETYPE_INCLUDE_DIRS}
+    )
+endif()
 
+# Define extra libraries based on platform
 if(BUILD_ENV_MSVC)
     set(EXTRA_LIBS
         netapi32.lib
@@ -336,36 +351,29 @@ elseif(BUILD_ENV_APPLE)
     find_library(AUDIOUNIT_LIB AudioUnit)
     find_library(AUDIOTB_LIB AudioToolbox)
     find_library(CARBON_LIB Carbon)
-
     set(EXTRA_LIBS
         ${AUDIOUNIT_LIB}
         ${AUDIOTB_LIB}
         ${CARBON_LIB}
     )
 elseif(BUILD_ENV_UNIXLIKE)
-    if(NOT BUILD_TARGET_WIN)
-        include_directories(
-            SYSTEM
-            ${FREETYPE_INCLUDE_DIRS}
-        )
-    endif()
-    set(EXTRA_LIBS
-        ${GLU_LIB}
-    )
+    set(EXTRA_LIBS ${GLU_LIB})
     if(BUILD_TARGET_WIN)
-        set(EXTRA_LIBS
-            ${EXTRA_LIBS}
-            -lnetapi32
-            -lmpr
-            -lwinmm
-            -lpsapi
-            -ldbghelp
-        )
+        list(APPEND EXTRA_LIBS -lnetapi32 -lmpr -lwinmm -lpsapi -ldbghelp)
     endif()
 endif()
 
+# Link libraries
 target_link_libraries(tnzcore
-    Qt5::Core Qt5::OpenGL Qt5::Network Qt5::Multimedia
-    ${GL_LIB} ${GLUT_LIB} ${QT_LIB} ${Z_LIB} ${JPEG_LIB} ${LZ4_LIB}
+    Qt5::Core
+    Qt5::OpenGL
+    Qt5::Network
+    Qt5::Multimedia
+    ${GL_LIB}
+    ${GLUT_LIB}
+    ${QT_LIB}
+    ${Z_LIB}
+    ${JPEG_LIB}
+    ${LZ4_LIB}
     ${EXTRA_LIBS}
 )
