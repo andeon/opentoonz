@@ -589,23 +589,18 @@ if(BUILD_ENV_APPLE)
 
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:tcomposer> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-        DEPENDS tcomposer
     )
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:tcleanup> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-        DEPENDS tcleanup
     )
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:tconverter> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-        DEPENDS tconverter
     )
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:tfarmcontroller> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-        DEPENDS tfarmcontroller
     )
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:tfarmserver> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-        DEPENDS tfarmserver
     )
 
     add_custom_command(TARGET OpenToonz POST_BUILD
@@ -630,11 +625,9 @@ endif()
 if(LZODRIVER_FOUND)
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:lzocompress> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-        DEPENDS lzocompress
     )
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:lzodecompress> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-        DEPENDS lzodecompress
     )
 endif()
 
