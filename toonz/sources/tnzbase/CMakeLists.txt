@@ -1,9 +1,12 @@
+# Define MOC headers for Qt processing
 set(MOC_HEADERS
     ../include/tcacheresourcepool.h
     ../common/tfx/trendererP.h
 )
 
-set(HEADERS ${MOC_HEADERS}
+# Combine headers with MOC headers
+set(HEADERS
+    ${MOC_HEADERS}
     ../common/twain/ttwain.h
     ../common/twain/ttwain_capability.h
     ../common/twain/ttwain_conversion.h
@@ -64,6 +67,7 @@ set(HEADERS ${MOC_HEADERS}
     ../include/tzeraryfx.h
 )
 
+# Define source files
 set(SOURCES
     permissionsmanager.cpp
     stringtable.cpp
@@ -112,16 +116,14 @@ set(SOURCES
     tscanner/tscannerepson.cpp
 )
 
+# Platform-specific source files
 if(BUILD_TARGET_WIN)
-    set(SOURCES ${SOURCES}
-        tscanner/TScannerIO/TUSBScannerIO_W.cpp
-    )
+    list(APPEND SOURCES tscanner/TScannerIO/TUSBScannerIO_W.cpp)
 else()
-    set(SOURCES ${SOURCES}
-        tscanner/TScannerIO/TUSBScannerIO_M.cpp
-    )
+    list(APPEND SOURCES tscanner/TScannerIO/TUSBScannerIO_M.cpp)
 endif()
 
+# Define Objective-C sources
 set(OBJCSOURCES
     ../common/twain/ttwain_capability.c
     ../common/twain/ttwain_conversion.c
@@ -133,70 +135,78 @@ set(OBJCSOURCES
     tscanner/tscannertwain.cpp
 )
 
+# Platform-specific Objective-C sources
 if(BUILD_TARGET_WIN)
-    set(OBJCSOURCES ${OBJCSOURCES}
+    list(APPEND OBJCSOURCES
         ../common/twain/ttwain_stateW.c
         ../common/twain/ttwain_utilW.c
         ../common/twain/ttwain_winW.c
     )
 elseif(BUILD_TARGET_APPLE)
-    set(OBJCSOURCES ${OBJCSOURCES}
+    list(APPEND OBJCSOURCES
         ../common/twain/ttwain_stateM.c
         ../common/twain/ttwain_utilM.c
         ../common/twain/ttwain_winM.c
     )
 elseif(BUILD_TARGET_UNIX)
-    set(OBJCSOURCES ${OBJCSOURCES}
+    list(APPEND OBJCSOURCES
         ../common/twain/ttwain_stateX.c
         ../common/twain/ttwain_utilX.c
         ../common/twain/ttwain_winX.c
     )
 endif()
 
+# Handle Objective-C++ compilation on Apple
 if(BUILD_ENV_APPLE)
-    #set_source_files_properties(${OBJCSOURCES} PROPERTIES LANGUAGE OBJCXX)
     set_source_files_properties(${OBJCSOURCES} PROPERTIES COMPILE_FLAGS "-x objective-c++")
 endif()
 
-qt5_wrap_cpp(SOURCES ${MOC_HEADERS})
+# Process MOC headers with Qt
+qt5_wrap_cpp(MOC_SOURCES ${MOC_HEADERS})
 
-add_library(tnzbase SHARED ${HEADERS} ${SOURCES} ${OBJCSOURCES})
+# Create the shared library
+add_library(tnzbase SHARED
+    ${HEADERS}
+    ${SOURCES}
+    ${MOC_SOURCES}
+    ${OBJCSOURCES}
+)
 
+# Set linker flags for Apple
 if(BUILD_ENV_APPLE)
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-install_name,@executable_path/libtnzbase.dylib")
+    set_target_properties(tnzbase PROPERTIES
+        LINK_FLAGS "-Wl,-install_name,@executable_path/libtnzbase.dylib"
+    )
     add_dependencies(tnzbase tnzcore)
 endif()
 
-add_definitions(
-    -DTNZBASE_EXPORTS
-    -DTPARAM_EXPORTS
-    -DTXSHEET_EXPORTS
-    -DTFX_EXPORTS
-    -DTAPPTOOLS_EXPORTS
-    -DTTEST_EXPORTS
+# Add definitions
+target_compile_definitions(tnzbase PRIVATE
+    TNZBASE_EXPORTS
+    TPARAM_EXPORTS
+    TXSHEET_EXPORTS
+    TFX_EXPORTS
+    TAPPTOOLS_EXPORTS
+    TTEST_EXPORTS
 )
 
-message("subdir: tnzbase")
-message("Bin: " ${CMAKE_CURRENT_BINARY_DIR})
-#message("Lib: " ${LIBRARY_OUTPUT_PATH})
-#message("Exe: " ${EXECUTABLE_OUTPUT_PATH})
-#message("Sources:" ${SOURCES})
+# Debug messages
+message(STATUS "Subdirectory: tnzbase")
+message(STATUS "Binary dir: ${CMAKE_CURRENT_BINARY_DIR}")
 
-include_directories(
-    SYSTEM
+# Include directories
+target_include_directories(tnzbase SYSTEM PRIVATE
     ../common/flash
     ${SDKROOT}/libusb/libusb-1.0.9/include
 )
 
+# Define extra libraries based on platform
 if(BUILD_ENV_MSVC)
-    set(EXTRA_LIBS
-        tnzcore
-    )
+    set(EXTRA_LIBS tnzcore)
 elseif(BUILD_ENV_APPLE)
     find_library(TWAIN_LIB TWAIN)
     find_library(IOKIT_LIB IOKit)
     find_library(COCOA_LIB Cocoa)
-
     set(EXTRA_LIBS
         "$<TARGET_FILE:tnzcore>"
         ${USB_LIB}
@@ -208,4 +218,9 @@ elseif(BUILD_ENV_UNIXLIKE)
     _find_toonz_library(EXTRA_LIBS "tnzcore")
 endif()
 
-target_link_libraries(tnzbase Qt5::Core Qt5::Gui ${EXTRA_LIBS})
+# Link libraries
+target_link_libraries(tnzbase
+    Qt5::Core
+    Qt5::Gui
+    ${EXTRA_LIBS}
+)
