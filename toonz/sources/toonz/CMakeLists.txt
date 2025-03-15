@@ -576,8 +576,8 @@ endif()
 
 # Post-build commands for Apple
 if(BUILD_ENV_APPLE)
-    get_target_property(bin OpenToonz LOCATION)
-    get_filename_component(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${bin} DIRECTORY)
+    set(bin "$<TARGET_FILE:OpenToonz>")
+    get_filename_component(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${bin}" DIRECTORY)
     message(STATUS "CMAKE_RUNTIME_OUTPUT_DIRECTORY: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
     foreach(lib ${EXTRA_LIBS})
