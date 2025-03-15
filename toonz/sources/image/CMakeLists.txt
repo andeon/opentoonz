@@ -1,3 +1,4 @@
+# Define headers
 set(HEADERS
     sgi/tiio_sgi.h
     pli/pli_io.h
@@ -29,6 +30,7 @@ set(HEADERS
     tzm/tiio_tzm.h
 )
 
+# Define source files
 set(SOURCES
     tiio.cpp
     sgi/filesgi.cpp
@@ -60,17 +62,15 @@ set(SOURCES
     tzm/tiio_tzm.cpp
 )
 
-
-# Can't build this on FreeBSD: libtiff requires internal API access.
-# Probably some one get luck to fix this.
+# Conditional headers and sources for non-BSD targets
 if(NOT BUILD_TARGET_BSD)
-    set(HEADERS ${HEADERS}
+    list(APPEND HEADERS
         tif/tiio_tif.h
         tzp/tiio_plt.h
         tzp/tiio_tzp.h
         tzp/toonztags.h
     )
-    set(SOURCES ${SOURCES}
+    list(APPEND SOURCES
         tif/tiio_tif.cpp
         tzp/tiio_plt.cpp
         tzp/tiio_tzp.cpp
@@ -79,90 +79,99 @@ if(NOT BUILD_TARGET_BSD)
     )
 endif()
 
-
+# Platform-specific headers and sources
 if(BUILD_TARGET_WIN)
-    set(HEADERS ${HEADERS}
+    list(APPEND HEADERS
         avi/tiio_avi.h
         mov/tiio_mov.h
         3gp/tiio_3gp.h
     )
-    set(SOURCES ${SOURCES}
+    list(APPEND SOURCES
         avi/tiio_avi.cpp
         mov/tiio_movW.cpp
         3gp/tiio_3gpW.cpp
     )
 elseif(BUILD_TARGET_APPLE)
-    set(HEADERS ${HEADERS}
+    list(APPEND HEADERS
         mov/tiio_movM.h
         3gp/tiio_3gpM.h
     )
-    set(SOURCES ${SOURCES}
+    list(APPEND SOURCES
         mov/tiio_movM.cpp
         3gp/tiio_3gpM.cpp
     )
 elseif(BUILD_TARGET_UNIX)
-    set(HEADERS ${HEADERS}
+    list(APPEND HEADERS
         3gp/tiio_3gp_proxy.h
         mov/tiio_mov_proxy.h
     )
-    set(SOURCES ${SOURCES}
+    list(APPEND SOURCES
         mov/tiio_mov_proxy.cpp
         3gp/tiio_3gp_proxy.cpp
     )
 endif()
 
+# Translation support
 if(WITH_TRANSLATION)
     add_translation(image ${HEADERS} ${SOURCES})
 endif()
 
-add_library(image SHARED ${HEADERS} ${SOURCES})
-add_definitions(
-    -DTNZIMAGE_DLL
-    -D_USRDLL
-    -DIMAGE_EXPORTS
+# Create the shared library
+add_library(image SHARED
+    ${HEADERS}
+    ${SOURCES}
 )
 
+# Add definitions
+target_compile_definitions(image PRIVATE
+    TNZIMAGE_DLL
+    _USRDLL
+    IMAGE_EXPORTS
+)
+
+# Set linker flags for Apple
 if(BUILD_ENV_APPLE)
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-install_name,@executable_path/libimage.dylib")
+    set_target_properties(image PROPERTIES
+        LINK_FLAGS "-Wl,-install_name,@executable_path/libimage.dylib"
+    )
     add_dependencies(image tnzcore tnzbase toonzlib)
 endif()
 
-message("subdir: image")
-message("Bin: " ${CMAKE_CURRENT_BINARY_DIR})
+# Debug messages
+message(STATUS "Subdirectory: image")
+message(STATUS "Binary dir: ${CMAKE_CURRENT_BINARY_DIR}")
 
-include_directories(
-    SYSTEM
+# Include directories
+target_include_directories(image SYSTEM PRIVATE
     ${TIFF_INCLUDE_DIR}
 )
 
 if(NOT BUILD_TARGET_BSD)
-    include_directories(
+    target_include_directories(image PRIVATE
         ${SDKROOT}/LibJPEG/jpeg-9
     )
 endif()
 
-
 if(BUILD_ENV_MSVC)
-    include_directories(
-        SYSTEM
+    target_include_directories(image SYSTEM PRIVATE
         ${SDKROOT}/libpng-1.6.21
     )
 endif()
+
 if(BUILD_TARGET_WIN AND PLATFORM EQUAL 32)
-    include_directories(
-        SYSTEM
+    target_include_directories(image SYSTEM PRIVATE
         ${SDKROOT}/quicktime/QT73SDK/CIncludes
     )
 endif()
 
-include_directories(
+target_include_directories(image PRIVATE
     ${SDKROOT}/tinyexr
 )
 
-
+# Find dependent Toonz libraries
 _find_toonz_library(TNZLIBS "tnzcore;tnzbase;toonzlib")
 
-
+# Define and link libraries
 if(BUILD_ENV_MSVC)
     set(EXTRA_LIBS
         ${TNZLIBS}
@@ -171,13 +180,14 @@ if(BUILD_ENV_MSVC)
 elseif(BUILD_ENV_APPLE)
     if(PLATFORM EQUAL 32)
         find_library(CORE_SERVICES_LIB CoreServices)
-        set(OSX_10_6_SDK_PATH "")
+        set(OSX_10_6_SDK_PATH "" CACHE PATH "Path to OSX 10.6 SDK")
         if(NOT OSX_10_6_SDK_PATH)
-            message(FATAL_ERROR "Set variable 'OSX_10_6_SDK_PATH'")
+            message(FATAL_ERROR "Set variable 'OSX_10_6_SDK_PATH' to the path of the OSX 10.6 SDK")
         endif()
         find_library(QD_LIB
             NAMES QD
-            PATHS OSX10_6_SDK_PATH
+            PATHS ${OSX_10_6_SDK_PATH}
+            NO_DEFAULT_PATH
         )
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -F ${OSX_10_6_SDK_PATH}")
     endif()
@@ -190,14 +200,21 @@ elseif(BUILD_ENV_APPLE)
         ${QD_LIB}
     )
 elseif(BUILD_ENV_UNIXLIKE)
-    # Generic Unix
-    set(EXTRA_LIBS
-        ${TNZLIBS}
-    )
-
+    set(EXTRA_LIBS ${TNZLIBS})
     if(BUILD_TARGET_WIN)
-        set(EXTRA_LIBS ${EXTRA_LIBS} -lvfw32)
+        list(APPEND EXTRA_LIBS -lvfw32)
     endif()
 endif()
 
-target_link_libraries(image Qt5::Core Qt5::Gui Qt5::Network ${Z_LIB} ${GLUT_LIB} ${GL_LIB} ${JPEG_LIB} ${TIFF_LIB} ${PNG_LIB} ${EXTRA_LIBS})
+target_link_libraries(image
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Network
+    ${Z_LIB}
+    ${GLUT_LIB}
+    ${GL_LIB}
+    ${JPEG_LIB}
+    ${TIFF_LIB}
+    ${PNG_LIB}
+    ${EXTRA_LIBS}
+)
