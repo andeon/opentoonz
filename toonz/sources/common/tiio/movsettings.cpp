@@ -2,6 +2,9 @@
 #define _WIN32_WINNT 0x0A00
 #endif
 
+// Prevent std::byte conflict by forcing Windows definition
+#define byte unsigned char
+
 #include "texception.h"
 #include "tpropertytype.h"
 // #include "timageinfo.h"
