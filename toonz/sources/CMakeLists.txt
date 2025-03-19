@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.11)
+cmake_minimum_required(VERSION 3.1)
 
 set(CMAKE_BUILD_TYPE_INIT Release)
 
@@ -6,6 +6,7 @@ project(OpenToonz)
 
 # Set C++17 globally 
 set(CMAKE_CXX_STANDARD 17)
+CMAKE_CXX_STANDARD_REQUIRED ON
 
 message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")
 
@@ -206,7 +207,7 @@ elseif(BUILD_ENV_APPLE)
     endif()
 elseif(BUILD_ENV_UNIXLIKE)
     # Needed for correct Qt detection
-    cmake_minimum_required(VERSION 2.8.12)
+    cmake_minimum_required(VERSION 3.1)
     set(PRELOAD_VARIABLE "LD_LIBRARY_PATH")
     if(CMAKE_SYSTEM_NAME MATCHES "Linux")
         add_definitions(-DLINUX)
