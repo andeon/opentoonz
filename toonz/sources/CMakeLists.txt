@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 2.8.11)
 
 set(CMAKE_BUILD_TYPE_INIT Release)
 
@@ -7,7 +7,6 @@ project(OpenToonz)
 # Set C++17 globally 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")
 
 #-----------------------------------------------------------------------------
@@ -207,7 +206,7 @@ elseif(BUILD_ENV_APPLE)
     endif()
 elseif(BUILD_ENV_UNIXLIKE)
     # Needed for correct Qt detection
-    cmake_minimum_required(VERSION 3.1)
+    cmake_minimum_required(VERSION 2.8.12)
     set(PRELOAD_VARIABLE "LD_LIBRARY_PATH")
     if(CMAKE_SYSTEM_NAME MATCHES "Linux")
         add_definitions(-DLINUX)
@@ -667,26 +666,14 @@ if((PLATFORM EQUAL 32) AND ((BUILD_TARGET_WIN AND BUILD_ENV_MSVC) OR BUILD_TARGE
 endif()
 
 if(BUILD_ENV_APPLE)
-    # Ensure dependencies are built before OpenToonz
-    add_dependencies(OpenToonz
-        tnzcore
-        tnzbase
-        toonzlib
-        colorfx
-        tnzext
-        image
-        sound
-        toonzqt
-        tnztools
-        tnzstdfx
-        tfarm
+    add_custom_command(TARGET executable
+        POST_BUILD COMMAND
+        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH}
+        $<TARGET_FILE:executable>
     )
-
-    # Add the custom command to set the rpath after OpenToonz is built
-    add_custom_command(TARGET OpenToonz
-        POST_BUILD
-        COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH} $<TARGET_FILE:OpenToonz>
-    )
+    # add capability for retina displays
+    set_target_properties(OpenToonz PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/../cmake/BundleInfo.plist.in)
+endif()
 
 if(BUILD_ENV_UNIXLIKE AND NOT BUILD_TARGET_WIN)
     add_subdirectory(xdg-data)
