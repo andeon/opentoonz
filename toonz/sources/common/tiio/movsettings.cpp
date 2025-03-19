@@ -1,4 +1,6 @@
-
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0A00
+#endif
 
 #include "texception.h"
 #include "tpropertytype.h"
