@@ -6,7 +6,7 @@ project(OpenToonz)
 
 # Set C++17 globally 
 set(CMAKE_CXX_STANDARD 17)
-CMAKE_CXX_STANDARD_REQUIRED ON
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")
 
