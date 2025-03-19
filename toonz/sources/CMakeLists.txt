@@ -667,14 +667,26 @@ if((PLATFORM EQUAL 32) AND ((BUILD_TARGET_WIN AND BUILD_ENV_MSVC) OR BUILD_TARGE
 endif()
 
 if(BUILD_ENV_APPLE)
-    add_custom_command(TARGET executable
-        POST_BUILD COMMAND
-        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH}
-        $<TARGET_FILE:executable>
+    # Ensure dependencies are built before OpenToonz
+    add_dependencies(OpenToonz
+        tnzcore
+        tnzbase
+        toonzlib
+        colorfx
+        tnzext
+        image
+        sound
+        toonzqt
+        tnztools
+        tnzstdfx
+        tfarm
     )
-    # add capability for retina displays
-    set_target_properties(OpenToonz PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/../cmake/BundleInfo.plist.in)
-endif()
+
+    # Add the custom command to set the rpath after OpenToonz is built
+    add_custom_command(TARGET OpenToonz
+        POST_BUILD
+        COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH} $<TARGET_FILE:OpenToonz>
+    )
 
 if(BUILD_ENV_UNIXLIKE AND NOT BUILD_TARGET_WIN)
     add_subdirectory(xdg-data)
