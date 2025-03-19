@@ -2,9 +2,6 @@
 #define _WIN32_WINNT 0x0A00
 #endif
 
-// Prevent std::byte conflict by forcing Windows definition
-#define byte unsigned char
-
 #include "texception.h"
 #include "tpropertytype.h"
 // #include "timageinfo.h"
@@ -404,6 +401,13 @@ bool Tiio::isQuicktimeInstalled() {
 // MAC-Specific includes
 #ifdef MACOSX
 #include <ApplicationServices/ApplicationServices.h>
+#endif
+
+#ifdef _WIN32
+// Define byte as unsigned char only for Windows-specific includes that need it
+#define byte unsigned char
+#include <windows.h>  // Include any Windows headers that might define byte
+#undef byte  // Undefine it immediately after to allow std::byte
 #endif
 
 //---------------------------------------------------------------------------
