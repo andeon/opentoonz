@@ -103,7 +103,7 @@ jobs:
                      --checks="-*,modernize-*,bugprone-*,performance-*,readability-*" \
                      $(find toonz/sources -name "*.cpp")
         
-    # Temporarily disable clang-tidy
+    # Temporarily disable clang-tidy 
     # - name: Run Static Analysis (Clang-Tidy)
     #   if: matrix.compiler == 'clang'
     #   run: |
