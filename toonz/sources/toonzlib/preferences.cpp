@@ -1,5 +1,4 @@
 
-
 #include "toonz/preferences.h"
 
 // TnzLib includes
@@ -389,15 +388,11 @@ void Preferences::definePreferenceItems() {
   define(CurrentStyleSheetName, "CurrentStyleSheetName", QMetaType::QString,
          "Default");
 
-  // Qt has a bug in recent versions that Menu item Does not show correctly
-  // (QTBUG-90242) Since the current OT is made to handle such issue, so we need
-  // to apply an extra adjustment when it is run on the older versions (5.9.x)
-  // of Qt
-  // Update: confirmed that the bug does not appear at least in Qt 5.12.8
+// Qt has a bug in recent versions that Menu item does not show correctly
+// (QTBUG-90242). The current OT handles this issue by applying an extra adjustment
+// for Qt versions 5.9.x.
+// Update: Issue confirmed fixed in Qt 5.12.8 and above, no longer affecting Qt 5.15 and later.
   QString defaultAditionalSheet = "";
-#if QT_VERSION < QT_VERSION_CHECK(5, 12, 9)
-  defaultAditionalSheet = "QMenu::Item{ padding: 3 28 3 28; }";
-#endif
 
   define(additionalStyleSheet, "additionalStyleSheet", QMetaType::QString,
          defaultAditionalSheet);
@@ -453,12 +448,17 @@ void Preferences::definePreferenceItems() {
   setCallBack(linearUnits, &Preferences::setUnits);
   setCallBack(cameraUnits, &Preferences::setCameraUnits);
 
+  define(viewerIndicatorEnabled, "viewerIndicatorEnabled", QMetaType::Bool,
+         true);
+
   // Visualization
   define(show0ThickLines, "show0ThickLines", QMetaType::Bool, true);
   define(regionAntialias, "regionAntialias", QMetaType::Bool, false);
+  define(rasterizeAntialias, "rasterizeAntialias", QMetaType::Bool, true);
 
   // Loading
   define(importPolicy, "importPolicy", QMetaType::Int, 0);  // Always ask
+  define(renamePolicy, "renamePolicy", QMetaType::Int, 0); // Always ask
   define(autoExposeEnabled, "autoExposeEnabled", QMetaType::Bool, true);
   define(subsceneFolderEnabled, "subsceneFolderEnabled", QMetaType::Bool, true);
   define(removeSceneNumberFromLoadedLevelName,
@@ -1023,30 +1023,28 @@ QString Preferences::getCurrentLanguage() const {
 QString Preferences::getCurrentStyleSheet() const {
   QString currentStyleSheetName = getStringValue(CurrentStyleSheetName);
   if (currentStyleSheetName.isEmpty()) return QString();
+
   TFilePath path(TEnv::getConfigDir() + "qss");
   QString string = currentStyleSheetName + QString("/") +
                    currentStyleSheetName + QString(".qss");
   QString styleSheetPath = path.getQString() + "/" + string;
 
-  QString additionalSheetStr = getStringValue(additionalStyleSheet);
-  // if there is no additional style sheet, return the path and let
-  // Qt to load and parse it
-  if (additionalSheetStr.isEmpty()) return QString("file:///" + styleSheetPath);
-
-  // if there is any additional style sheet, load the style sheet
-  // from the file and combine with it
   QString styleSheetStr;
+
+  // Always read the main stylesheet from the file
   QFile f(styleSheetPath);
   if (f.open(QFile::ReadOnly | QFile::Text)) {
     QTextStream ts(&f);
     styleSheetStr = ts.readAll();
   }
-  styleSheetStr += additionalSheetStr;
 
-  // here we will convert all relative paths to absolute paths
-  // or Qt will look for images relative to the current working directory
-  // since it has no idea where the style sheet comes from.
+  // Append additional stylesheet if provided
+  QString additionalSheetStr = getStringValue(additionalStyleSheet);
+  if (!additionalSheetStr.isEmpty()) {
+    styleSheetStr += additionalSheetStr;
+  }
 
+  // Fix relative paths in stylesheets
   QString currentStyleFolderPath =
       path.getQString().replace("\\", "/") + "/" + currentStyleSheetName;
 

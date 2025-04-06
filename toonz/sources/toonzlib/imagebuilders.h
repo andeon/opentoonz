@@ -6,6 +6,10 @@
 #include "tfilepath.h"
 
 #include "toonz/imagemanager.h"
+#include "toonz/tcamera.h"
+
+// ToonzLib includes
+#include "toonz/stage.h"
 
 //======================================================
 
@@ -39,11 +43,17 @@ public:
     //!< 'the currently stored one' if an image is already cached, or
     //!< m_sl's subsampling property otherwise)
     bool m_icon;  //!< Whether the icon (if any) should be loaded instead
+    
+    TPointD m_cameraDPI;  // for Rasterizer
 
   public:
     BuildExtData(const TXshSimpleLevel *sl, const TFrameId &fid, int subs = 0,
                  bool icon = false)
-        : m_sl(sl), m_fid(fid), m_subs(subs), m_icon(icon) {}
+        : m_sl(sl)
+        , m_fid(fid)
+        , m_subs(subs)
+        , m_icon(icon)
+        , m_cameraDPI(Stage::inch, Stage::inch) {}
   };
 
 public:
@@ -91,7 +101,11 @@ public:
   ImageRasterizer() {}
   ~ImageRasterizer() {}
 
-  bool isImageCompatible(int imFlags, void *extData) override { return true; }
+  TPointD m_cameraDPI;
+  bool m_antiAliasing;
+
+  //Imagemaneget::getImage
+  bool isImageCompatible(int imFlags, void *extData) override;
 
 protected:
   bool getInfo(TImageInfo &info, int imFlags, void *extData) override;

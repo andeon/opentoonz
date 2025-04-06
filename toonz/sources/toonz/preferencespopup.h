@@ -83,6 +83,8 @@ private:
 private:
   void rebuildFormatsList();
   QList<ComboBoxItem> buildFontStyleList() const;
+  QList<ComboBoxItem> buildSvnUserList() const;
+  QList<ComboBoxItem> buildSvnRepList() const;
 
   QWidget* createUI(
       PreferencesItemId id,
@@ -125,7 +127,6 @@ private:
   void onPathAliasPriorityChanged();
   // Interface
   void onStyleSheetTypeChanged();
-  void onIconThemeChanged();
   void onPixelsOnlyChanged();
   void beforeUnitChanged();
   void onUnitChanged();
@@ -177,6 +178,7 @@ private slots:
   void onEditLevelFormat();
   void onLevelFormatEdited();
   void onImportPolicyExternallyChanged(int policy);
+  void onRenamePolicyExternallyChanged(int policy);
 };
 
 //**********************************************************************************

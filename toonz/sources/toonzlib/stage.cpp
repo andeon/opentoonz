@@ -38,6 +38,7 @@
 #include "imagebuilders.h"
 #include "toonz/toonzscene.h"
 #include "toonz/sceneproperties.h"
+#include "toonz/tcamera.h"
 
 // Qt includes
 #include <QImage>
@@ -195,6 +196,8 @@ public:
   double m_fade;
 
   ShiftTraceGhostId m_shiftTraceGhostId;
+  bool m_editingShift;
+  bool m_showShiftOrigin;
 
   bool m_camera3d;
   OnionSkinMask m_onionSkinMask;
@@ -286,6 +289,8 @@ StageBuilder::StageBuilder()
     , m_ancestorColumnIndex(-1)
     , m_fade(0)
     , m_shiftTraceGhostId(NO_GHOST)
+    , m_editingShift(false)
+    , m_showShiftOrigin(false)
     , m_currentXsheetLevel(0)
     , m_xsheetLevel(0) {
   m_placementStack.push_back(ZPlacement());
@@ -424,7 +429,18 @@ void StageBuilder::addCell(PlayerSet &players, ToonzScene *scene, TXsheet *xsh,
     player.m_isGuidedDrawingEnabled = m_isGuidedDrawingEnabled;
     player.m_guidedFrontStroke      = m_guidedFrontStroke;
     player.m_guidedBackStroke       = m_guidedBackStroke;
+    if (xsh) {
+      TPointD cameraDpi =//use cameraDpi for rasterized vector image
+          xsh->getStageObjectTree()->getCurrentCamera()->getDpi();
+        player.m_dpiAff =
+          sl ? ((sl->getType() == PLI_XSHLEVEL && sl->m_rasterizePli)
+                    ? TScale(Stage::inch / cameraDpi.x,
+                             Stage::inch / cameraDpi.y)
+                    : getDpiAffine(sl, cell.m_frameId))
+             : TAffine();
+    } else  
     player.m_dpiAff = sl ? getDpiAffine(sl, cell.m_frameId) : TAffine();
+
     player.m_onionSkinDistance = m_onionSkinDistance;
     // when visiting the subxsheet, valuate the subxsheet column index
     bool isCurrent               = (subSheetColIndex >= 0)
@@ -474,15 +490,19 @@ void StageBuilder::addCell(PlayerSet &players, ToonzScene *scene, TXsheet *xsh,
         if (m_onionSkinMask.getShiftTraceStatus() !=
             OnionSkinMask::ENABLED_WITHOUT_GHOST_MOVEMENTS) {
           if (m_shiftTraceGhostId == FIRST_GHOST) {
-            player.m_opacity = 30;
-            players.push_back(player);
+            if (m_editingShift || m_showShiftOrigin) {
+              player.m_opacity = 30;
+              players.push_back(player);
+            }
             player.m_opacity           = opacity;
             player.m_onionSkinDistance = -1;
             player.m_placement =
                 m_onionSkinMask.getShiftTraceGhostAff(0) * player.m_placement;
           } else if (m_shiftTraceGhostId == SECOND_GHOST) {
-            player.m_opacity = 30;
-            players.push_back(player);
+            if (m_editingShift || m_showShiftOrigin) {
+              player.m_opacity = 30;
+              players.push_back(player);
+            }
             player.m_opacity           = opacity;
             player.m_onionSkinDistance = 1;
             player.m_placement =
@@ -586,6 +606,9 @@ void StageBuilder::addCellWithOnionSkin(PlayerSet &players, ToonzScene *scene,
   };  // locals
 
   if (m_onionSkinMask.isShiftTraceEnabled()) {
+    m_editingShift    = m_onionSkinMask.isEditingShift();
+    m_showShiftOrigin = m_onionSkinMask.isShowShiftOrigin();
+
     // when visiting the subxsheet, valuate the subxsheet column index
     bool isCurrent = (subSheetColIndex >= 0)
                          ? (subSheetColIndex == m_currentColumnIndex)

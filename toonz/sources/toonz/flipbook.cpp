@@ -232,8 +232,6 @@ FlipBook::FlipBook(QWidget *parent, QString viewerTitle,
                                   ->getOutputProperties()
                                   ->getFrameRate());
 
-  mainLayout->addWidget(m_flipConsole);
-
   m_previewUpdateTimer.setSingleShot(true);
 
   ret = ret && connect(parentWidget(), SIGNAL(closeButtonPressed()), this,
@@ -266,7 +264,7 @@ void FlipBook::addFreezeButtonToTitleBar() {
   if (panel) {
     TPanelTitleBar *titleBar = panel->getTitleBar();
     m_freezeButton =
-        new TPanelTitleBarButton(titleBar, getIconPath("pane_freeze"));
+        new TPanelTitleBarButton(titleBar, "freeze");
     m_freezeButton->setToolTip("Freeze");
     titleBar->add(QPoint(-64, 0), m_freezeButton);
     connect(m_freezeButton, SIGNAL(toggled(bool)), this, SLOT(freeze(bool)));

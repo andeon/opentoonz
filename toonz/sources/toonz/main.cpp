@@ -256,9 +256,6 @@ int main(int argc, char *argv[]) {
   }
 #endif
 
-  // Build icon map
-  ThemeManager::getInstance().buildIconPathsMap(":/icons");
-
   // Install signal handlers to catch crashes
   CrashHandler::install();
 
@@ -405,7 +402,7 @@ int main(int argc, char *argv[]) {
 
   // Enable to render smooth icons on high dpi monitors
   a.setAttribute(Qt::AA_UseHighDpiPixmaps);
-#if defined(_WIN32) && QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+#if defined(_WIN32)
   // Compress tablet events with application attributes instead of implementing
   // the delay-timer by ourselves
   a.setAttribute(Qt::AA_CompressHighFrequencyEvents);
@@ -635,6 +632,10 @@ int main(int argc, char *argv[]) {
                      Qt::white);
   a.processEvents();
 
+  // Initialize ThemeManager before TApp
+  auto &themeManager = ThemeManager::getInstance();
+  themeManager.initialize();
+
   TTool::setApplication(TApp::instance());
   TApp::instance()->init();
 
@@ -665,7 +666,7 @@ int main(int argc, char *argv[]) {
     if (TFileStatus(loadFilePath).doesExist()) {
       // find project for this script file
       TProjectManager *pm = TProjectManager::instance();
-      auto sceneProject = pm->loadSceneProject(loadFilePath);
+      auto sceneProject   = pm->loadSceneProject(loadFilePath);
       TFilePath oldProjectPath;
       if (!sceneProject) {
         std::cerr << QObject::tr(
@@ -726,6 +727,9 @@ int main(int argc, char *argv[]) {
   // Carico lo styleSheet
   QString currentStyle = Preferences::instance()->getCurrentStyleSheet();
   a.setStyleSheet(currentStyle);
+
+  // Parse inital stylesheet in ThemeManager
+  themeManager.parseCustomPropertiesFromStylesheet(currentStyle);
 
   w.setWindowTitle(QString::fromStdString(TEnv::getApplicationFullName()));
   if (TEnv::getIsPortable()) {

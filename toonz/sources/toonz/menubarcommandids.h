@@ -194,6 +194,7 @@
 #define MI_EditShift "MI_EditShift"
 #define MI_NoShift "MI_NoShift"
 #define MI_ResetShift "MI_ResetShift"
+#define MI_ShowShiftOrigin "MI_ShowShiftOrigin"
 #define MI_Histogram "MI_Histogram"
 #define MI_ViewerHistogram "MI_ViewerHistogram"
 #define MI_FxParamEditor "MI_FxParamEditor"
@@ -242,6 +243,7 @@
 #define MI_OnionSkin "MI_OnionSkin"
 #define MI_ZeroThick "MI_ZeroThick"
 #define MI_CursorOutline "MI_CursorOutline"
+#define MI_ViewerIndicator "MI_ViewerIndicator"
 
 // #define MI_LoadResourceFile       "MI_LoadResourceFile"
 #define MI_DuplicateFile "MI_DuplicateFile"
@@ -495,4 +497,5 @@
 #define MI_PrevTaggedFrame "MI_PrevTaggedFrame"
 #define MI_ClearTags "MI_ClearTags"
 
+#define MI_OpenLocator "MI_OpenLocator"
 #endif

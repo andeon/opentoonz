@@ -82,6 +82,7 @@ TEnv::IntVar LinkToggleAction("LinkToggleAction", 0);
 TEnv::IntVar DockingCheckToggleAction("DockingCheckToggleAction", 0);
 TEnv::IntVar ShiftTraceToggleAction("ShiftTraceToggleAction", 0);
 TEnv::IntVar EditShiftToggleAction("EditShiftToggleAction", 0);
+TEnv::IntVar ShowShiftOriginToggleAction("ShowShiftOriginToggleAction", 0);
 TEnv::IntVar NoShiftToggleAction("NoShiftToggleAction", 0);
 TEnv::IntVar TouchGestureControl("TouchGestureControl", 0);
 
@@ -966,6 +967,7 @@ void MainWindow::onNewScene() {
   cm->setChecked(MI_ShiftTrace, false);
   cm->setChecked(MI_EditShift, false);
   cm->setChecked(MI_NoShift, false);
+  cm->setChecked(MI_ShowShiftOrigin, false);
   cm->setChecked(MI_VectorGuidedDrawing, false);
 }
 
@@ -1140,6 +1142,11 @@ void MainWindow::onCurrentRoomChanged(int newRoomIndex) {
   for (int i = 0; i < paneList.size(); i++) {
     TPanel *pane = paneList.at(i);
     if (pane->isFloating() && !pane->isHidden()) {
+      // Close floating Locator panes
+      if (pane->getPanelType() == "Locator") {
+        pane->close();
+        continue;
+      }
       QRect oldGeometry = pane->geometry();
       // Just setting the new parent is not enough for the new layout manager.
       // Must be removed from the old and added to the new.
@@ -1269,6 +1276,8 @@ void MainWindow::onMenuCheckboxChanged() {
     EditShiftToggleAction = isChecked;
   else if (cm->getAction(MI_NoShift) == action)
     NoShiftToggleAction = isChecked;
+  else if (cm->getAction(MI_ShowShiftOrigin) == action)
+    ShowShiftOriginToggleAction = isChecked;
   else if (cm->getAction(MI_TouchGestureControl) == action)
     TouchGestureControl = isChecked;
 }
@@ -1437,7 +1446,7 @@ QAction *MainWindow::createAction(const char *id, const char *name,
 #endif
     // do nothing for other platforms
   } else
-    action->setIcon(createQIcon(iconSVGName, false, true));
+    action->setIcon(createQIcon(iconSVGName, true));
   addAction(action);
 #ifdef MACOSX
   // To prevent the wrong menu items (due to MacOS menu naming conventions),
@@ -1629,7 +1638,7 @@ QAction *MainWindow::createToolOptionsAction(const char *id, const char *name,
                                              const char *iconSVGName) {
   QAction *action = new DVAction(tr(name), this);
   if (iconSVGName && *iconSVGName)
-    action->setIcon(createQIcon(iconSVGName, false, true));
+    action->setIcon(createQIcon(iconSVGName, true));
   addAction(action);
   CommandManager::instance()->define(id, ToolModifierCommandType,
                                      defaultShortcut.toStdString(), action,
@@ -1706,12 +1715,12 @@ void MainWindow::defineActions() {
                        "new_scene");
   createMenuFileAction(MI_LoadScene, QT_TR_NOOP("&Load Scene..."), "Ctrl+L",
                        "load_scene");
-  createMenuFileAction(MI_SaveScene, QT_TR_NOOP("&Save Scene"), "Ctrl+Shift+S",
-                       "save_scene");
-  createMenuFileAction(MI_SaveSceneAs, QT_TR_NOOP("&Save Scene As..."), "",
-                       "save_scene_as");
   createMenuFileAction(MI_SaveAll, QT_TR_NOOP("&Save All"), "Ctrl+S",
                        "saveall");
+  createMenuFileAction(MI_SaveScene, QT_TR_NOOP("&Save Scene Only"),
+                       "Ctrl+Shift+S", "save_scene");
+  createMenuFileAction(MI_SaveSceneAs, QT_TR_NOOP("&Save Scene As..."), "",
+                       "save_scene_as");
   menuAct = createMenuFileAction(MI_RevertScene, QT_TR_NOOP("&Revert Scene"),
                                  "", "revert_scene");
   menuAct->setEnabled(false);
@@ -1743,7 +1752,7 @@ void MainWindow::defineActions() {
   createMenuFileAction(MI_ProjectSettings, QT_TR_NOOP("&Project Settings..."),
                        "", "project_settings");
   createMenuFileAction(MI_SaveDefaultSettings,
-                       QT_TR_NOOP("&Save Default Settings"), "",
+                       QT_TR_NOOP("&Set Scene Settings as Default"), "",
                        "save_default_settings");
   createMenuFileAction(MI_SoundTrack, QT_TR_NOOP("&Export Soundtrack"), "");
   createMenuFileAction(MI_Preferences, QT_TR_NOOP("&Preferences..."), "Ctrl+U",
@@ -2121,10 +2130,10 @@ void MainWindow::defineActions() {
                          QT_TR_NOOP("&Save Previewed Frames"), "",
                          "save_previewed_frames");
   createToggle(MI_ToggleViewerPreview, QT_TR_NOOP("Toggle Viewer Preview"), "",
-               false, MenuRenderCommandType, "pane_preview");
+               false, MenuRenderCommandType, "preview");
   createToggle(MI_ToggleViewerSubCameraPreview,
                QT_TR_NOOP("Toggle Viewer Sub-camera Preview"), "", false,
-               MenuRenderCommandType, "pane_subpreview");
+               MenuRenderCommandType, "subpreview");
 
   createRightClickMenuAction(MI_OpenPltGizmo, QT_TR_NOOP("&Palette Gizmo"), "",
                              "palettegizmo");
@@ -2182,8 +2191,11 @@ void MainWindow::defineActions() {
                MenuViewCommandType, "shift_and_trace_edit");
   createToggle(MI_NoShift, QT_TR_NOOP("No Shift"), "", false,
                MenuViewCommandType, "shift_and_trace_no_shift");
+  createToggle(MI_ShowShiftOrigin, QT_TR_NOOP("Show Shift Origin"), "", false,
+               MenuViewCommandType, "");
   CommandManager::instance()->enable(MI_EditShift, false);
   CommandManager::instance()->enable(MI_NoShift, false);
+  CommandManager::instance()->enable(MI_ShowShiftOrigin, false);
   createAction(MI_ResetShift, QT_TR_NOOP("Reset Shift"), "",
                MenuViewCommandType, "shift_and_trace_reset");
   createToggle(MI_VectorGuidedDrawing, QT_TR_NOOP("Vector Guided Drawing"), "",
@@ -2201,7 +2213,7 @@ void MainWindow::defineActions() {
   createMenuWindowsAction(MI_OpenFileBrowser, QT_TR_NOOP("&File Browser"), "",
                           "filebrowser");
   createMenuWindowsAction(MI_OpenPreproductionBoard,
-                          QT_TR_NOOP("&Preproduction Board"), "", "");
+                          QT_TR_NOOP("&Preproduction Board"), "", "preproductionboard");
   createMenuWindowsAction(MI_OpenFileViewer, QT_TR_NOOP("&Flipbook"), "",
                           "flipbook");
   createMenuWindowsAction(MI_OpenFunctionEditor, QT_TR_NOOP("&Function Editor"),
@@ -2271,6 +2283,7 @@ void MainWindow::defineActions() {
                    false);
   createMenuWindowsAction(MI_CustomPanelEditor,
                           QT_TR_NOOP("&Custom Panel Editor..."), "", "");
+  createMenuWindowsAction(MI_OpenLocator, QT_TR_NOOP("&Locator"), "", "locator");
 
   menuAct =
       createToggle(MI_DockingCheck, QT_TR_NOOP("&Lock Room Panes"), "",
@@ -2336,7 +2349,7 @@ void MainWindow::defineActions() {
   createRightClickMenuAction(MI_ToggleXsheetCameraColumn,
                              QT_TR_NOOP("Show/Hide Xsheet Camera Column"), "");
   createRightClickMenuAction(MI_SetKeyframes, QT_TR_NOOP("&Set Key"), "F6",
-                             "set_key");
+                             "set_keyframe");
   createRightClickMenuAction(MI_ShiftKeyframesDown,
                              QT_TR_NOOP("&Shift Keys Down"), "",
                              "shift_keys_down");
@@ -2474,6 +2487,9 @@ void MainWindow::defineActions() {
   createRightClickMenuAction(MI_SeparateColors,
                              QT_TR_NOOP("Separate Colors..."), "",
                              "separate_colors");
+  createToggle(MI_ViewerIndicator, QT_TR_NOOP("Toggle Viewer Indicators"), "",
+               Preferences::instance()->isViewerIndicatorEnabled(),
+               RightClickMenuCommandType);
 
   // Tools
 

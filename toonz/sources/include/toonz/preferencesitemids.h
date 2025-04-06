@@ -40,15 +40,18 @@ enum PreferencesItemId {
   colorCalibrationLutPaths,
   showIconsInMenu,
   displayIn30bit,
+  viewerIndicatorEnabled,
 
   //----------
   // Visualization
   show0ThickLines,
   regionAntialias,
+  rasterizeAntialias,
 
   //----------
   // Loading
   importPolicy,
+  renamePolicy,
   autoExposeEnabled,
   subsceneFolderEnabled,
   removeSceneNumberFromLoadedLevelName,

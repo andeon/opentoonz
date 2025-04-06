@@ -5,6 +5,8 @@
 // Tnz6 includes
 #include "menubarcommandids.h"
 #include "versioncontrol.h"
+#include "permissionsmanager.h"
+#include "versioncontrolxmlwriter.h"
 #include "levelsettingspopup.h"
 #include "tapp.h"
 #include "cleanupsettingsmodel.h"
@@ -456,6 +458,34 @@ QList<ComboBoxItem> PreferencesPopup::buildFontStyleList() const {
 
 //-----------------------------------------------------------------------------
 
+QList<ComboBoxItem> PreferencesPopup::buildSvnUserList() const { 
+    PermissionsManager* instance        = PermissionsManager::instance();
+    QList<ComboBoxItem> userList;
+    std::string username;
+    username = instance->getSVNUserName(0);
+    for (int i = 1; !username.empty(); i++) {
+      userList.append(ComboBoxItem(QString::fromStdString(username),
+                                    QString::fromStdString(username)));
+      username = instance->getSVNUserName(i);
+    }
+    return userList;
+}
+
+QList<ComboBoxItem> PreferencesPopup::buildSvnRepList() const {
+  VersionControl* instance = VersionControl::instance();
+  QList<ComboBoxItem> repList;
+  QList<SVNRepository> repositories = instance->getRepositories();
+  for (int i = 0; i < repositories.size(); i++) {
+    SVNRepository r = repositories.at(i);
+    repList.append(ComboBoxItem(r.m_name,
+                                  r.m_name));
+  }
+  return repList;
+
+}
+
+//-----------------------------------------------------------------------------
+
 void PreferencesPopup::onAutoSaveChanged() {
   bool on = getUI<QGroupBox*>(autosaveEnabled)->isChecked();
   if (!on) return;
@@ -500,11 +530,18 @@ void PreferencesPopup::onStyleSheetTypeChanged() {
   QString currentStyle = m_pref->getCurrentStyleSheet();
   qApp->setStyleSheet(currentStyle);
   QApplication::restoreOverrideCursor();
+
+  // Update icons
+  ThemeManager& tm = ThemeManager::getInstance();
+  tm.parseCustomPropertiesFromStylesheet(currentStyle);
+
+  // Try request a full UI repaint to update icons
+  // TODO: Can be better, may not refresh all widgets like popups...
+  QMainWindow* mainwindow = TApp::instance()->getMainWindow();
+  if (mainwindow) {
+    mainwindow->update();
+  }
 }
-
-//-----------------------------------------------------------------------------
-
-void PreferencesPopup::onIconThemeChanged() {}
 
 //-----------------------------------------------------------------------------
 
@@ -923,6 +960,13 @@ void PreferencesPopup::onImportPolicyExternallyChanged(int policy) {
 
 //-----------------------------------------------------------------------------
 
+void PreferencesPopup::onRenamePolicyExternallyChanged(int policy) {
+  QComboBox* renamePolicyCombo = getUI<QComboBox*>(renamePolicy);
+  // update preferences data accordingly
+  renamePolicyCombo->setCurrentIndex(policy);
+}
+//-----------------------------------------------------------------------------
+
 QWidget* PreferencesPopup::createUI(PreferencesItemId id,
                                     const QList<ComboBoxItem>& comboItems) {
   PreferencesItem item = m_pref->getItem(id);
@@ -1173,7 +1217,6 @@ QString PreferencesPopup::getUIString(PreferencesItemId id) {
 
       // Interface
       {CurrentStyleSheetName, tr("Theme:")},
-      {iconTheme, tr("Switch to dark icons")},
       {pixelsOnly, tr("All imported images will use the same DPI")},
       //{ oldUnits,                               tr("") },
       //{ oldCameraUnits,                         tr("") },
@@ -1201,13 +1244,16 @@ QString PreferencesPopup::getUIString(PreferencesItemId id) {
            .arg(LutManager::instance()->getMonitorName())},
       {displayIn30bit, tr("30bit Display*")},
       {showIconsInMenu, tr("Show Icons In Menu*")},
+      {viewerIndicatorEnabled, tr("Show Viewer Indicators")},
 
       // Visualization
       {show0ThickLines, tr("Show Lines with Thickness 0")},
       {regionAntialias, tr("Antialiased Region Boundaries")},
+      {rasterizeAntialias, tr("Rasterize Vector with Anti Aliasing")},
 
       // Loading
       {importPolicy, tr("Default File Import Behavior:")},
+      {renamePolicy, tr("Normalize Imported Image Sequences:")},
       {autoExposeEnabled, tr("Expose Loaded Levels in Xsheet")},
       {autoRemoveUnusedLevels,
        tr("Automatically Remove Unused Levels From Scene Cast")},
@@ -1261,7 +1307,8 @@ QString PreferencesPopup::getUIString(PreferencesItemId id) {
        tr("Use higher DPI for calculations - Slower but more accurate")},
 
       // Tools
-      // {dropdownShortcutsCycleOptions, tr("Dropdown Shortcuts:")}, // removed
+      // {dropdownShortcutsCycleOptions, tr("Dropdown Shortcuts:")}, //
+      // removed
       {FillOnlysavebox, tr("Use the TLV Savebox to Limit Filling Operations")},
       {multiLayerStylePickerEnabled,
        tr("Multi Layer Style Picker: Switch Levels by Picking")},
@@ -1304,7 +1351,8 @@ QString PreferencesPopup::getUIString(PreferencesItemId id) {
        tr("Sync Level Strip Drawing Number Changes with the Xsheet")},
       {currentTimelineEnabled, tr("Show Current Time Indicator")},
       {currentColumnColor, tr("Current Column Color:")},
-      //{ levelNameOnEachMarkerEnabled, tr("Display Level Name on Each Marker")
+      //{ levelNameOnEachMarkerEnabled, tr("Display Level Name on Each
+      // Marker")
       //},
       {levelNameDisplayType, tr("Level Name Display:")},
       {showFrameNumberWithLetters,
@@ -1315,8 +1363,8 @@ QString PreferencesPopup::getUIString(PreferencesItemId id) {
       {keyframeType, tr("Default Interpolation:")},
       {animationStep, tr("Animation Step:")},
       {modifyExpressionOnMovingReferences,
-       tr("[Experimental Feature] ") +
-           tr("Automatically Modify Expression On Moving Referenced Objects")},
+       tr("[Experimental Feature] ") + tr("Automatically Modify Expression "
+                                          "On Moving Referenced Objects")},
 
       // Preview
       {blanksCount, tr("Blank Frames:")},
@@ -1356,11 +1404,13 @@ QString PreferencesPopup::getUIString(PreferencesItemId id) {
        tr("Check for the Latest Version of OpenToonz on Launch")},
 
       // Touch / Tablet Settings
-      // TounchGestureControl // Touch Gesture is a checkable command and not in
+      // TounchGestureControl // Touch Gesture is a checkable command and not
+      // in
       // preferences.ini
       {winInkEnabled, tr("Enable Windows Ink Support* (EXPERIMENTAL)")},
       {useQtNativeWinInk,
-       tr("Use Qt's Native Windows Ink Support*\n(CAUTION: This options is for "
+       tr("Use Qt's Native Windows Ink Support*\n(CAUTION: This options is "
+          "for "
           "maintenance purpose. \n Do not activate this option or the tablet "
           "won't work properly.)")}};
 
@@ -1400,6 +1450,10 @@ QList<ComboBoxItem> PreferencesPopup::getComboItemList(
        {{tr("Always ask before loading or importing"), 0},
         {tr("Always import the file to the current project"), 1},
         {tr("Always load the file from the current location"), 2}}},
+      {renamePolicy,
+       {{tr("Always ask before renaming"), 0},
+        {tr("Normalize sequence names automatically"), 1},
+        {tr("Keep original filenames"), 2}}},
       {rasterLevelCachingBehavior,
        {{tr("On Demand"), 0},
         {tr("All Icons"), 1},
@@ -1673,10 +1727,6 @@ QWidget* PreferencesPopup::createInterfacePage() {
   int row = lay->rowCount();
   lay->addWidget(additionalStyleSheetBtn, row - 1, 2, Qt::AlignRight);
 
-  lay->addWidget(new QLabel(tr("Icon Theme*:"), this), 2, 0,
-                 Qt::AlignRight | Qt::AlignVCenter);
-  lay->addWidget(createUI(iconTheme), 2, 1);
-
   insertUI(linearUnits, lay, getComboItemList(linearUnits));
   insertUI(cameraUnits, lay,
            getComboItemList(linearUnits));  // share items with linearUnits
@@ -1689,6 +1739,7 @@ QWidget* PreferencesPopup::createInterfacePage() {
   insertUI(functionEditorToggle, lay, getComboItemList(functionEditorToggle));
   insertUI(moveCurrentFrameByClickCellArea, lay);
   insertUI(actualPixelViewOnSceneEditingMode, lay);
+  insertUI(viewerIndicatorEnabled, lay);
   insertUI(showRasterImagesDarkenBlendedInViewer, lay);
   insertUI(iconSize, lay);
   insertDualUIs(viewShrink, viewStep, lay);
@@ -1728,7 +1779,6 @@ QWidget* PreferencesPopup::createInterfacePage() {
 
   m_onEditedFuncMap.insert(CurrentStyleSheetName,
                            &PreferencesPopup::onStyleSheetTypeChanged);
-  m_onEditedFuncMap.insert(iconTheme, &PreferencesPopup::onIconThemeChanged);
   m_onEditedFuncMap.insert(pixelsOnly, &PreferencesPopup::onPixelsOnlyChanged);
   m_preEditedFuncMap.insert(linearUnits, &PreferencesPopup::beforeUnitChanged);
   m_onEditedFuncMap.insert(linearUnits, &PreferencesPopup::onUnitChanged);
@@ -1751,6 +1801,7 @@ QWidget* PreferencesPopup::createVisualizationPage() {
 
   insertUI(show0ThickLines, lay);
   insertUI(regionAntialias, lay);
+  insertUI(rasterizeAntialias, lay);
 
   lay->setRowStretch(lay->rowCount(), 1);
   widget->setLayout(lay);
@@ -1775,6 +1826,7 @@ QWidget* PreferencesPopup::createLoadingPage() {
   setupLayout(lay);
 
   insertUI(importPolicy, lay, getComboItemList(importPolicy));
+  insertUI(renamePolicy, lay, getComboItemList(renamePolicy));
   QGridLayout* autoExposeLay = insertGroupBoxUI(autoExposeEnabled, lay);
   { insertUI(autoRemoveUnusedLevels, autoExposeLay); }
   insertUI(subsceneFolderEnabled, lay);
@@ -1814,6 +1866,9 @@ QWidget* PreferencesPopup::createLoadingPage() {
   ret = ret && connect(TApp::instance()->getCurrentScene(),
                        SIGNAL(importPolicyChanged(int)), this,
                        SLOT(onImportPolicyExternallyChanged(int)));
+  ret = ret && connect(TApp::instance()->getCurrentScene(),
+                       SIGNAL(renamePolicyChanged(int)), this,
+                       SLOT(onRenamePolicyExternallyChanged(int)));
   assert(ret);
 
   return widget;
@@ -2201,19 +2256,96 @@ QWidget* PreferencesPopup::createColorsPage() {
 //-----------------------------------------------------------------------------
 
 QWidget* PreferencesPopup::createVersionControlPage() {
+
+  SVNConfigWriter* writer = new SVNConfigWriter();
   QWidget* widget  = new QWidget(this);
   QGridLayout* lay = new QGridLayout();
+  QHBoxLayout* svnUserLay = new QHBoxLayout();
+  QHBoxLayout* svnRepLay = new QHBoxLayout();
+
+  QLabel* repLabel = new QLabel(QString("Repositories*: "));
+  svnRepLay->addWidget(repLabel);
+  QComboBox* repoCombo               = new QComboBox();
+  QList<ComboBoxItem> repositoryList = PreferencesPopup::buildSvnRepList();
+  for (const ComboBoxItem& item : repositoryList)
+    repoCombo->addItem(item.first, item.second);
+  QPushButton* addRep        = new QPushButton("+");
+  addRep->setFixedSize(20, 20);
+  QPushButton* removeRep = new QPushButton("-");
+  removeRep->setFixedSize(20, 20);
+  QPushButton* editRep = new QPushButton("Edit");
+
+  QLabel* userLabel = new QLabel(QString("Users*: "));
+  svnUserLay->addWidget(userLabel);
+  QComboBox* userCombo    = new QComboBox();
+  QList<ComboBoxItem> userList = PreferencesPopup::buildSvnUserList();
+  for (const ComboBoxItem& item : userList)
+    userCombo->addItem(item.first, item.second);
+  QPushButton* addUser = new QPushButton("+");
+  addUser->setFixedSize(20, 20);
+  QPushButton* removeUser = new QPushButton("-");
+  removeUser->setFixedSize(20, 20);
+  QPushButton* editUser = new QPushButton("Edit");
+
+  svnRepLay->setSpacing(5);
+  svnRepLay->addWidget(repoCombo);
+  svnRepLay->addWidget(addRep);
+  svnRepLay->addWidget(removeRep);
+  svnRepLay->addWidget(editRep);
+  
+  svnUserLay->setSpacing(5);
+  svnUserLay->addWidget(userCombo);
+  svnUserLay->addWidget(addUser);
+  svnUserLay->addWidget(removeUser);
+  svnUserLay->addWidget(editUser);
+
   setupLayout(lay);
+  lay->setColumnMinimumWidth(0, 300);
 
   insertUI(SVNEnabled, lay);
+  lay->addLayout(svnUserLay, 3, 0);
+  lay->addLayout(svnRepLay, 4, 0);
   insertUI(automaticSVNFolderRefreshEnabled, lay);
   insertUI(latestVersionCheckEnabled, lay);
-
+  
   lay->setRowStretch(lay->rowCount(), 1);
   insertFootNote(lay);
   widget->setLayout(lay);
 
   m_onEditedFuncMap.insert(SVNEnabled, &PreferencesPopup::onSVNEnabledChanged);
+  
+  connect(addRep, &QPushButton::clicked, this, [repoCombo, writer]() {
+    QString addedRepo = writer->writeRepository("");
+    if (repoCombo->findText(addedRepo) == -1 && !addedRepo.isEmpty()) {
+      repoCombo->addItem(addedRepo);
+      repoCombo->setCurrentText(addedRepo);
+    }
+  });
+  connect(removeRep, &QPushButton::clicked, this, [repoCombo, writer]() {
+    writer->writeRepository(repoCombo->currentText(), QString(),
+                            QString(), true);
+    repoCombo->removeItem(repoCombo->currentIndex());
+  });
+  connect(editRep, &QPushButton::clicked, this, [repoCombo, writer]() {
+    if (repoCombo->currentText().isEmpty()) return;
+    writer->writeRepository(repoCombo->currentText());
+  });
+
+  connect(addUser, &QPushButton::clicked, this, [userCombo, writer]() { 
+    QString addedUser = writer->writeSvnUser("");
+    if (userCombo->findText(addedUser) == -1 && !addedUser.isEmpty()) {
+      userCombo->addItem(addedUser);
+      userCombo->setCurrentText(addedUser);
+    }
+  });
+  connect(removeUser, &QPushButton::clicked, this, [userCombo, writer]() {
+    writer->writeSvnUser(userCombo->currentText(), QString(), true);
+    userCombo->removeItem(userCombo->currentIndex());
+  });
+  connect(editUser, &QPushButton::clicked, this, [userCombo, writer]() {
+    if (userCombo->currentText().isEmpty()) return;
+      writer->writeSvnUser(userCombo->currentText());
+  });
 
   return widget;
 }

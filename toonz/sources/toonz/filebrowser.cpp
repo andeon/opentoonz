@@ -432,9 +432,10 @@ void FileBrowser::sortByDataModel(DataType dataType, bool isDiscendent) {
         boost::make_counting_iterator(0),
         boost::make_counting_iterator(int(m_items.size())));
 
-    std::stable_sort(
-        new2OldIdx.begin(), new2OldIdx.end(),
-        [this, dataType](int x, int y) { return locals::itemLess(x, y, *this, dataType); });
+    std::stable_sort(new2OldIdx.begin(), new2OldIdx.end(),
+                     [this, dataType](int x, int y) {
+                       return locals::itemLess(x, y, *this, dataType);
+                     });
 
     // Use the renumbering table to permutate elements
     std::vector<Item>(
@@ -452,13 +453,17 @@ void FileBrowser::sortByDataModel(DataType dataType, bool isDiscendent) {
           boost::make_counting_iterator(int(m_items.size())));
 
       std::sort(old2NewIdx.begin(), old2NewIdx.end(),
-                [&new2OldIdx](int aIdx, int bIdx){ return locals::indexLess(aIdx, bIdx, new2OldIdx); });
+                [&new2OldIdx](int aIdx, int bIdx) {
+                  return locals::indexLess(aIdx, bIdx, new2OldIdx);
+                });
 
       std::vector<int> newSelectedIndices;
-      tcg::substitute(
-          newSelectedIndices,
-          tcg::permuted_range(old2NewIdx, fs->getSelectedIndices() |
-                                              ba::filtered([&old2NewIdx](int x){ return x < old2NewIdx.size(); })));
+      tcg::substitute(newSelectedIndices,
+                      tcg::permuted_range(
+                          old2NewIdx, fs->getSelectedIndices() |
+                                          ba::filtered([&old2NewIdx](int x) {
+                                            return x < old2NewIdx.size();
+                                          })));
 
       fs->select(!newSelectedIndices.empty() ? &newSelectedIndices.front() : 0,
                  int(newSelectedIndices.size()));
@@ -480,11 +485,12 @@ void FileBrowser::sortByDataModel(DataType dataType, bool isDiscendent) {
       int iCount = int(m_items.size()), lastIdx = iCount - 1;
 
       std::vector<int> newSelectedIndices;
-      tcg::substitute(
-          newSelectedIndices,
-          fs->getSelectedIndices() |
-              ba::filtered([iCount](int x){ return x < iCount; }) |
-              ba::transformed([lastIdx](int x){ return locals::complement(x, lastIdx); }));
+      tcg::substitute(newSelectedIndices,
+                      fs->getSelectedIndices() | ba::filtered([iCount](int x) {
+                        return x < iCount;
+                      }) | ba::transformed([lastIdx](int x) {
+                        return locals::complement(x, lastIdx);
+                      }));
 
       fs->select(!newSelectedIndices.empty() ? &newSelectedIndices.front() : 0,
                  int(newSelectedIndices.size()));
@@ -894,19 +900,16 @@ QVariant FileBrowser::getItemData(int index, DataType dataType,
     QSize iconSize = m_itemViewer->getPanel()->getIconSize();
     // parent folder icons
     if (item.m_path == m_folder.getParentDir()) {
-      static QPixmap folderUpPixmap(generateIconPixmap(
-          "folder_browser_up", qreal(1.0), iconSize, Qt::KeepAspectRatio));
+      static QPixmap folderUpPixmap(getIconPath("folder_browser_up"));
       return folderUpPixmap;
     }
     // folder icons
     else if (item.m_isFolder) {
       if (item.m_isLink) {
-        static QPixmap folderLinkPixmap(generateIconPixmap(
-            "folder_browser_link", qreal(1.0), iconSize, Qt::KeepAspectRatio));
+        static QPixmap folderLinkPixmap(getIconPath("folder_browser_link"));
         return folderLinkPixmap;
       } else {
-        static QPixmap folderPixmap(generateIconPixmap(
-            "folder_browser", qreal(1.0), iconSize, Qt::KeepAspectRatio));
+        static QPixmap folderPixmap(getIconPath("folder_browser"));
         return folderPixmap;
       }
     }
@@ -1638,7 +1641,7 @@ RenameAsToonzPopup::RenameAsToonzPopup(const QString name, int frames)
 
   m_overwrite = new QCheckBox(tr("Delete Original Files"));
   m_overwrite->setFixedHeight(20);
-  // addWidget(m_overwrite, false);
+  //addWidget(m_overwrite, false);
 
   QFormLayout *formLayout = new QFormLayout;
 
@@ -1767,8 +1770,15 @@ void renameSingleFileOrToonzLevel(const QString &fullpath) {
 
   if (popup.doOverwrite())
     TSystem::renameFileOrLevel(fpin.withName(name), fpin, true);
-  else
-    TSystem::copyFileOrLevel(fpin.withName(name), fpin);
+  else {
+    if (TSystem::doesExistFileOrLevel(fpin.withName(name))) {
+      DVGui::error(QString(
+          QObject::tr("The specified name is already assigned to the %1 file.")
+              .arg(fpin.withName(name).getQString())));
+      return;
+    }
+    else TSystem::copyFileOrLevel(fpin.withName(name), fpin); 
+  }
 }
 
 //----------------------------------------------------------
@@ -2054,9 +2064,9 @@ void FileBrowser::onSelectedItems(const std::set<int> &indexes) {
 
 void FileBrowser::onClickedItem(int index) {
   if (0 <= index && index < (int)m_items.size()) {
-    // if the folder is clicked, then move the current folder
+    // if the parent folder is clicked, then move the current folder
     TFilePath fp = m_items[index].m_path;
-    if (m_items[index].m_isFolder) {
+    if (index == 0 && m_items[index].m_isFolder) {
       setFolder(fp, true);
       QModelIndex index = m_folderTreeView->currentIndex();
       if (index.isValid()) m_folderTreeView->scrollTo(index);
@@ -2069,8 +2079,8 @@ void FileBrowser::onClickedItem(int index) {
 
 void FileBrowser::onDoubleClickedItem(int index) {
   // TODO: Avoid duplicate code with onClickedItem().
-  if (0 <= index && index < (int)m_items.size()) {
-    // if the folder is clicked, then move the current folder
+  if (0 < index && index < (int)m_items.size()) {
+    // if the folder is doubleClicked, then move the current folder
     TFilePath fp = m_items[index].m_path;
     if (m_items[index].m_isFolder) {
       setFolder(fp, true);
@@ -2180,30 +2190,14 @@ void FileBrowser::newFolder() {
   int i                   = 1;
   while (TFileStatus(folderPath).doesExist())
     folderPath = parentFolder + (folderName + L" " + std::to_wstring(++i));
-  
-  if (Preferences::instance()->isWatchFileSystemEnabled()) {
-    MyFileSystemWatcher *watcher = MyFileSystemWatcher::instance();
-    // Remove parent folder from watcher
-    watcher->removePaths(QStringList() << parentFolder.getQString());
 
-    try {
-      TSystem::mkDir(folderPath);
-    } catch (...) {
-      DVGui::error(tr("It is not possible to create the %1 folder.")
-                       .arg(toQString(folderPath)));
-      watcher->addPaths(QStringList() << parentFolder.getQString());
-      return;
-    }
-    // Add the parent folder back
-    watcher->addPaths(QStringList() << parentFolder.getQString());
-  } else {
-    try {
-      TSystem::mkDir(folderPath);
-    } catch (...) {
-      DVGui::error(tr("It is not possible to create the %1 folder.")
-                       .arg(toQString(folderPath)));
-      return;
-    }
+  try {
+    TSystem::mkDir(folderPath);
+
+  } catch (...) {
+    DVGui::error(tr("It is not possible to create the %1 folder.")
+                     .arg(toQString(folderPath)));
+    return;
   }
 
   DvDirModel *model = DvDirModel::instance();
