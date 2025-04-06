@@ -6,6 +6,9 @@
 // TCG includes
 #include "mesh.h"
 
+// STD includes
+#include <utility>  // Added for std::make_pair
+
 // Boost includes
 #include <boost/graph/graph_traits.hpp>
 
