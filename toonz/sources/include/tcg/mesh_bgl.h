@@ -119,11 +119,10 @@ template <typename Mesh>
 inline std::pair<typename boost::graph_traits<Mesh>::out_edge_iterator,
                  typename boost::graph_traits<Mesh>::out_edge_iterator>
 out_edges(int v, const Mesh &mesh) {
-  typedef
-      typename boost::graph_traits<Mesh>::out_edge_iterator out_edge_iterator;
+  typedef typename boost::graph_traits<Mesh>::out_edge_iterator out_edge_iterator;
 
-  return make_pair(out_edge_iterator(mesh.vertex(v).edgesBegin(), v),
-                   out_edge_iterator(mesh.vertex(v).edgesEnd(), v));
+  return std::make_pair(out_edge_iterator(mesh.vertex(v).edgesBegin(), v),
+                        out_edge_iterator(mesh.vertex(v).edgesEnd(), v));
 }
 
 //---------------------------------------------------------------------------------------
@@ -132,7 +131,8 @@ template <typename Mesh>
 inline int out_degree(int v, const Mesh &mesh) {
   return mesh.vertex(v).edgesCount();
 }
-}
-}  // namespace tcg::bgl
+
+}  // namespace bgl
+}  // namespace tcg
 
 #endif  // TCG_MESH_BGL_H
