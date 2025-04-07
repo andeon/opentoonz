@@ -3,16 +3,7 @@
 #ifndef ORIENTATION_INCLUDED
 #define ORIENTATION_INCLUDED
 
-#undef DVAPI
-#undef DVVAR
-#ifdef TOONZLIB_EXPORTS
-#define DVAPI DV_EXPORT_API
-#define DVVAR DV_EXPORT_VAR
-#else
-#define DVAPI DV_IMPORT_API
-#define DVVAR DV_IMPORT_VAR
-#endif
-
+#include "export_config.h" // Single include for all export logic
 #include "tcommon.h"
 #include "cellposition.h"
 #include "toonz/cellpositionratio.h"
@@ -314,4 +305,9 @@ public:
   static const Orientation *byName(const QString &name);
 };
 
+// Close warning suppression at end of header
+#ifdef _WIN32
+  #pragma warning(pop)
 #endif
+
+#endif // ORIENTATION_INCLUDED
