@@ -1,20 +1,24 @@
 // texport_config.h
 #pragma once
 
-#ifdef _WIN32
-  #ifdef TOONZLIB_EXPORTS
-    #define DVAPI __declspec(dllexport)
-    #define DVVAR __declspec(dllexport)
+#ifndef DVAPI  // Only define if not already defined
+  #ifdef _WIN32
+    #ifdef TOONZLIB_EXPORTS
+      #define DVAPI __declspec(dllexport)
+    #else
+      #define DVAPI __declspec(dllimport)
+    #endif
   #else
-    #define DVAPI __declspec(dllimport)
-    #define DVVAR __declspec(dllimport)
+    #define DVAPI
   #endif
-  
-  // Suppress STL export warnings
+#endif
+
+#ifndef DVVAR  // Only define if not already defined
+  #define DVVAR DVAPI  // For consistency
+#endif
+
+#ifdef _WIN32
   #pragma warning(push)
-  #pragma warning(disable : 4251)  // STL needs DLL interface
-  #pragma warning(disable : 4275)  // Base class not exported
-#else
-  #define DVAPI
-  #define DVVAR
+  #pragma warning(disable : 4251)
+  #pragma warning(disable : 4275)
 #endif
