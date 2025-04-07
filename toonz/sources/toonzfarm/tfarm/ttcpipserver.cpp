@@ -1,10 +1,9 @@
-
-
 #include "ttcpip.h"
 #include "tconvert.h"
 
 #ifdef _WIN32
 #include <winsock2.h>
+#include <ws2tcpip.h> // Added for getaddrinfo
 #else
 #include <errno.h> /* obligatory includes */
 #include <signal.h>
@@ -37,8 +36,6 @@ bool Sthutdown = false;
 
 //#define TRACE
 
-//---------------------------------------------------------------------
-
 class TTcpIpServerImp {
 public:
   TTcpIpServerImp(int port) : m_port(port), m_s(-1), m_server(0) {}
@@ -53,8 +50,6 @@ public:
   TThread::Mutex m_mutex;
 };
 
-//---------------------------------------------------------------------
-
 int TTcpIpServerImp::readData(int sock, QString &data) {
   int cnt = 0;
   char buff[1025];
@@ -63,7 +58,7 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
 #ifdef _WIN32
   if ((cnt = recv(sock, buff, sizeof(buff) - 1, 0)) < 0) {
     int err = WSAGetLastError();
-    // GESTIRE L'ERRORE SPECIFICO
+    // MANAGE THE SPECIFIC ERROR
     return -1;
   }
 #else
@@ -101,7 +96,7 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
 #ifdef _WIN32
     if ((cnt = recv(sock, buff, sizeof(buff) - 1, 0)) < 0) {
       int err = WSAGetLastError();
-      // GESTIRE L'ERRORE SPECIFICO
+      // MANAGE THE SPECIFIC ERROR
       return -1;
     }
 #else
@@ -113,11 +108,10 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
     }
 #endif
     else if (cnt == 0) {
-      break;  // break out of loop
+      break;
     } else if (cnt < (int)sizeof(buff)) {
       buff[cnt] = '\0';
       data += QString(buff);
-      // break;  // break out of loop
     } else {
       data += QString(buff);
     }
@@ -143,94 +137,10 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
   return 0;
 }
 
-#if 0
-
-int TTcpIpServerImp::readData(int sock, string &data)
-{
-  int cnt = 0;
-  char buff[1024];
-
-  do
-  {
-    memset (buff,0,sizeof(buff));
-
-#ifdef _WIN32
-    if (( cnt = recv(sock, buff, sizeof(buff), 0)) < 0 )
-    {
-      int err = WSAGetLastError();
-      // GESTIRE L'ERRORE SPECIFICO
-      return -1;
-    }
-#else
-    if (( cnt = read (sock, buff, sizeof(buff))) < 0 )
-    {
-      printf("socket read failure %d\n", errno);
-      perror("network server");
-      close(sock);
-      return -1;
-    }
-#endif
-    else
-    if (cnt == 0)
-      break;  // break out of loop
-
-    data += string(buff);
-  }
-  while (cnt != 0);  // do loop condition
-
-  return 0;
-}
-
-#endif
-
-//#define PRIMA
-
-#ifdef PRIMA
-
-int TTcpIpServerImp::readData(int sock, string &data) {
-  int cnt = 0;
-  char buff[1024];
-
-  do {
-    memset(buff, 0, sizeof(buff));
-
-#ifdef _WIN32
-    if ((cnt = recv(sock, buff, sizeof(buff), 0)) < 0) {
-      int err = WSAGetLastError();
-      // GESTIRE L'ERRORE SPECIFICO
-      return -1;
-    }
-#else
-    if ((cnt = read(sock, buff, sizeof(buff))) < 0) {
-      printf("socket read failure %d\n", errno);
-      perror("network server");
-      close(sock);
-      return -1;
-    }
-#endif
-    else if (cnt == 0) {
-      break;  // break out of loop
-    } else if (cnt < sizeof(buff)) {
-      data += string(buff);
-      // break;  // break out of loop
-    } else {
-      data += string(buff);
-    }
-  } while (cnt != 0);  // do loop condition
-
-  return 0;
-}
-
-#endif
-
-//---------------------------------------------------------------------
-
 void TTcpIpServerImp::onReceive(int sock, const QString &data) {
   QMutexLocker sl(&m_mutex);
   m_server->onReceive(sock, data);
 }
-
-//---------------------------------------------------------------------
 
 TTcpIpServer::TTcpIpServer(int port) : m_imp(new TTcpIpServerImp(port)) {
   m_imp->m_server = this;
@@ -244,8 +154,6 @@ TTcpIpServer::TTcpIpServer(int port) : m_imp(new TTcpIpServerImp(port)) {
 #endif
 }
 
-//---------------------------------------------------------------------
-
 TTcpIpServer::~TTcpIpServer() {
   if (m_imp->m_s != -1)
 #ifdef _WIN32
@@ -257,15 +165,9 @@ TTcpIpServer::~TTcpIpServer() {
 #endif
 }
 
-//---------------------------------------------------------------------
-
 int TTcpIpServer::getPort() const { return m_imp->m_port; }
 
-//---------------------------------------------------------------------
-
 static void shutdown_cb(int) { Sthutdown = true; }
-
-//---------------------------------------------------------------------
 
 class DataReader final : public TThread::Runnable {
 public:
@@ -294,8 +196,6 @@ void DataReader::run() {
   }
 }
 
-//---------------------------------------------------------------------
-
 class DataReceiver final : public TThread::Runnable {
 public:
   DataReceiver(int clientSocket, const QString &data,
@@ -311,8 +211,6 @@ public:
   std::shared_ptr<TTcpIpServerImp> m_serverImp;
 };
 
-//---------------------------------------------------------------------
-
 void DataReceiver::run() {
   m_serverImp->onReceive(m_clientSocket, m_data);
 #ifdef _WIN32
@@ -322,22 +220,16 @@ void DataReceiver::run() {
 #endif
 }
 
-//---------------------------------------------------------------------
-
 void TTcpIpServer::run() {
   try {
 #ifdef _WIN32
-
     int err = establish(m_imp->m_port, m_imp->m_s);
     if (!err && m_imp->m_s != -1) {
-      int t;  // client socket
-
-      while (!Sthutdown) /* loop for connections */
-      {
-        if ((t = get_connection(m_imp->m_s)) < 0) /* get a connection */
-        {
+      int t;
+      while (!Sthutdown) {
+        if ((t = get_connection(m_imp->m_s)) < 0) {
           m_exitCode = WSAGetLastError();
-          // GESTIRE LA CONDIZIONE DI ERRORE
+          // MANAGE THE ERROR CONDITION
           return;
         }
 
@@ -345,10 +237,9 @@ void TTcpIpServer::run() {
         int ret = m_imp->readData(t, data);
         if (ret != -1 && data != "") {
           if (data == QString("shutdown")) {
-            // DebugBreak();
             Sthutdown = true;
           } else {
-            // creo un nuovo thread per la gestione dei dati ricevuti
+            // create a new thread to handle the received data
             TThread::Executor executor;
             executor.addTask(new DataReceiver(t, data, m_imp));
           }
@@ -360,13 +251,9 @@ void TTcpIpServer::run() {
       m_exitCode = err;
       return;
     }
-
-#else  // !_WIN32
-
+#else
     int err = establish(m_imp->m_port, m_imp->m_s);
     if (!err && m_imp->m_s != -1) {
-//      signal(SIGCHLD, fireman);           /* this eliminates zombies */
-
 #ifdef MACOSX
       struct sigaction sact;
       sact.sa_handler = shutdown_cb;
@@ -374,20 +261,15 @@ void TTcpIpServer::run() {
 #else
       sigset(SIGUSR1, shutdown_cb);
 #endif
-
       int t;
-
-      while (!Sthutdown) /* loop for connections */
-      {
-        if ((t = get_connection(m_imp->m_s)) < 0) /* get a connection */
-        {
-          if (errno == EINTR) /* EINTR might happen on accept(), */
-            continue;         /* try again */
-          perror("accept");   /* bad */
+      while (!Sthutdown) {
+        if ((t = get_connection(m_imp->m_s)) < 0) {
+          if (errno == EINTR)
+            continue;
+          perror("accept");
           m_exitCode = errno;
           return;
         }
-
         TThread::Executor executor;
         executor.addTask(new DataReader(t, m_imp));
       }
@@ -395,32 +277,22 @@ void TTcpIpServer::run() {
       m_exitCode = err;
       return;
     }
-
-#endif  // _WIN32
+#endif
   } catch (...) {
     m_exitCode = 2000;
     return;
   }
-
   m_exitCode = 0;
 }
 
-//---------------------------------------------------------------------
-
 int TTcpIpServer::getExitCode() const { return m_exitCode; }
-
-//---------------------------------------------------------------------
 
 void TTcpIpServer::sendReply(int socket, const QString &reply) {
   string replyUtf8 = reply.toStdString();
-
   QString header("#$#THS01.00");
   header += QString::number((int)replyUtf8.size());
   header += QString("#$#THE");
-
   string packet = header.toStdString() + replyUtf8;
-
-  //  string packet = reply;;
 
   int nLeft = packet.size();
   int idx   = 0;
@@ -430,39 +302,45 @@ void TTcpIpServer::sendReply(int socket, const QString &reply) {
 #else
     int ret = write(socket, packet.c_str() + idx, nLeft);
 #endif
-
     if (ret == SOCKET_ERROR) {
       // Error
     }
     nLeft -= ret;
     idx += ret;
   }
-
   ::shutdown(socket, 1);
 }
-
-//---------------------------------------------------------------------
-//---------------------------------------------------------------------
 
 int establish(unsigned short portnum, int &sock) {
   char myname[MAXHOSTNAME + 1];
   struct sockaddr_in sa;
-  struct hostent *hp;
+  struct addrinfo hints = {0};
+  struct addrinfo *result = nullptr;
 
-  memset(&sa, 0, sizeof(struct sockaddr_in)); /* clear our address */
-  gethostname(myname, MAXHOSTNAME);           /* who are we? */
-  hp = gethostbyname(myname);                 /* get our address info */
-  if (hp == NULL)                             /* we don't exist !? */
+  memset(&sa, 0, sizeof(struct sockaddr_in));
+  gethostname(myname, MAXHOSTNAME);
+
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_protocol = 0;
+
+  std::string portStr = std::to_string(portnum);
+  int status = getaddrinfo(myname, portStr.c_str(), &hints, &result);
+  if (status != 0)
     return (-1);
 
-  sa.sin_family = hp->h_addrtype; /* this is our host address */
-  sa.sin_port   = htons(portnum); /* this is our port number */
-  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) /* create socket */
-  {
+  sa.sin_family = AF_INET;
+  sa.sin_port = htons(portnum);
+  struct sockaddr_in *resolvedAddr = (struct sockaddr_in *)result->ai_addr;
+  sa.sin_addr = resolvedAddr->sin_addr;
+
+  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 #ifdef _WIN32
     int err = WSAGetLastError();
+    freeaddrinfo(result);
     return err;
 #else
+    freeaddrinfo(result);
     return errno;
 #endif
   }
@@ -471,32 +349,27 @@ int establish(unsigned short portnum, int &sock) {
 #ifdef _WIN32
     int err = WSAGetLastError();
     closesocket(sock);
+    freeaddrinfo(result);
     return err;
 #else
+    freeaddrinfo(result);
     return errno;
     close(sock);
 #endif
   }
 
-  return listen(sock, 3); /* max # of queued connects */
+  freeaddrinfo(result);
+  return listen(sock, 3);
 }
 
-//-----------------------------------------------------------------------
-/* wait for a connection to occur on a socket created with establish() */
-
 int get_connection(int s) {
-  int t; /* socket of connection */
-
-  if ((t = accept(s, NULL, NULL)) < 0) /* accept connection if there is one */
+  int t;
+  if ((t = accept(s, NULL, NULL)) < 0)
     return (-1);
   return (t);
 }
 
 #ifndef _WIN32
-//-----------------------------------------------------------------------
-/* as children die we should get catch their returns or else we get
- * zombies, A Bad Thing.  fireman() catches falling children.
- */
 void fireman(int) {
   while (waitpid(-1, NULL, WNOHANG) > 0)
     ;
