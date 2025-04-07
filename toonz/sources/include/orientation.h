@@ -3,7 +3,7 @@
 #ifndef ORIENTATION_INCLUDED
 #define ORIENTATION_INCLUDED
 
-#include "export_config.h" // Single include for all export logic
+#include "texport_config.h" // Single include for all export logic
 #include "tcommon.h"
 #include "cellposition.h"
 #include "toonz/cellpositionratio.h"
