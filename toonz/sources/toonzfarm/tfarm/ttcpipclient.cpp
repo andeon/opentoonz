@@ -1,10 +1,9 @@
-
-
 #include "ttcpip.h"
 #include "tconvert.h"
 
 #ifdef _WIN32
 #include <winsock2.h>
+#include <ws2tcpip.h> // Added for getaddrinfo
 #else
 #include <errno.h> /* obligatory includes */
 #include <signal.h>
@@ -43,33 +42,50 @@ TTcpIpClient::~TTcpIpClient() {
 
 int TTcpIpClient::connect(const QString &hostName, const QString &addrStr,
                           int port, int &sock) {
-  /*
-    if (!addrStr.empty())
-    {
-      unsigned long ipAddr = inet_addr(addrStr.c_str());
-    }
-  */
-  struct hostent *he = gethostbyname(hostName.toUtf8());
-  if (!he) {
+  struct addrinfo hints = {0};
+  struct addrinfo *result = nullptr;
+
+  // Set up hints for getaddrinfo
+  hints.ai_family = AF_INET;    // IPv4 only for now (matches original behavior)
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_protocol = 0;        // Any protocol (TCP in this case)
+
+  // Convert port to string for getaddrinfo
+  std::string portStr = std::to_string(port);
+
+  // Resolve hostname using getaddrinfo
+  int status = getaddrinfo(hostName.toUtf8().constData(), portStr.c_str(), &hints, &result);
+  if (status != 0) {
 #ifdef _WIN32
     int err = WSAGetLastError();
 #else
+    // For non-Windows, could use gai_strerror(status) for error details
 #endif
     return HOST_UNKNOWN;
   }
 
+  // Create socket
   int socket_id = socket(AF_INET, SOCK_STREAM, 0);
+  if (socket_id == SOCKET_ERROR) {
+    freeaddrinfo(result);
+#ifdef _WIN32
+    int err = WSAGetLastError();
+#endif
+    return CONNECTION_FAILED;
+  }
 
+  // Use the first valid address from getaddrinfo
   struct sockaddr_in addr;
-  memset((char *)&addr, 0, sizeof addr);
-  addr.sin_family = he->h_addrtype;
-  addr.sin_port   = htons(port);
-  memcpy((char *)&(addr.sin_addr), he->h_addr, he->h_length);
+  memset((char *)&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(port);
+  struct sockaddr_in *resolvedAddr = (struct sockaddr_in *)result->ai_addr;
+  addr.sin_addr = resolvedAddr->sin_addr;
 
-  int rcConnect = ::connect(socket_id, (struct sockaddr *)&(addr), sizeof addr);
+  // Connect to the server
+  int rcConnect = ::connect(socket_id, (struct sockaddr *)&addr, sizeof(addr));
   if (rcConnect == SOCKET_ERROR) {
     sock = -1;
-
 #ifdef _WIN32
     int err = WSAGetLastError();
     switch (err) {
@@ -83,66 +99,19 @@ int TTcpIpClient::connect(const QString &hostName, const QString &addrStr,
       err = CONNECTION_FAILED;
       break;
     }
-
     closesocket(socket_id);
-    return err;
 #else
     close(socket_id);
-    return CONNECTION_FAILED;
+    err = CONNECTION_FAILED;
 #endif
+    freeaddrinfo(result);
+    return err;
   }
 
   sock = socket_id;
+  freeaddrinfo(result); // Free the addrinfo structure
   return OK;
 }
-
-/*
-int TTcpIpClient::connect(const std::string &hostName, const std::string
-&addrStr, int port, int &sock)
-{
-  struct hostent *he = gethostbyname (hostName.c_str());
-  if (!he)
-  {
-#ifdef _WIN32
-    int err = WSAGetLastError();
-#else
-#endif
-    return HOST_UNKNOWN;
-  }
-
-  int socket_id = socket (AF_INET, SOCK_STREAM,0);
-
-  struct sockaddr_in addr;
-  memset((char*)&addr, 0, sizeof addr);
-  addr.sin_family = he->h_addrtype;
-  addr.sin_port = htons(port);
-  memcpy((char *)&(addr.sin_addr), he->h_addr, he->h_length);
-
-  int rcConnect = ::connect (socket_id, (struct sockaddr *)&(addr), sizeof
-addr);
-  if (rcConnect == SOCKET_ERROR)
-  {
-    sock = -1;
-#ifdef _WIN32
-    int err = WSAGetLastError();
-    switch (err)
-    {
-     case WSAECONNREFUSED:
-        return CONNECTION_REFUSED;
-     case WSAETIMEDOUT:
-        return CONNECTION_TIMEDOUT;
-     default:
-        return CONNECTION_FAILED;
-    }
-#else
-    return CONNECTION_FAILED;
-#endif
-  }
-
-  sock = socket_id;
-  return OK;
-}
-*/
 
 //------------------------------------------------------------------------------
 
@@ -152,7 +121,6 @@ int TTcpIpClient::disconnect(int sock) {
 #else
   close(sock);
 #endif
-
   return OK;
 }
 
@@ -167,8 +135,6 @@ int TTcpIpClient::send(int sock, const QString &data) {
 
   std::string packet = header.toStdString() + dataUtf8;
 
-  //  string packet = data;;
-
   int nLeft = packet.size();
   int idx   = 0;
   while (nLeft > 0) {
@@ -179,7 +145,6 @@ int TTcpIpClient::send(int sock, const QString &data) {
 #endif
 
     if (ret == SOCKET_ERROR) {
-// Error
 #ifdef _WIN32
       int err = WSAGetLastError();
 #else
@@ -204,7 +169,6 @@ static int readData(int sock, QString &data) {
 #ifdef _WIN32
   if ((cnt = recv(sock, buff, sizeof(buff), 0)) < 0) {
     int err = WSAGetLastError();
-    // GESTIRE L'ERRORE SPECIFICO
     return -1;
   }
 #else
@@ -237,7 +201,6 @@ static int readData(int sock, QString &data) {
 #ifdef _WIN32
     if ((cnt = recv(sock, buff, sizeof(buff), 0)) < 0) {
       int err = WSAGetLastError();
-      // GESTIRE L'ERRORE SPECIFICO
       return -1;
     }
 #else
@@ -249,10 +212,9 @@ static int readData(int sock, QString &data) {
     }
 #endif
     else if (cnt == 0) {
-      break;  // break out of loop
+      break;
     } else if (cnt < (int)sizeof(buff)) {
       data += QString(buff);
-      // break;  // break out of loop
     } else {
       data += QString(buff);
     }
@@ -265,86 +227,6 @@ static int readData(int sock, QString &data) {
   return 0;
 }
 
-#if 0
-
-int readData(int sock, string &data)
-{
-  int cnt = 0;
-  char buff[1024];
-
-  do
-  {
-    memset (buff,0,sizeof(buff));
-
-#ifdef _WIN32
-    if (( cnt = recv(sock, buff, sizeof(buff), 0)) < 0 )
-    {
-      int err = WSAGetLastError();
-      // GESTIRE L'ERRORE SPECIFICO
-      return -1;
-    }
-#else
-    if (( cnt = read (sock, buff, sizeof(buff))) < 0 )
-    {
-      printf("socket read failure %d\n", errno);
-      perror("network server");
-      close(sock);
-      return -1;
-    }
-#endif
-    else
-    if (cnt == 0)
-      break;  // break out of loop
-
-    data += string(buff);
-  }
-  while (cnt != 0);  // do loop condition
-
-  return 0;
-}
-
-#endif
-
-// #define PRIMA
-
-#ifdef PRIMA
-
-int readData(int sock, string &data) {
-  int cnt = 0;
-  char buff[1024];
-
-  do {
-    memset(buff, 0, sizeof(buff));
-
-#ifdef _WIN32
-    if ((cnt = recv(sock, buff, sizeof(buff), 0)) < 0) {
-      int err = WSAGetLastError();
-      // GESTIRE L'ERRORE SPECIFICO
-      return -1;
-    }
-#else
-    if ((cnt = read(sock, buff, sizeof(buff))) < 0) {
-      printf("socket read failure %d\n", errno);
-      perror("network server");
-      close(sock);
-      return -1;
-    }
-#endif
-    else if (cnt == 0) {
-      break;  // break out of loop
-    } else if (cnt < sizeof(buff)) {
-      data += string(buff);
-      // break;  // break out of loop
-    } else {
-      data += string(buff);
-    }
-  } while (cnt != 0);  // do loop condition
-
-  return 0;
-}
-
-#endif
-
 //------------------------------------------------------------------------------
 
 int TTcpIpClient::send(int sock, const QString &data, QString &reply) {
@@ -356,13 +238,3 @@ int TTcpIpClient::send(int sock, const QString &data, QString &reply) {
 
   return OK;
 }
-
-/*
-int TTcpIpClient::send(int sock, const std::string &data, string &reply)
-{
-  int ret = send(sock, data);
-  if (ret == 0)
-    ret = readData(sock, reply);
-  return ret;
-}
-*/
