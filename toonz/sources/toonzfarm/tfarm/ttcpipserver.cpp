@@ -3,7 +3,7 @@
 
 #ifdef _WIN32
 #include <winsock2.h>
-#include <ws2tcpip.h> // Added for getaddrinfo
+#include <ws2tcpip.h>   // For getaddrinfo
 #else
 #include <errno.h> /* obligatory includes */
 #include <signal.h>
@@ -89,7 +89,7 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
   unsigned long size = dataSize;
   data               = QString(buff + x2 + sizeof("#$#THE") - 1);
   size -= data.size();
-
+}
   while (size > 0) {
     memset(buff, 0, sizeof(buff));
 
@@ -146,7 +146,6 @@ TTcpIpServer::TTcpIpServer(int port) : m_imp(new TTcpIpServerImp(port)) {
   m_imp->m_server = this;
 
 #ifdef _WIN32
-  // Windows Socket startup
   WSADATA wsaData;
   WORD wVersionRequested = MAKEWORD(1, 1);
   int irc                = WSAStartup(wVersionRequested, &wsaData);
@@ -210,7 +209,6 @@ public:
   QString m_data;
   std::shared_ptr<TTcpIpServerImp> m_serverImp;
 };
-
 void DataReceiver::run() {
   m_serverImp->onReceive(m_clientSocket, m_data);
 #ifdef _WIN32
@@ -232,14 +230,12 @@ void TTcpIpServer::run() {
           // MANAGE THE ERROR CONDITION
           return;
         }
-
         QString data;
         int ret = m_imp->readData(t, data);
         if (ret != -1 && data != "") {
           if (data == QString("shutdown")) {
             Sthutdown = true;
           } else {
-            // create a new thread to handle the received data
             TThread::Executor executor;
             executor.addTask(new DataReceiver(t, data, m_imp));
           }
@@ -254,13 +250,10 @@ void TTcpIpServer::run() {
 #else
     int err = establish(m_imp->m_port, m_imp->m_s);
     if (!err && m_imp->m_s != -1) {
-#ifdef MACOSX
-      struct sigaction sact;
+      struct sigaction sact = {0};
       sact.sa_handler = shutdown_cb;
-      sigaction(SIGUSR1, &sact, 0);
-#else
-      sigset(SIGUSR1, shutdown_cb);
-#endif
+      sigaction(SIGUSR1, &sact, NULL);
+
       int t;
       while (!Sthutdown) {
         if ((t = get_connection(m_imp->m_s)) < 0) {
@@ -295,7 +288,7 @@ void TTcpIpServer::sendReply(int socket, const QString &reply) {
   string packet = header.toStdString() + replyUtf8;
 
   int nLeft = packet.size();
-  int idx   = 0;
+  int idx = 0;
   while (nLeft > 0) {
 #ifdef _WIN32
     int ret = send(socket, packet.c_str() + idx, nLeft, 0);
