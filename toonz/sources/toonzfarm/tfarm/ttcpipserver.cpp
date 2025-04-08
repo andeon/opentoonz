@@ -89,7 +89,7 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
   unsigned long size = dataSize;
   data               = QString(buff + x2 + sizeof("#$#THE") - 1);
   size -= data.size();
-}
+
   while (size > 0) {
     memset(buff, 0, sizeof(buff));
 
@@ -209,6 +209,7 @@ public:
   QString m_data;
   std::shared_ptr<TTcpIpServerImp> m_serverImp;
 };
+
 void DataReceiver::run() {
   m_serverImp->onReceive(m_clientSocket, m_data);
 #ifdef _WIN32
