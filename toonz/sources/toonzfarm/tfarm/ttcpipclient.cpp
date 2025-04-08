@@ -3,7 +3,7 @@
 
 #ifdef _WIN32
 #include <winsock2.h>
-#include <ws2tcpip.h> // Added for getaddrinfo
+#include <ws2tcpip.h> // For getaddrinfo
 #else
 #include <errno.h> /* obligatory includes */
 #include <signal.h>
@@ -44,22 +44,22 @@ int TTcpIpClient::connect(const QString &hostName, const QString &addrStr,
                           int port, int &sock) {
   struct addrinfo hints = {0};
   struct addrinfo *result = nullptr;
-
+  int err = OK; // Declare err at function scope
   // Set up hints for getaddrinfo
-  hints.ai_family = AF_INET;    // IPv4 only for now (matches original behavior)
+  hints.ai_family = AF_INET;    // IPv4 only
   hints.ai_socktype = SOCK_STREAM;
-  hints.ai_protocol = 0;        // Any protocol (TCP in this case)
+  hints.ai_protocol = 0;
 
   // Convert port to string for getaddrinfo
   std::string portStr = std::to_string(port);
 
-  // Resolve hostname using getaddrinfo
+  // Resolve hostname using getaddrinfo  
   int status = getaddrinfo(hostName.toUtf8().constData(), portStr.c_str(), &hints, &result);
   if (status != 0) {
 #ifdef _WIN32
-    int err = WSAGetLastError();
+    err = WSAGetLastError();
 #else
-    // For non-Windows, could use gai_strerror(status) for error details
+    err = errno; // Use errno for POSIX systems
 #endif
     return HOST_UNKNOWN;
   }
@@ -69,12 +69,13 @@ int TTcpIpClient::connect(const QString &hostName, const QString &addrStr,
   if (socket_id == SOCKET_ERROR) {
     freeaddrinfo(result);
 #ifdef _WIN32
-    int err = WSAGetLastError();
+    err = WSAGetLastError();
+#else
+    err = errno;
 #endif
     return CONNECTION_FAILED;
   }
 
-  // Use the first valid address from getaddrinfo
   struct sockaddr_in addr;
   memset((char *)&addr, 0, sizeof(addr));
   addr.sin_family = AF_INET;
@@ -82,12 +83,11 @@ int TTcpIpClient::connect(const QString &hostName, const QString &addrStr,
   struct sockaddr_in *resolvedAddr = (struct sockaddr_in *)result->ai_addr;
   addr.sin_addr = resolvedAddr->sin_addr;
 
-  // Connect to the server
   int rcConnect = ::connect(socket_id, (struct sockaddr *)&addr, sizeof(addr));
   if (rcConnect == SOCKET_ERROR) {
     sock = -1;
 #ifdef _WIN32
-    int err = WSAGetLastError();
+    err = WSAGetLastError();
     switch (err) {
     case WSAECONNREFUSED:
       err = CONNECTION_REFUSED;
@@ -101,15 +101,26 @@ int TTcpIpClient::connect(const QString &hostName, const QString &addrStr,
     }
     closesocket(socket_id);
 #else
+    err = errno;
+    switch (err) {
+    case ECONNREFUSED:
+      err = CONNECTION_REFUSED;
+      break;
+    case ETIMEDOUT:
+      err = CONNECTION_TIMEDOUT;
+      break;
+    default:
+      err = CONNECTION_FAILED;
+      break;
+    }
     close(socket_id);
-    err = CONNECTION_FAILED;
 #endif
     freeaddrinfo(result);
     return err;
   }
 
   sock = socket_id;
-  freeaddrinfo(result); // Free the addrinfo structure
+  freeaddrinfo(result);
   return OK;
 }
 
@@ -143,11 +154,11 @@ int TTcpIpClient::send(int sock, const QString &data) {
 #else
     int ret = write(sock, packet.c_str() + idx, nLeft);
 #endif
-
     if (ret == SOCKET_ERROR) {
 #ifdef _WIN32
       int err = WSAGetLastError();
 #else
+      int err = errno;
 #endif
       return SEND_FAILED;
     }
@@ -218,7 +229,6 @@ static int readData(int sock, QString &data) {
     } else {
       data += QString(buff);
     }
-
     size -= cnt;
   }
 
@@ -235,6 +245,5 @@ int TTcpIpClient::send(int sock, const QString &data, QString &reply) {
     if (ret == 0) ret = readData(sock, reply);
     return ret;
   }
-
   return OK;
 }
