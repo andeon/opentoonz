@@ -90,19 +90,16 @@ static IMAGE *img_read_region_quantel_interlaced(T_CHAR *fname, int x1, int y1,
 
 static void vpb_string(const char *str, int field_type, char **p_h,
                        char *stop) {
-  char *h;
-  size_t len;  // Change to size_t
-
-  h   = *p_h;
-  len = strlen(str);
-  NOT_MORE_THAN(255, len) // Macro should handle size_t safely
-  if (h + 3 + len >= stop) return;
-  *h++ = field_type;
-  *h++ = 0;
-  *h++ = (char)len;  // Safe cast: len <= 255
-  strncpy(h, str, (size_t)len);
-  h += len;
-  *p_h = h;
+    char *h = *p_h;
+    size_t len = strlen(str);
+    if (len > 255) len = 255;  // Ensure length doesn't exceed maximum
+    if (h + 3 + len >= stop) return;
+    *h++ = field_type;
+    *h++ = 0;
+    *h++ = (char)len;  // Now safe to cast
+    memcpy(h, str, len);  // Use memcpy instead of strncpy
+    h += len;
+    *p_h = h;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -250,12 +247,12 @@ static int vpb_get_info(FILE *file, int *xsize, int *ysize, int *imgoffs) {
 static size_t quantel_write_buffer(FILE *outf, UCHAR *buf, int ysize) {  // Fix: Return size_t
     size_t n;  // Fix: Change from int to size_t
 
-  n = fwrite(buf, 1, ysize * BYTESPERROW, outf); // No warning: size_t to size_t
-  if (n <= 0) {
-    /*printf("quantel_write_frame error: write failed\n");*/
-    return 0;  // Return 0 for failure (size_t)
-  }
-  return n;  // Return bytes written
+    size_t bytes_to_write = (size_t)ysize * BYTESPERROW;
+    size_t n = fwrite(buf, 1, bytes_to_write, outf);
+    if (n != bytes_to_write) {
+        return 0;  // Return 0 for failure
+    }
+    return n;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -490,6 +487,7 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h,
   picbuf = (UCHAR *)malloc(true_ysize * QUANTEL_XSIZE * sizeof(short));
   if (picbuf == NIL) {
     /*printf("img_write_quantel error: out of memory\n");*/
+    fclose(outf);
     return 0;
   }
   ap = picbuf + (true_ysize * QUANTEL_XSIZE * sizeof(short)) - 1;
@@ -535,7 +533,7 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h,
     if (picbuf) free(picbuf);
     fclose(outf);
 
-    return (int)(ret > 0);  // Explicit cast to int, silences C4267
+    return (ret != 0);  // Returns TRUE (1) if write succeeded, FALSE (0) otherwise
 }
 
 /*---------------------------------------------------------------------------*/
