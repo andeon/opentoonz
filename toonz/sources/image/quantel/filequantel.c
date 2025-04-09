@@ -535,7 +535,7 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h,
     if (picbuf) free(picbuf);
     fclose(outf);
 
-    return (ret > 0) ? TRUE : FALSE;  // Fix: Convert size_t to int (TRUE/FALSE)
+    return (int)(ret > 0);  // Explicit cast to int, silences C4267
 }
 
 /*---------------------------------------------------------------------------*/
