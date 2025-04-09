@@ -98,8 +98,7 @@ static void vpb_string(const char *str, int field_type, char **p_h,
     *h++ = 0;
     *h++ = (char)len;  // Now safe to cast
     memcpy(h, str, len);  // Use memcpy instead of strncpy
-    h += len;
-    *p_h = h;
+    *p_h = h + len;  // Fix: Update the pointer correctly;
 }
 
 /*---------------------------------------------------------------------------*/
