@@ -406,8 +406,7 @@ void *img_read_quantel(const T_CHAR *fname, int *w, int *h, int type) {
 
 /*---------------------------------------------------------------------------*/
 
-int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h,
-                      int type) {
+int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h, int type) {
   FILE *outf;
   UCHAR *picbuf, *ap;
   USHORT rbuffer[8192], gbuffer[8192], bbuffer[8192];
@@ -416,7 +415,8 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h,
   int yuv_flag = 0;
   int xmarg, ymarg;
   LPIXEL *RGBbuf, *appo;
-  int xsize, true_ysize, max_ysize = 0, ysize;
+  size_t xsize;  // Fix: Change from int to size_t 
+  int true_ysize, max_ysize = 0, ysize;
   size_t ret;  // Fix: Change from int to size_t for write result
   int interlace = 0;
 
@@ -424,14 +424,14 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h,
   gbuf = (USHORT *)&gbuffer;
   bbuf = (USHORT *)&bbuffer;
 
-  xsize = w;
+  xsize = (size_t)w;  // Safe cast from int to size_t
   ysize = h;
 
   if (xsize > QUANTEL_XSIZE) {
-    /* printf("error: bad X size (%s)\n", Quantel_error[type-1]);*/
+    /* printf("error: bad X size (%s)\n", Quantel_error[type-1]); */
     return FALSE;
   } else if (xsize < QUANTEL_XSIZE)
-    xmarg = (QUANTEL_XSIZE - xsize) / 2;
+    xmarg = (int)(QUANTEL_XSIZE - xsize) / 2;
   else
     xmarg = 0;
 
@@ -458,12 +458,12 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h,
     max_ysize = QUANTEL_GET_YSIZE(ysize);
     break;
   default:
-    /*printf("error: %d bad file format\n", fname);*/
+    /* printf("error: %d bad file format\n", fname); */
     return 0;
   }
 
   if (ysize > max_ysize) {
-    /*printf("error: bad Y size (%s)\n", Quantel_error[type-1]);*/
+    /* printf("error: bad Y size (%s)\n", Quantel_error[type-1]); */
     return FALSE;
   } else if (!yuv_flag && ysize < max_ysize) {
     ymarg      = (max_ysize - ysize) / 2;
@@ -475,7 +475,7 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h,
 
   outf = _wfopen(fname, L"wb");
   if (outf == NULL) {
-    /*printf("error: unable to open %s for writing\n",  fname);*/
+    /* printf("error: unable to open %s for writing\n", fname); */
     return FALSE;
   }
 
@@ -485,7 +485,7 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h,
 
   picbuf = (UCHAR *)malloc(true_ysize * QUANTEL_XSIZE * sizeof(short));
   if (picbuf == NIL) {
-    /*printf("img_write_quantel error: out of memory\n");*/
+    /* printf("img_write_quantel error: out of memory\n"); */
     fclose(outf);
     return 0;
   }
@@ -495,44 +495,44 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h,
 
   if (interlace) {
     appo = RGBbuf;
-        for (y = 0; y < (size_t)true_ysize; y += 2) {  // Fix: Cast to size_t
-            if (y < (size_t)ymarg || y > (size_t)(true_ysize - ymarg - 1))
-                QUANTEL_FILL_LINE_OF_BLACK(rbuf, gbuf, bbuf, QUANTEL_XSIZE)
-            else {
-                QUANTEL_FILL_LINE_OF_RGB(xmarg, xsize, rbuf, gbuf, bbuf, appo)
-                appo += xsize;
-            }
-            quantel_rgb_to_yuv(rbuf, gbuf, bbuf, ap);
-            ap -= BYTESPERROW;
-        }
-        appo = RGBbuf + xsize;
-        for (y = 1; y < (size_t)true_ysize; y += 2) {  // Fix: Cast to size_t
-            if (y < (size_t)ymarg || y > (size_t)(true_ysize - ymarg - 1))
-                QUANTEL_FILL_LINE_OF_BLACK(rbuf, gbuf, bbuf, QUANTEL_XSIZE)
-            else {
-                QUANTEL_FILL_LINE_OF_RGB(xmarg, xsize, rbuf, gbuf, bbuf, appo)
-                appo += xsize;
-            }
-            quantel_rgb_to_yuv(rbuf, gbuf, bbuf, ap);
-            ap -= BYTESPERROW;
-        }
-      } else {
-        for (y = 0; y < (size_t)true_ysize; y++) {  // Fix: Cast to size_t
-            if (y < (size_t)ymarg || y > (size_t)(true_ysize - ymarg - 1))
-                QUANTEL_FILL_LINE_OF_BLACK(rbuf, gbuf, bbuf, QUANTEL_XSIZE)
-            else
-                QUANTEL_FILL_LINE_OF_RGB(xmarg, xsize, rbuf, gbuf, bbuf, RGBbuf)
-            quantel_rgb_to_yuv(rbuf, gbuf, bbuf, ap);
-            ap -= BYTESPERROW;
-        }
+    for (y = 0; y < (size_t)true_ysize; y += 2) {
+      if (y < (size_t)ymarg || y > (size_t)(true_ysize - ymarg - 1))
+        QUANTEL_FILL_LINE_OF_BLACK(rbuf, gbuf, bbuf, QUANTEL_XSIZE)
+      else {
+        QUANTEL_FILL_LINE_OF_RGB(xmarg, xsize, rbuf, gbuf, bbuf, appo)
+        appo += xsize;
+      }
+      quantel_rgb_to_yuv(rbuf, gbuf, bbuf, ap);
+      ap -= BYTESPERROW;
     }
+    appo = RGBbuf + xsize;
+    for (y = 1; y < (size_t)true_ysize; y += 2) {
+      if (y < (size_t)ymarg || y > (size_t)(true_ysize - ymarg - 1))
+        QUANTEL_FILL_LINE_OF_BLACK(rbuf, gbuf, bbuf, QUANTEL_XSIZE)
+      else {
+        QUANTEL_FILL_LINE_OF_RGB(xmarg, xsize, rbuf, gbuf, bbuf, appo)
+        appo += xsize;
+      }
+      quantel_rgb_to_yuv(rbuf, gbuf, bbuf, ap);
+      ap -= BYTESPERROW;
+    }
+  } else {
+    for (y = 0; y < (size_t)true_ysize; y++) {
+      if (y < (size_t)ymarg || y > (size_t)(true_ysize - ymarg - 1))
+        QUANTEL_FILL_LINE_OF_BLACK(rbuf, gbuf, bbuf, QUANTEL_XSIZE)
+      else
+        QUANTEL_FILL_LINE_OF_RGB(xmarg, xsize, rbuf, gbuf, bbuf, RGBbuf)
+      quantel_rgb_to_yuv(rbuf, gbuf, bbuf, ap);
+      ap -= BYTESPERROW;
+    }
+  }
 
-    ret = quantel_write_buffer(outf, picbuf, true_ysize);  // Now returns size_t
+  ret = quantel_write_buffer(outf, picbuf, true_ysize);
 
-    if (picbuf) free(picbuf);
-    fclose(outf);
+  if (picbuf) free(picbuf);
+  fclose(outf);
 
-    return (ret != 0);  // Returns TRUE (1) if write succeeded, FALSE (0) otherwise
+  return (int)(ret != 0);  // Explicit cast to int
 }
 
 /*---------------------------------------------------------------------------*/
