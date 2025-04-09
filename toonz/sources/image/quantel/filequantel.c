@@ -247,7 +247,7 @@ static size_t quantel_write_buffer(FILE *outf, UCHAR *buf, int ysize) {  // Fix:
     size_t n;  // Fix: Change from int to size_t
 
     size_t bytes_to_write = (size_t)ysize * BYTESPERROW;
-    size_t n = fwrite(buf, 1, bytes_to_write, outf);
+    n = fwrite(buf, 1, bytes_to_write, outf); 
     if (n != bytes_to_write) {
         return 0;  // Return 0 for failure
     }
