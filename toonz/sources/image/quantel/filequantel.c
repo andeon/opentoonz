@@ -91,15 +91,15 @@ static IMAGE *img_read_region_quantel_interlaced(T_CHAR *fname, int x1, int y1,
 static void vpb_string(const char *str, int field_type, char **p_h,
                        char *stop) {
   char *h;
-  int len;
+  size_t len;  // Change to size_t
 
   h   = *p_h;
   len = strlen(str);
-  NOT_MORE_THAN(255, len)
+  NOT_MORE_THAN(255, len) // Macro should handle size_t safely
   if (h + 3 + len >= stop) return;
   *h++ = field_type;
   *h++ = 0;
-  *h++ = len;
+  *h++ = (char)len;  // Safe cast: len <= 255
   strncpy(h, str, (size_t)len);
   h += len;
   *p_h = h;
@@ -247,15 +247,15 @@ static int vpb_get_info(FILE *file, int *xsize, int *ysize, int *imgoffs) {
 
 /*---------------------------------------------------------------------------*/
 
-static int quantel_write_buffer(FILE *outf, UCHAR *buf, int ysize) {
-  int n;
+static size_t quantel_write_buffer(FILE *outf, UCHAR *buf, int ysize) {  // Fix: Return size_t
+    size_t n;  // Fix: Change from int to size_t
 
-  n = fwrite(buf, 1, ysize * BYTESPERROW, outf);
+  n = fwrite(buf, 1, ysize * BYTESPERROW, outf); // No warning: size_t to size_t
   if (n <= 0) {
     /*printf("quantel_write_frame error: write failed\n");*/
-    return FALSE;
+    return 0;  // Return 0 for failure (size_t)
   }
-  return TRUE;
+  return n;  // Return bytes written
 }
 
 /*---------------------------------------------------------------------------*/
@@ -416,10 +416,13 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h,
   UCHAR *picbuf, *ap;
   USHORT rbuffer[8192], gbuffer[8192], bbuffer[8192];
   USHORT *rbuf, *gbuf, *bbuf;
-  int y, yuv_flag = 0;
+  size_t y;  // Fix: Change from int to size_t for loops
+  int yuv_flag = 0;
   int xmarg, ymarg;
   LPIXEL *RGBbuf, *appo;
-  int xsize, true_ysize, max_ysize = 0, ysize, ret, interlace = 0;
+  int xsize, true_ysize, max_ysize = 0, ysize;
+  size_t ret;  // Fix: Change from int to size_t for write result
+  int interlace = 0;
 
   rbuf = (USHORT *)&rbuffer;
   gbuf = (USHORT *)&gbuffer;
@@ -495,44 +498,44 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h,
 
   if (interlace) {
     appo = RGBbuf;
-    for (y = 0; y < true_ysize; y += 2) {
-      if (y < ymarg || y > (true_ysize - ymarg - 1))
-        QUANTEL_FILL_LINE_OF_BLACK(rbuf, gbuf, bbuf, QUANTEL_XSIZE)
-      else {
-        QUANTEL_FILL_LINE_OF_RGB(xmarg, xsize, rbuf, gbuf, bbuf, appo)
-        appo += xsize;
-      }
-      quantel_rgb_to_yuv(rbuf, gbuf, bbuf, ap);
-      ap -= BYTESPERROW;
+        for (y = 0; y < (size_t)true_ysize; y += 2) {  // Fix: Cast to size_t
+            if (y < (size_t)ymarg || y > (size_t)(true_ysize - ymarg - 1))
+                QUANTEL_FILL_LINE_OF_BLACK(rbuf, gbuf, bbuf, QUANTEL_XSIZE)
+            else {
+                QUANTEL_FILL_LINE_OF_RGB(xmarg, xsize, rbuf, gbuf, bbuf, appo)
+                appo += xsize;
+            }
+            quantel_rgb_to_yuv(rbuf, gbuf, bbuf, ap);
+            ap -= BYTESPERROW;
+        }
+        appo = RGBbuf + xsize;
+        for (y = 1; y < (size_t)true_ysize; y += 2) {  // Fix: Cast to size_t
+            if (y < (size_t)ymarg || y > (size_t)(true_ysize - ymarg - 1))
+                QUANTEL_FILL_LINE_OF_BLACK(rbuf, gbuf, bbuf, QUANTEL_XSIZE)
+            else {
+                QUANTEL_FILL_LINE_OF_RGB(xmarg, xsize, rbuf, gbuf, bbuf, appo)
+                appo += xsize;
+            }
+            quantel_rgb_to_yuv(rbuf, gbuf, bbuf, ap);
+            ap -= BYTESPERROW;
+        }
+      } else {
+        for (y = 0; y < (size_t)true_ysize; y++) {  // Fix: Cast to size_t
+            if (y < (size_t)ymarg || y > (size_t)(true_ysize - ymarg - 1))
+                QUANTEL_FILL_LINE_OF_BLACK(rbuf, gbuf, bbuf, QUANTEL_XSIZE)
+            else
+                QUANTEL_FILL_LINE_OF_RGB(xmarg, xsize, rbuf, gbuf, bbuf, RGBbuf)
+            quantel_rgb_to_yuv(rbuf, gbuf, bbuf, ap);
+            ap -= BYTESPERROW;
+        }
     }
-    appo = RGBbuf + xsize;
-    for (y = 1; y < true_ysize; y += 2) {
-      if (y < ymarg || y > (true_ysize - ymarg - 1))
-        QUANTEL_FILL_LINE_OF_BLACK(rbuf, gbuf, bbuf, QUANTEL_XSIZE)
-      else {
-        QUANTEL_FILL_LINE_OF_RGB(xmarg, xsize, rbuf, gbuf, bbuf, appo)
-        appo += xsize;
-      }
-      quantel_rgb_to_yuv(rbuf, gbuf, bbuf, ap);
-      ap -= BYTESPERROW;
-    }
-  } else {
-    for (y = 0; y < true_ysize; y++) {
-      if (y < ymarg || y > (true_ysize - ymarg - 1))
-        QUANTEL_FILL_LINE_OF_BLACK(rbuf, gbuf, bbuf, QUANTEL_XSIZE)
-      else
-        QUANTEL_FILL_LINE_OF_RGB(xmarg, xsize, rbuf, gbuf, bbuf, RGBbuf)
-      quantel_rgb_to_yuv(rbuf, gbuf, bbuf, ap);
-      ap -= BYTESPERROW;
-    }
-  }
 
-  ret = quantel_write_buffer(outf, picbuf, true_ysize);
+    ret = quantel_write_buffer(outf, picbuf, true_ysize);  // Now returns size_t
 
-  if (picbuf) free(picbuf);
-  fclose(outf);
+    if (picbuf) free(picbuf);
+    fclose(outf);
 
-  return ret; /*  ??  */
+    return (ret > 0) ? TRUE : FALSE;  // Fix: Convert size_t to int (TRUE/FALSE)
 }
 
 /*---------------------------------------------------------------------------*/

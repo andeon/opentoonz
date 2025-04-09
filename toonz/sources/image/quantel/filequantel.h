@@ -16,7 +16,7 @@ extern "C" {
 #define T_CHAR wchar_t
 
 void *img_read_quantel(const T_CHAR *fname, int *w, int *h, int type);
-int img_write_quantel(const T_CHAR *, void *buffer, int w, int h, int type);
+int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h, int type); // Matches the naming
 void img_read_quantel_info(const T_CHAR *, int *w, int *h, int type);
 
 #ifdef __cplusplus
