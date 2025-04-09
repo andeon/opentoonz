@@ -11,6 +11,8 @@
 #ifndef AVL_H
 #define AVL_H
 
+#include <stdint.h> // Added for intptr_t
+
 #ifdef __cplusplus
 extern "C" {
 #define AVL_PROTOTYPES
@@ -27,24 +29,19 @@ extern "C" {
 #define AVL_MAX_SAFE_OFFSET 1024
 
 #ifdef WIN32
-
 #undef TNZAPI
 #ifdef TNZ_IS_COMMONLIB
 #define TNZAPI __declspec(dllexport)
 #else
 #define TNZAPI __declspec(dllimport)
 #endif
-
 double Avl_Dummy[(AVL_MAX_SAFE_OFFSET / sizeof(double)) + 1];
-
 #else
-
 #ifdef AVL_C
 double Avl_Dummy[(AVL_MAX_SAFE_OFFSET / sizeof(double)) + 1];
 #else
 extern double Avl_Dummy[];
 #endif
-
 #endif
 
 #define avl_offset(structure, member)                                          \
@@ -120,29 +117,29 @@ extern double Avl_Dummy[];
 
 #define avl_nodes(tree) ((tree)->nodes)
 
-#define avl_locate(tree, key) avl__locate((tree), (long)(key))
-#define avl_locate_ge(tree, key) avl__locate_ge((tree), (long)(key))
-#define avl_locate_gt(tree, key) avl__locate_gt((tree), (long)(key))
-#define avl_locate_le(tree, key) avl__locate_le((tree), (long)(key))
-#define avl_locate_lt(tree, key) avl__locate_lt((tree), (long)(key))
-#define avl_remove(tree, key) avl__remove((tree), (long)(key))
+#define avl_locate(tree, key) avl__locate((tree), (intptr_t)(key)) // Updated to intptr_t
+#define avl_locate_ge(tree, key) avl__locate_ge((tree), (intptr_t)(key))
+#define avl_locate_gt(tree, key) avl__locate_gt((tree), (intptr_t)(key))
+#define avl_locate_le(tree, key) avl__locate_le((tree), (intptr_t)(key))
+#define avl_locate_lt(tree, key) avl__locate_lt((tree), (intptr_t)(key))
+#define avl_remove(tree, key) avl__remove((tree), (intptr_t)(key))
 
 #define avl_scan(tree, usrfun) avl__scan((tree), (usrfun), 0)
 #define avl_backscan(tree, usrfun) avl__scan((tree), (usrfun), 1)
 
-#define avl_start(tree, key) avl__start((tree), (long)(key), 0)
-#define avl_backstart(tree, key) avl__start((tree), (long)(key), 1)
+#define avl_start(tree, key) avl__start((tree), (intptr_t)(key), 0)
+#define avl_backstart(tree, key) avl__start((tree), (intptr_t)(key), 1)
 
 #define avl_link(tree, structure, member)                                      \
   avl__link((tree), avl_offset(structure, member), 0)
 #define avl_backlink(tree, structure, member)                                  \
   avl__link((tree), avl_offset(structure, member), 1)
 
-#define AVL_MAX_PATHDEPTH ((int)sizeof(long) * 8 * 3 / 2 - 2)
+#define AVL_MAX_PATHDEPTH ((int)sizeof(int64_t) * 8 * 3 / 2 - 2)  // Fixed to int64_t
 
 union avl_key {
   void *ptr;
-  long val;
+  int64_t val;  // Changed from long to int64_t
 };
 
 struct avl_node {
@@ -163,8 +160,8 @@ struct avl_path {
 typedef struct avl_tree {
   unsigned short keyinfo;
   unsigned short keyoffs;
-  int (*usrcmp)();
-  long nodes;
+  int (*usrcmp)(void *, void *);  // Updated signature
+  int64_t nodes;  // Changed from long to int64_t
   struct avl_node *root;
   struct avl_path *path;
 } TREE;
@@ -178,69 +175,28 @@ typedef struct avl_tree {
 #endif
 
 #undef TNZAPI
-/*
-#ifdef TNZ_IS_COMMONLIB
-  #define TNZAPI TNZ_EXPORT_API
-#else
-  #define TNZAPI TNZ_IMPORT_API
-#endif
-*/
-
 #define TNZAPI
-#ifndef AVL_PROTOTYPES
 
-TNZAPI TREE *avl__tree();
-TNZAPI TREE *avl_copy();
+#ifdef AVL_PROTOTYPES
 
-TNZAPI int avl_insert();
-TNZAPI void *avl__locate();
-TNZAPI void *avl__locate_ge();
-TNZAPI void *avl__locate_gt();
-TNZAPI void *avl__locate_le();
-TNZAPI void *avl__locate_lt();
-TNZAPI void *avl_locate_first();
-TNZAPI void *avl_locate_last();
-TNZAPI void *avl__remove();
-
-TNZAPI void avl__scan();
-
-TNZAPI void *avl_first();
-TNZAPI void *avl_last();
-TNZAPI void *avl__start();
-TNZAPI void *avl_next();
-TNZAPI void *avl_prev();
-TNZAPI void avl_stop();
-
-TNZAPI void *avl__link();
-
-TNZAPI void avl_release();
-TNZAPI void avl_reset();
-TNZAPI void avl_close();
-
-TNZAPI int avl_dump();
-
-TNZAPI int avl_porting_problems();
-
-#else
-
-TNZAPI TREE *avl__tree(int treetype, unsigned keyoffs, int (*usrcmp)());
+TNZAPI TREE *avl__tree(int treetype, unsigned keyoffs, int (*usrcmp)(void *, void *));
 TNZAPI TREE *avl_copy(TREE *tree);
 
 TNZAPI int avl_insert(TREE *tree, void *data);
-TNZAPI void *avl__locate(TREE *tree, long keyval);
-TNZAPI void *avl__locate_ge(TREE *tree, long keyval);
-TNZAPI void *avl__locate_gt(TREE *tree, long keyval);
-TNZAPI void *avl__locate_le(TREE *tree, long keyval);
-TNZAPI void *avl__locate_lt(TREE *tree, long keyval);
+TNZAPI void *avl__locate(TREE *tree, intptr_t keyval); // Updated to intptr_t
+TNZAPI void *avl__locate_ge(TREE *tree, intptr_t keyval);
+TNZAPI void *avl__locate_gt(TREE *tree, intptr_t keyval);
+TNZAPI void *avl__locate_le(TREE *tree, intptr_t keyval);
+TNZAPI void *avl__locate_lt(TREE *tree, intptr_t keyval);
 TNZAPI void *avl_locate_first(TREE *tree);
 TNZAPI void *avl_locate_last(TREE *tree);
-TNZAPI void *avl__remove(TREE *tree, long keyval);
+TNZAPI void *avl__remove(TREE *tree, intptr_t keyval);
 
 TNZAPI void avl__scan(TREE *tree, void (*usrfun)(), int back);
 
 TNZAPI void *avl_first(TREE *tree);
 TNZAPI void *avl_last(TREE *tree);
-TNZAPI void *avl__start(TREE *tree, long keyval, int back);
+TNZAPI void *avl__start(TREE *tree, intptr_t keyval, int back);
 TNZAPI void *avl_next(TREE *tree);
 TNZAPI void *avl_prev(TREE *tree);
 TNZAPI void avl_stop(TREE *tree);
@@ -252,6 +208,16 @@ TNZAPI void avl_reset(TREE *tree);
 TNZAPI void avl_close(TREE *tree);
 
 TNZAPI int avl_dump(TREE *tree, void **dat_vect, int *lev_vect, int *pos_vect);
+
+TNZAPI int avl_check(TREE *tree); // Added
+TNZAPI int64_t avl_count(TREE *tree);  // Updated to int64_t
+TNZAPI int avl_size(TREE *tree);  // Added
+TNZAPI void avl_print(TREE *tree, FILE *out); // Added
+TNZAPI int avl_color(char *color); // Added
+TNZAPI int avl_red(int argb);      // Added
+TNZAPI int avl_green(int argb);    // Added
+TNZAPI int avl_blue(int argb);     // Added
+TNZAPI int avl_alpha(int argb);    // Added
 
 TNZAPI int avl_porting_problems(void);
 
