@@ -55,7 +55,7 @@ public:
     m_index((size_t)-1), m_field(fieldName) { }
 
   inline bool isIndex() const
-    { return m_index >= 0; }  // Still works with size_t due to wrapping
+    { return m_index != (size_t)-1; }  // Still works with size_t due to wrapping
   inline bool isField() const
     { return !isIndex(); }
   inline size_t index() const  // Changed from int to size_t
@@ -276,14 +276,14 @@ public:
   void insert(size_t index, const TVariant &v);  // Changed from int to size_t
   void remove(size_t index);  // Changed from int to size_t
   TVariant& operator[] (size_t index);  // Changed from int to size_t
-  inline int size() const
+  inline size_t size() const
     { return (int)(m_type == List ? m_list.size() : m_map.size()); }
   inline void clearList()
     { resize(0); }
   inline void append(const TVariant &v)
-    { insert((int)m_list.size(), v); }
+    { insert(m_list.size(), v); }
   inline const TVariant& operator[] (size_t index) const {  // Changed from int to size_t
-    return index < (int)m_list.size() ? m_list[index] : blank();
+    return index < m_list.size() ? m_list[index] : blank();
   }
 
   // map methods
@@ -336,8 +336,8 @@ public:
     { return m_parent; }
   inline TVariant* parent()
     { return m_parent; }
-  inline int parentIndex() const
-    { return m_parent || !m_parentField ? this - &m_parent->m_list.front() : 0; }
+  inline size_t parentIndex() const
+    { return m_parent ? static_cast<size_t>(this - &m_parent->m_list.front()) : 0; }
   inline const TStringId& parentField() const
     { return m_parentField; }
   inline bool isRoot() const
