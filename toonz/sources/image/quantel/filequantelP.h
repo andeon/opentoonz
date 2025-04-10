@@ -3,6 +3,7 @@
 #ifndef __FILEQUANTELP_H__
 #define __FILEQUANTELP_H__
 
+#include <stdio.h>  // For printf in CHECK_END_OF_FILE
 #include "filequantel.h"
 
 #define QNT_PAL_FILE_SIZE 829440
@@ -97,7 +98,7 @@
 
 #define QUANTEL_FILL_LINE_OF_RGB(xmarg, xsize, rbuf, gbuf, bbuf, RGBbuf)       \
   {                                                                            \
-    int i;                                                                     \
+    size_t i;                                                                  \
     QUANTEL_FILL_LINE_OF_BLACK(rbuf, gbuf, bbuf, xmarg)                        \
     for (i = xmarg; i < xsize + xmarg; i++) {                                  \
       rbuf[i] = (USHORT)RGBbuf->r;                                             \
@@ -110,7 +111,7 @@
 
 #define QUANTEL_FILL_LINE_OF_RGB2(xmarg, rbuf, gbuf, bbuf, RGBbuf)             \
   {                                                                            \
-    int i;                                                                     \
+    size_t i;                                                                  \
     QUANTEL_FILL_LINE_OF_BLACK(rbuf, gbuf, bbuf, xmarg)                        \
     for (i = xmarg; i < (QUANTEL_XSIZE - xmarg); i++) {                        \
       rbuf[i] = (USHORT)RGBbuf->r;                                             \
