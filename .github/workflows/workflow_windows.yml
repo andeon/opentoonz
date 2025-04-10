@@ -13,7 +13,7 @@ jobs:
       QT_PATH: ${{ github.workspace }}\thirdparty\qt\5.15.2_wintab\msvc2019_64  # Path to custom Qt.
       VCINSTALLDIR: 'C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC'  # Path to MSVC.
       MSVCVERSION: "Visual Studio 16 2019"  # Visual Studio version.
-      BOOST_ROOT: C:\local\boost_1_74_0  # Boost library root.
+      BOOST_ROOT: C:\local\boost_1_85_0  # Boost library root.
       OpenCV_DIR: C:\tools\opencv\build  # Path to OpenCV.
 
     steps:
@@ -39,7 +39,7 @@ jobs:
         run: |
           @echo on
           choco install opencv --version=4.10.0 -y
-          choco install boost-msvc-14.2 --version=1.74.0 -y
+          choco install boost-msvc-14.2 --version=1.85.0 -y --force
         shell: cmd
 
       - name: Install custom Qt 5.15.2 with WinTab support
