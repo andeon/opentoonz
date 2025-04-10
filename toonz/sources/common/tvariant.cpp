@@ -1,10 +1,8 @@
-
 #include <tvariant.h>
 
 #include <sstream>
 #include <iostream>
 #include <cstdio>
-
 
 //---------------------------------------------------------
 
@@ -54,9 +52,9 @@ TVariant::blank() {
 //---------------------------------------------------------
 
 void
-TVariant::resize(int size) {
+TVariant::resize(size_t size) {  // Changed from int to size_t
   setType(List);
-  int prevSize = (int)m_list.size();
+  size_t prevSize = m_list.size();  // Changed from int to size_t
   if (prevSize == size) return;
   m_list.resize(size);
   if (prevSize < size)
@@ -68,8 +66,8 @@ TVariant::resize(int size) {
 //---------------------------------------------------------
 
 void
-TVariant::insert(int index, const TVariant &v) {
-  resize(std::max((int)m_list.size(), index));
+TVariant::insert(size_t index, const TVariant &v) {  // Changed from int to size_t
+  resize(std::max(m_list.size(), index));  // size_t implicitly used
   m_list.insert(m_list.begin() + index, v);
   m_list[index].setParent(*this);
   touch();
@@ -78,18 +76,18 @@ TVariant::insert(int index, const TVariant &v) {
 //---------------------------------------------------------
 
 void
-TVariant::remove(int index) {
-  if (m_type == List && index >= 0 && index < (int)m_list.size())
+TVariant::remove(size_t index) {  // Changed from int to size_t
+  if (m_type == List && index < m_list.size())  // Simplified condition
     { m_list.erase(m_list.begin() + index); touch(); }
 }
 
 //---------------------------------------------------------
 
 TVariant&
-TVariant::operator[] (int index) {
+TVariant::operator[] (size_t index) {  // Changed from int to size_t
   setType(List);
-  assert(index >= 0);
-  int prevSize = (int)m_list.size();
+  assert(index < (size_t)-1);  // Adjusted assertion for size_t
+  size_t prevSize = m_list.size();  // Changed from int to size_t
   if (index >= prevSize) {
     m_list.resize(index + 1);
     for(TVariantList::iterator i = m_list.begin() + prevSize; i != m_list.end(); ++i)
@@ -386,7 +384,7 @@ TVariant::fromStream(std::istream &stream, int *currentRow, int *currentCol) {
       while(isdouble(peek()) || isalpha(peek())) str.push_back((char)get());
       double d = 0.0;
       try { d = std::stod(str); }
-      catch (const std::exception &e) { warning("wrong number: " + str); }
+      catch (const std::exception&) { warning("wrong number: " + str); }  // Removed unused 'e'
       data.setDouble(d);
       return true;
     }
@@ -531,4 +529,3 @@ TVariant::fromString(const std::string &str, int *currentRow, int *currentCol) {
 }
 
 //---------------------------------------------------------
-
