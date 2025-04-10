@@ -272,10 +272,10 @@ public:
     { setType(Map); m_map = v; setParentForChilds(); touch(); }
 
   // list methods
-  void resize(int size);
-  void insert(int index, const TVariant &v);
-  void remove(int index);
-  TVariant& operator[] (int index);
+  void resize(size_t size);  // Changed from int to size_t
+  void insert(size_t index, const TVariant &v);  // Changed from int to size_t
+  void remove(size_t index);  // Changed from int to size_t
+  TVariant& operator[] (size_t index);  // Changed from int to size_t
   inline int size() const
     { return (int)(m_type == List ? m_list.size() : m_map.size()); }
   inline void clearList()
