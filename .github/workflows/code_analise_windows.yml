@@ -1,10 +1,6 @@
 name: Windows code analise
 
-on:
-  push:
-    branches:
-      - '*'  # Specify branches where the workflow should run
-  pull_request:  # Here no specific branches are listed to allow all pull requests to generate a workflow run
+on: [push, pull_request]
 
 jobs:
   Windows:
