@@ -44,21 +44,21 @@ public:
 
 class DVAPI TVariantPathEntry {
 private:
-  int m_index;
+  size_t m_index;  // Changed from int to size_t
   TStringId m_field;
 public:
-  inline explicit TVariantPathEntry(int index = -1):
+  inline explicit TVariantPathEntry(size_t index = (size_t)-1):  // Changed from int to size_t
     m_index(index) { }
   inline explicit TVariantPathEntry(const TStringId &field):
-    m_index(-1), m_field(field) { }
+    m_index((size_t)-1), m_field(field) { }
   inline explicit TVariantPathEntry(const std::string &fieldName):
-    m_index(-1), m_field(fieldName) { }
+    m_index((size_t)-1), m_field(fieldName) { }
 
   inline bool isIndex() const
-    { return m_index >= 0; }
+    { return m_index >= 0; }  // Still works with size_t due to wrapping
   inline bool isField() const
     { return !isIndex(); }
-  inline int index() const
+  inline size_t index() const  // Changed from int to size_t
     { return m_index; }
   inline TStringId field() const
     { return m_field; }
@@ -70,12 +70,12 @@ public:
   inline bool operator< (const TVariantPathEntry &other) const
     { return m_index < other.m_index || m_field < other.m_field; }
 
-  inline void set(int index)
+  inline void set(size_t index)  // Changed from int to size_t
     { m_index = index; m_field.reset(); }
   inline void set(const TStringId &field)
-    { m_index = 0; m_field = field; }
+    { m_index = (size_t)-1; m_field = field; }
   inline void set(const std::string &fieldName)
-    { m_index = 0; m_field.set(fieldName); }
+    { m_index = (size_t)-1; m_field.set(fieldName); }
 };
 
 //-------------------------------------------------------------------
@@ -282,8 +282,7 @@ public:
     { resize(0); }
   inline void append(const TVariant &v)
     { insert((int)m_list.size(), v); }
-  inline const TVariant& operator[] (int index) const {
-    assert(index >= 0);
+  inline const TVariant& operator[] (size_t index) const {  // Changed from int to size_t
     return index < (int)m_list.size() ? m_list[index] : blank();
   }
 
