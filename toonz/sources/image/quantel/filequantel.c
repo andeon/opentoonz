@@ -415,7 +415,7 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h, int type)
   int yuv_flag = 0;
   int xmarg, ymarg;
   LPIXEL *RGBbuf, *appo;
-  size_t xsize;  // Fix: Change from int to size_t 
+  size_t xsize;  // Fix: Change from int to size_t
   int true_ysize, max_ysize = 0, ysize;
   size_t ret;  // Fix: Change from int to size_t for write result
   int interlace = 0;
@@ -424,11 +424,10 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h, int type)
   gbuf = (USHORT *)&gbuffer;
   bbuf = (USHORT *)&bbuffer;
 
-  xsize = (size_t)w;  // Safe cast from int to size_t
+  xsize = (size_t)w;
   ysize = h;
 
   if (xsize > QUANTEL_XSIZE) {
-    /* printf("error: bad X size (%s)\n", Quantel_error[type-1]); */
     return FALSE;
   } else if (xsize < QUANTEL_XSIZE)
     xmarg = (int)(QUANTEL_XSIZE - xsize) / 2;
@@ -458,12 +457,10 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h, int type)
     max_ysize = QUANTEL_GET_YSIZE(ysize);
     break;
   default:
-    /* printf("error: %d bad file format\n", fname); */
     return 0;
   }
 
   if (ysize > max_ysize) {
-    /* printf("error: bad Y size (%s)\n", Quantel_error[type-1]); */
     return FALSE;
   } else if (!yuv_flag && ysize < max_ysize) {
     ymarg      = (max_ysize - ysize) / 2;
@@ -475,7 +472,6 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h, int type)
 
   outf = _wfopen(fname, L"wb");
   if (outf == NULL) {
-    /* printf("error: unable to open %s for writing\n", fname); */
     return FALSE;
   }
 
@@ -485,7 +481,6 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h, int type)
 
   picbuf = (UCHAR *)malloc(true_ysize * QUANTEL_XSIZE * sizeof(short));
   if (picbuf == NIL) {
-    /* printf("img_write_quantel error: out of memory\n"); */
     fclose(outf);
     return 0;
   }
@@ -527,12 +522,16 @@ int img_write_quantel(const T_CHAR *fname, void *buffer, int w, int h, int type)
     }
   }
 
-  ret = quantel_write_buffer(outf, picbuf, true_ysize);
+  ret = quantel_write_buffer(outf, picbuf, true_ysize);  // Line 787
 
   if (picbuf) free(picbuf);
   fclose(outf);
 
-  return (int)(ret != 0);  // Explicit cast to int
+  // Fix: Check if ret fits in int safely, though unlikely to exceed INT_MAX
+  if (ret > INT_MAX) {
+    return 1;  // Success, but cap at int max (rare case)
+  }
+  return ret != 0 ? 1 : 0;  // Simplified return
 }
 
 /*---------------------------------------------------------------------------*/
