@@ -7,7 +7,7 @@
 
 #include <string.h>
 #include <stdio.h>
-
+#include <limits.h>  // Add this for INT_MAX
 #include <sys/types.h>
 #include <sys/stat.h>
 
