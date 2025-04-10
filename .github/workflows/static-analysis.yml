@@ -53,21 +53,6 @@ jobs:
           cmake ../sources -G Ninja -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCMAKE_C_COMPILER=${{ matrix.cc }} -DWITH_TRANSLATION=OFF -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           ninja
 
-      - name: Run Static Analysis (GCC - Wall) on fixed files
-        if: matrix.compiler == 'gcc'
-        run: |
-          echo "Executing static code analysis with GCC on fixed files..."
-          INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | xargs -I{} echo -I{})
-          QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-          while IFS= read -r file; do
-            echo "Analyzing file: $file"
-            if [ -f "toonz/sources/$file" ]; then
-              gcc -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES "toonz/sources/$file" -o /dev/null
-            else
-              echo "File $file not found!"
-            fi
-          done < ci-scripts/linux/test_files.txt
-
       - name: Run Static Analysis (GCC - Wall) on all files
         if: matrix.compiler == 'gcc'
         run: |
@@ -75,41 +60,14 @@ jobs:
           INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | xargs -I{} echo -I{})
           QT_INCLUDES=$(pkg-config --cflags Qt5Core)
           find toonz/sources -name "*.cpp" | xargs gcc -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES -o /dev/null
-
-      - name: Run Static Analysis (Clang-Tidy) on fixed files
-        if: matrix.compiler == 'clang'
-        run: |
-          echo "Executing static code analysis with clang-tidy on fixed files..."
-          QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-          while IFS= read -r file; do
-            echo "Analyzing file: $file"
-            if [ -f "toonz/sources/$file" ]; then
-              clang-tidy "toonz/sources/$file" \
-                         --extra-arg="-Wno-unknown-warning-option" \
-                         -p=toonz/build \
-                         --checks="-*,modernize-*,bugprone-*,performance-*,readability-*"
-            else
-              echo "File $file not found!"
-            fi
-          done < ci-scripts/linux/test_files.txt
-
-      - name: Run Static Analysis (Clang-Tidy) on all files
-        if: matrix.compiler == 'clang'
-        run: |
-          echo "Executing static code analysis with clang-tidy on entire codebase..."
-          QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-          clang-tidy --extra-arg="-Wno-unknown-warning-option" \
-                     -p=toonz/build \
-                     --checks="-*,modernize-*,bugprone-*,performance-*,readability-*" \
-                     $(find toonz/sources -name "*.cpp")
         
     # Temporarily disable clang-tidy 
-    # - name: Run Static Analysis (Clang-Tidy)
-    #   if: matrix.compiler == 'clang'
-    #   run: |
-    #     echo "Executing static code analysis with clang-tidy..."
-    #     QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-    #     find toonz/sources -name "*.cpp" | xargs clang-tidy -p=toonz/build $QT_INCLUDES
+      - name: Run Static Analysis (Clang-Tidy)
+        if: matrix.compiler == 'clang'
+        run: |
+          echo "Executing static code analysis with clang-tidy..."
+          QT_INCLUDES=$(pkg-config --cflags Qt5Core)
+          find toonz/sources -name "*.cpp" | xargs clang-tidy -p=toonz/build $QT_INCLUDES
 
     # Temporarily disable cppcheck
     # - name: Run Static Analysis (Cppcheck)
