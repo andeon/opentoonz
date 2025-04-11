@@ -62,6 +62,11 @@
 
 #include "toonz/stagevisitor.h"
 
+// STL includes
+#include <vector>
+#include <cassert>
+#include <utility> // For std::pair
+
 //**********************************************************************************************
 //    Stage namespace
 //**********************************************************************************************
@@ -226,7 +231,8 @@ Picker::Picker(const TAffine &viewAff, const TPointD &point,
 //-----------------------------------------------------------------------------
 
 void Picker::setMinimumDistance(double d) {
-  m_minDist2 = (double)(m_devPixRatio * m_devPixRatio) * d * d;
+    double scale = std::sqrt(m_viewAff.det());
+    m_minDist2 = (m_devPixRatio * m_devPixRatio) * d * d / (scale * scale);
 }
 
 //-----------------------------------------------------------------------------
@@ -671,8 +677,13 @@ void RasterPainter::flushRasterImages() {
   glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-  glDrawPixels(ras2->getLx(), ras2->getLy(),            // Perform the over
-               TGL_FMT, TGL_TYPE, ras2->getRawData());  //
+  // Improved
+  GLuint tex;
+  glGenTextures(1, &tex);
+  glBindTexture(GL_TEXTURE_2D, tex);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ras2->getLx(), ras2->getLy(), 0, GL_RGBA, GL_UNSIGNED_BYTE, ras2->getRawData());
+  drawQuad(rect.x0, rect.y0, ras2->getLx(), ras2->getLy());
+  glDeleteTextures(1, &tex);
 
   ras->unlock();
   glPopMatrix();
@@ -742,7 +753,7 @@ static void buildAutocloseImage(
     points[0]       = p1;
     points[1]       = 0.5 * (p1 + p2);
     points[2]       = p2;
-    points[0].thick = points[1].thick = points[2].thick = 0.0;
+    points[0].thick = points[1].thick = points[2].thick = 2.0;
     TStroke *auxStroke                                  = new TStroke(points);
     auxStroke->setStyle(2);
     vaux->addStroke(auxStroke);
