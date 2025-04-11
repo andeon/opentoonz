@@ -28,7 +28,7 @@ jobs:
             libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev libpng-dev \
             libjpeg-dev libglew-dev freeglut3-dev libfreetype6-dev libjson-c-dev \
             libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2 \
-            clang-tidy pkg-config
+            clang-tidy pkg-config include-what-you-use
 
       - name: Set up cache
         run: mkdir -p /home/runner/.ccache
@@ -78,3 +78,23 @@ jobs:
           echo "Executing static code analysis with clang-tidy..."
           QT_INCLUDES=$(pkg-config --cflags Qt5Core)
           find toonz/sources -name "*.cpp" -exec clang-tidy {} -p=toonz/build --extra-arg="$QT_INCLUDES" \;
+
+      - name: Run Include-What-You-Use (IWYU)
+        if: matrix.compiler == 'clang'
+        run: |
+          echo "Running IWYU on OpenToonz..."
+          
+          # Rodar IWYU usando compile_commands.json gerado
+          cd toonz/build
+          
+          iwyu_tool.py -p . ../sources/common > iwyu_report.txt
+          
+          cat iwyu_report.txt
+
+          # Opcional: Falhar o job se encontrar includes desnecessários
+          if grep -q "should remove" iwyu_report.txt; then
+            echo "❌ IWYU encontrou headers desnecessários!"
+            exit 1
+          else
+            echo "✅ IWYU OK!"
+          fi
