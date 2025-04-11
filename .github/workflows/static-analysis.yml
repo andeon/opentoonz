@@ -111,7 +111,7 @@ jobs:
           # Run IWYU using the generated compile_commands.json
           cd toonz/build
           
-          iwyu_tool.py -p . ../sources -- --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp | tee iwyu_report.txt
+          iwyu_tool.py -p . --mapping_file=../../ci-scripts/qt.iwyu.imp ../sources | tee iwyu_report.txt
          
           if grep -q "should remove" iwyu_report.txt; then
             echo "❌ IWYU found unnecessary headers!"

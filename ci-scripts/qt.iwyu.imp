@@ -1,0 +1,126 @@
+// opentoonz/ci-scripts/qt.iwyu.imp
+
+// This file provides custom include mappings for Include-What-You-Use (IWYU)
+// specific to Qt in the OpenToonz codebase.
+//
+// Qt headers are typically included using angle-bracket format like:
+//     #include <QString>
+// IWYU may incorrectly suggest switching to lowercase/private headers like:
+//     #include <qstring.h>
+//
+// This file overrides those suggestions and maps lowercase Qt headers back
+// to their public API form to maintain compatibility with Qt 5.15 and
+// future Qt 6 versions.
+//
+// Usage:
+// In the GitHub Actions workflow or local IWYU runs, pass this file via:
+//     --mapping_file=path/to/qt.iwyu.imp
+//
+// IWYU documentation on mapping files:
+// https://github.com/include-what-you-use/include-what-you-use/blob/master/docs/IWYUPragmas.md
+
+include_mapping {
+  include: "qstring.h"
+  replace_with: "<QString>"
+  kind: "private"
+}
+include_mapping {
+  include: "qlist.h"
+  replace_with: "<QList>"
+  kind: "private"
+}
+include_mapping {
+  include: "qmap.h"
+  replace_with: "<QMap>"
+  kind: "private"
+}
+include_mapping {
+  include: "qset.h"
+  replace_with: "<QSet>"
+  kind: "private"
+}
+include_mapping {
+  include: "qvector.h"
+  replace_with: "<QVector>"
+  kind: "private"
+}
+include_mapping {
+  include: "qstringlist.h"
+  replace_with: "<QStringList>"
+  kind: "private"
+}
+include_mapping {
+  include: "qbytearray.h"
+  replace_with: "<QByteArray>"
+  kind: "private"
+}
+include_mapping {
+  include: "qobject.h"
+  replace_with: "<QObject>"
+  kind: "private"
+}
+include_mapping {
+  include: "qthread.h"
+  replace_with: "<QThread>"
+  kind: "private"
+}
+include_mapping {
+  include: "qmutex.h"
+  replace_with: "<QMutex>"
+  kind: "private"
+}
+include_mapping {
+  include: "qeventloop.h"
+  replace_with: "<QEventLoop>"
+  kind: "private"
+}
+include_mapping {
+  include: "qcoreapplication.h"
+  replace_with: "<QCoreApplication>"
+  kind: "private"
+}
+include_mapping {
+  include: "qdatetime.h"
+  replace_with: "<QDateTime>"
+  kind: "private"
+}
+include_mapping {
+  include: "qprocess.h"
+  replace_with: "<QProcess>"
+  kind: "private"
+}
+include_mapping {
+  include: "qnamespace.h"
+  replace_with: "<Qt>"
+  kind: "private"
+}
+include_mapping {
+  include: "qobjectdefs.h"
+  replace_with: "<QObject>"
+  kind: "private"
+}
+include_mapping {
+  include: "qdebug.h"
+  replace_with: "<QDebug>"
+  kind: "private"
+}
+include_mapping {
+  include: "qfile.h"
+  replace_with: "<QFile>"
+  kind: "private"
+}
+include_mapping {
+  include: "qfileinfo.h"
+  replace_with: "<QFileInfo>"
+  kind: "private"
+}
+include_mapping {
+  include: "qdir.h"
+  replace_with: "<QDir>"
+  kind: "private"
+}
+include_mapping {
+  include: "qimage.h"
+  replace_with: "<QImage>"
+  kind: "private"
+}
