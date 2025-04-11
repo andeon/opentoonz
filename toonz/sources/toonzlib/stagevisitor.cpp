@@ -677,13 +677,7 @@ void RasterPainter::flushRasterImages() {
   glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-  // Improved
-  GLuint tex;
-  glGenTextures(1, &tex);
-  glBindTexture(GL_TEXTURE_2D, tex);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ras2->getLx(), ras2->getLy(), 0, GL_RGBA, GL_UNSIGNED_BYTE, ras2->getRawData());
-  drawQuad(rect.x0, rect.y0, ras2->getLx(), ras2->getLy());
-  glDeleteTextures(1, &tex);
+  glDrawPixels(ras2->getLx(), ras2->getLy(), TGL_FMT, TGL_TYPE, ras2->getRawData());
 
   ras->unlock();
   glPopMatrix();
