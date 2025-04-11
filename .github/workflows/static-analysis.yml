@@ -111,9 +111,7 @@ jobs:
           # Rodar IWYU usando compile_commands.json gerado
           cd toonz/build
           
-          iwyu_tool.py -p . ../sources/common > iwyu_report.txt
-          
-          cat iwyu_report.txt
+          iwyu_tool.py -p . ../sources/common | tee iwyu_report.txt
 
           # Opcional: Falhar o job se encontrar includes desnecessários
           if grep -q "should remove" iwyu_report.txt; then
