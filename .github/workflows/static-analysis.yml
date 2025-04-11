@@ -31,7 +31,7 @@ jobs:
             clang-tidy pkg-config
 
       - name: Install IWYU (Include-What-You-Use)
-        if: matrix.compiler == 'clang'  # Só instala IWYU se o compilador for Clang              
+        if: matrix.compiler == 'clang'                
         run: |
           git clone --recursive https://github.com/include-what-you-use/include-what-you-use.git
           cd include-what-you-use
@@ -41,6 +41,13 @@ jobs:
           cmake ..
           make
           sudo make install
+
+          IWYU_DIR=$(include-what-you-use -print-resource-dir 2>/dev/null || true)
+          CLANG_DIR=$(clang -print-resource-dir)
+          if [ -n "$IWYU_DIR" ] && [ ! -e "$IWYU_DIR" ]; then
+            sudo mkdir -p "$(dirname "$IWYU_DIR")"
+            sudo ln -s "$CLANG_DIR" "$IWYU_DIR"
+          fi
 
       - name: Set up cache
         run: mkdir -p /home/runner/.ccache
