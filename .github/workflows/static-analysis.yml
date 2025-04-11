@@ -34,7 +34,10 @@ jobs:
         run: |
           git clone --recursive https://github.com/include-what-you-use/include-what-you-use.git
           cd include-what-you-use
-          cmake .
+          git checkout clang_14
+          mkdir build
+          cd build
+          cmake ..
           make
           sudo make install
 
