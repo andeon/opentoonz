@@ -36,11 +36,13 @@ jobs:
           git clone --recursive https://github.com/include-what-you-use/include-what-you-use.git
           cd include-what-you-use
           git checkout clang_14
-          mkdir build
-          cd build
-          cmake ..
-          make
-          sudo make install
+          mkdir build && cd build
+          cmake .. -G Ninja \
+            -DCMAKE_C_COMPILER=clang-14 \
+            -DCMAKE_CXX_COMPILER=clang++-14
+          ninja
+          sudo ninja install
+          
 
           IWYU_DIR=$(include-what-you-use -print-resource-dir 2>/dev/null || true)
           CLANG_DIR=$(clang -print-resource-dir)
