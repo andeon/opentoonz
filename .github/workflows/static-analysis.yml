@@ -38,6 +38,7 @@ jobs:
           git checkout clang_14
           mkdir build && cd build
           cmake .. -G Ninja \
+            -DCMAKE_PREFIX_PATH="/usr/lib/llvm-14" \
             -DCMAKE_C_COMPILER=clang-14 \
             -DCMAKE_CXX_COMPILER=clang++-14
           ninja
