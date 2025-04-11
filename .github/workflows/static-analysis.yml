@@ -31,6 +31,7 @@ jobs:
             clang-tidy pkg-config
 
       - name: Install IWYU (Include-What-You-Use)
+        if: matrix.compiler == 'clang'  # Só instala IWYU se o compilador for Clang              
         run: |
           git clone --recursive https://github.com/include-what-you-use/include-what-you-use.git
           cd include-what-you-use
