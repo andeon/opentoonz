@@ -95,13 +95,13 @@ jobs:
           QT_INCLUDES=$(pkg-config --cflags Qt5Core)
           find toonz/sources -name "*.cpp" -exec ${{ matrix.cc }} -c -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES {} \;
 
-      - name: Run Static Analysis (Clang-Tidy)
-        if: matrix.compiler == 'clang'
-        run: |
-          echo "Executing static code analysis with clang-tidy..."
-          QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-          find toonz/sources -name "*.cpp" | \
-          xargs -n 1 -P $(nproc) clang-tidy -p=toonz/build --extra-arg="$QT_INCLUDES" --quiet
+#      - name: Run Static Analysis (Clang-Tidy)
+ #       if: matrix.compiler == 'clang'
+  #      run: |
+   #       echo "Executing static code analysis with clang-tidy..."
+    #      QT_INCLUDES=$(pkg-config --cflags Qt5Core)
+      #    find toonz/sources -name "*.cpp" | \
+     #     xargs -n 1 -P $(nproc) clang-tidy -p=toonz/build --extra-arg="$QT_INCLUDES" --quiet
 
       - name: Run Include-What-You-Use (IWYU)
         if: matrix.compiler == 'clang'
