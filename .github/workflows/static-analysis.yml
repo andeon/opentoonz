@@ -108,15 +108,13 @@ jobs:
         run: |
           echo "Running IWYU on OpenToonz..."
           
-          # Rodar IWYU usando compile_commands.json gerado
+          # Run IWYU using the generated compile_commands.json
           cd toonz/build
           
-          iwyu_tool.py -p . ../sources/common | tee iwyu_report.txt
-
-          # Opcional: Falhar o job se encontrar includes desnecessários
+          iwyu_tool.py -p . ../sources | tee iwyu_report.txt
+         
           if grep -q "should remove" iwyu_report.txt; then
-            echo "❌ IWYU encontrou headers desnecessários!"
-            exit 1
+            echo "❌ IWYU found unnecessary headers!"
           else
             echo "✅ IWYU OK!"
           fi
