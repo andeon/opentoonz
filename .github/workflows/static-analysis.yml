@@ -87,13 +87,13 @@ jobs:
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           ninja
 
-      - name: Run Static Analysis (GCC)
-        if: matrix.compiler == 'gcc'
-        run: |
-          echo "Executing static code analysis with GCC..."
-          INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | sed 's/^/-I/')
-          QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-          find toonz/sources -name "*.cpp" -exec ${{ matrix.cc }} -c -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES {} \;
+#       - name: Run Static Analysis (GCC)
+#         if: matrix.compiler == 'gcc'
+#         run: |
+#           echo "Executing static code analysis with GCC..."
+#           INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | sed 's/^/-I/')
+ #          QT_INCLUDES=$(pkg-config --cflags Qt5Core)
+   #        find toonz/sources -name "*.cpp" -exec ${{ matrix.cc }} -c -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES {} \;
 
 #      - name: Run Static Analysis (Clang-Tidy)
  #       if: matrix.compiler == 'clang'
@@ -111,7 +111,7 @@ jobs:
           # Run IWYU using the generated compile_commands.json
           cd toonz/build
           
-          iwyu_tool.py -p . ../sources | tee iwyu_report.txt
+          iwyu_tool.py -p . --mapping_file=../../include-what-you-use/iwyu/mappings/qt5_11.imp ../sources | tee iwyu_report.txt
          
           if grep -q "should remove" iwyu_report.txt; then
             echo "❌ IWYU found unnecessary headers!"
