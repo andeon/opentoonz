@@ -28,7 +28,15 @@ jobs:
             libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev libpng-dev \
             libjpeg-dev libglew-dev freeglut3-dev libfreetype6-dev libjson-c-dev \
             libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2 \
-            clang-tidy pkg-config include-what-you-use
+            clang-tidy pkg-config
+
+      - name: Install IWYU (Include-What-You-Use)
+        run: |
+          git clone --recursive https://github.com/include-what-you-use/include-what-you-use.git
+          cd include-what-you-use
+          cmake .
+          make
+          sudo make install
 
       - name: Set up cache
         run: mkdir -p /home/runner/.ccache
