@@ -108,40 +108,17 @@ jobs:
       - name: Run IWYU analysis and show output with tee
         id: analyze
         run: |
+          
+          echo "Running IWYU on OpenToonz..."
+          
+          # Run IWYU using the generated compile_commands.json
           cd toonz/build
           
-          jq -r '.[] | select(.file | test("\\.(cpp|c)$")) | .file' \
-            compile_commands.json > all_files.txt
-          
-          total_files=$(wc -l < all_files.txt)
-          files_per_chunk=$(( (total_files + 3) / 4 ))
-          start_line=$(( (${{ matrix.chunk }} - 1) * files_per_chunk + 1 ))
-          end_line=$(( ${{ matrix.chunk }} * files_per_chunk ))
-          
-          sed -n "${start_line},${end_line}p" all_files.txt > chunk_files.txt
-
-          mkdir -p iwyu_reports
-
-          while IFS= read -r file; do
-            base=$(basename "$file" .cpp | tr '/' '_')
-            echo "▶ Processing $file..."
-            if [[ "$file" == *"Q"* ]]; then
-              iwyu_tool.py -p . "$file" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
-                2>&1 | tee "iwyu_reports/${base}.txt"
-            else
-              iwyu_tool.py -p . "$file" -- -Xiwyu \
-                2>&1 | tee "iwyu_reports/${base}.txt"
-            fi
-          done < chunk_files.txt
-
-          cat iwyu_reports/*.txt > combined_report.txt
-          grep -E "should (add|remove)" combined_report.txt | sort | uniq > actionable_items.txt
-
-          add_count=$(grep -c "should add" combined_report.txt || true)
-          remove_count=$(grep -c "should remove" combined_report.txt || true)
-
-          echo "add_issues=$add_count" >> $GITHUB_OUTPUT
-          echo "remove_issues=$remove_count" >> $GITHUB_OUTPUT
+          jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/.*\.(cpp|c)$" > source_files.txt
+          # Roda IWYU em paralelo, um arquivo por vez (ajustável)
+          cat source_files.txt | xargs -n 1 -P $(nproc) -I {} \
+            iwyu_tool.py -p . "{}" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
+            2>/dev/null | tee iwyu_report.txt
 
       - name: Upload IWYU reports
         uses: actions/upload-artifact@v4
