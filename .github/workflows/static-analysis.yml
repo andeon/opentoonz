@@ -38,24 +38,24 @@ jobs:
       - name: Install IWYU (Include-What-You-Use)
         if: matrix.compiler == 'clang'
         run: |
-          if ! command -v include-what-you-use >/dev/null 2>&1; then
-            git clone --depth 1 --branch clang_14 \
-              https://github.com/include-what-you-use/include-what-you-use.git
-            cd include-what-you-use
-            mkdir build && cd build
-            cmake .. -G Ninja \
-              -DCMAKE_PREFIX_PATH="/usr/lib/llvm-14" \
-              -DCMAKE_C_COMPILER=clang-14 \
-              -DCMAKE_CXX_COMPILER=clang++-14
-            ninja
-            sudo ninja install
-            cd ../..
+          git clone --recursive https://github.com/include-what-you-use/include-what-you-use.git
+          cd include-what-you-use
+          git checkout clang_14
+          mkdir build && cd build
+          cmake .. -G Ninja \
+            -DCMAKE_PREFIX_PATH="/usr/lib/llvm-14" \
+            -DCMAKE_C_COMPILER=clang-14 \
+            -DCMAKE_CXX_COMPILER=clang++-14
+          ninja
+          sudo ninja install
+          
+          IWYU_DIR=$(include-what-you-use -print-resource-dir 2>/dev/null || true)
+          CLANG_DIR=$(clang -print-resource-dir)
+          if [ -n "$IWYU_DIR" ] && [ ! -e "$IWYU_DIR" ]; then
+            sudo mkdir -p "$(dirname "$IWYU_DIR")"
+            sudo ln -s "$CLANG_DIR" "$IWYU_DIR"
           fi
-
-          sudo mkdir -p /usr/local/share/include-what-you-use
-          sudo wget -q -O /usr/local/share/include-what-you-use/qt5_11.imp \
-            https://raw.githubusercontent.com/include-what-you-use/include-what-you-use/master/qt5_11.imp
-
+          
       - name: Set up build cache
         run: |
           mkdir -p /home/runner/.ccache
