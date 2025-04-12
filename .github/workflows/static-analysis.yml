@@ -113,36 +113,38 @@ jobs:
       - name: Run IWYU for chunk ${{ matrix.chunk }}
         run: |
           echo "Running IWYU for chunk ${{ matrix.chunk }}..."
-          
-          # Run IWYU using the generated compile_commands.json
+
           cd toonz/build
-          
-          # Filtra os arquivos com base no chunk
-          jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/.*\.(cpp|c)$" > source_files.txt
 
-          # Divide os arquivos em chunks
+          if [ ! -f compile_commands.json ]; then
+            echo "❌ compile_commands.json not found!"
+            exit 1
+          fi
+
+          jq -r '.[].file' compile_commands.json | grep -E "\.(cpp|c)$" > source_files.txt
+
           total_files=$(wc -l < source_files.txt)
-          files_per_chunk=$((total_files / 4))  # Divide em 4 partes
+          echo "Found $total_files source files"
+          files_per_chunk=$(( (total_files + 3) / 4 ))  # divide e arredonda pra cima
 
-          # Define o intervalo de arquivos a serem processados
-          start_line=$(( (${{ matrix.chunk }} - 1) * files_per_chunk + 1 ))
-          end_line=$(( ${{ matrix.chunk }} * files_per_chunk ))        
+          chunk=${{ matrix.chunk }}
+          start_line=$(( (chunk - 1) * files_per_chunk + 1 ))
+          end_line=$(( chunk * files_per_chunk ))
 
-          # Pega o intervalo de arquivos para este chunk
+          echo "Processing lines $start_line to $end_line"
+
           sed -n "${start_line},${end_line}p" source_files.txt > chunk_files.txt
+          echo "Processing $(wc -l < chunk_files.txt) files in chunk $chunk"
 
-          # Condicional: Roda IWYU com mapeamento para Qt apenas para os chunks 1 e 2
-          if [[ "${{ matrix.chunk }}" -le 2 ]]; then
+          if [ "$chunk" -le 2 ]; then
             echo "Running IWYU for Qt files (with mapping)..."
-            # Filtra os arquivos que são Qt (contêm 'Q')
-            grep '/sources/.*Q.*\.cpp' chunk_files.txt | xargs -n 1 -P $(nproc) -I {} \
-              iwyu_tool.py -p toonz/build "{}" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
+            grep '/sources/.*Q.*\.cpp' chunk_files.txt | xargs -r -n 1 -P $(nproc) -I {} \
+              iwyu_tool.py -p . "{}" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
               2>/dev/null | tee iwyu_report_qt.txt
           else
             echo "Running IWYU for non-Qt files (no mapping)..."
-            # Filtra os arquivos que **não** são Qt
-            grep -v '/sources/.*Q.*\.cpp' chunk_files.txt | xargs -n 1 -P $(nproc) -I {} \
-              iwyu_tool.py -p toonz/build "{}" -- -Xiwyu \
+            grep -v '/sources/.*Q.*\.cpp' chunk_files.txt | xargs -r -n 1 -P $(nproc) -I {} \
+              iwyu_tool.py -p . "{}" -- -Xiwyu \
               2>/dev/null | tee iwyu_report_non_qt.txt
           fi
 
