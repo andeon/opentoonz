@@ -110,15 +110,27 @@ jobs:
         run: |
           
           echo "Running IWYU on OpenToonz..."
-          
-          # Run IWYU using the generated compile_commands.json
+    
           cd toonz/build
-          
+    
+          # Get source files
           jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/.*\.(cpp|c)$" > source_files.txt
-          # Roda IWYU em paralelo, um arquivo por vez (ajustável)
-          cat source_files.txt | xargs -n 1 -P $(nproc) -I {} \
+
+          # Split files into 4 chunks
+          split -n l/4 source_files.txt chunk_
+
+          # Map matrix.chunk to actual file
+          declare -a CHUNK_MAP=(chunk_aa chunk_ab chunk_ac chunk_ad)
+          CHUNK_FILE="${CHUNK_MAP[$(( ${{ matrix.chunk }} - 1 ))]}"
+
+          # Copy to a standard name for summary step
+          cp "$CHUNK_FILE" chunk_files.txt
+
+          # Run IWYU only on files in this chunk
+          cat chunk_files.txt | xargs -n 1 -P $(nproc) -I {} \
             iwyu_tool.py -p . "{}" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
             2>/dev/null | tee iwyu_report.txt
+          echo "Running IWYU on OpenToonz..."
 
       - name: Upload IWYU reports
         uses: actions/upload-artifact@v4
