@@ -97,10 +97,10 @@ jobs:
   iwyu-chunked:
     needs: build
     runs-on: ubuntu-22.04
-    timeout-minutes: 360  # 6 hours
+    timeout-minutes: 360
     strategy:
       matrix:
-        chunk: [1, 2, 3, 4]  # Divide os arquivos em 4 chunks
+        chunk: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
 
@@ -113,7 +113,6 @@ jobs:
       - name: Run IWYU for chunk ${{ matrix.chunk }}
         run: |
           echo "Running IWYU for chunk ${{ matrix.chunk }}..."
-
           cd toonz/build
 
           if [ ! -f compile_commands.json ]; then
@@ -125,31 +124,36 @@ jobs:
 
           total_files=$(wc -l < source_files.txt)
           echo "Found $total_files source files"
-          files_per_chunk=$(( (total_files + 3) / 4 ))  # divide e arredonda pra cima
 
+          files_per_chunk=$(( (total_files + 3) / 4 ))
           chunk=${{ matrix.chunk }}
           start_line=$(( (chunk - 1) * files_per_chunk + 1 ))
           end_line=$(( chunk * files_per_chunk ))
 
           echo "Processing lines $start_line to $end_line"
-
           sed -n "${start_line},${end_line}p" source_files.txt > chunk_files.txt
-          echo "Processing $(wc -l < chunk_files.txt) files in chunk $chunk"
+
+          chunk_count=$(wc -l < chunk_files.txt)
+          echo "Processing $chunk_count files in chunk $chunk"
+          cat chunk_files.txt
 
           if [ "$chunk" -le 2 ]; then
             echo "Running IWYU for Qt files (with mapping)..."
-            grep '/sources/.*Q.*\.cpp' chunk_files.txt | xargs -r -n 1 -P $(nproc) -I {} \
+            grep '/sources/.*Q.*\.cpp' chunk_files.txt > qt_files.txt
+            cat qt_files.txt
+            cat qt_files.txt | xargs -r -n 1 -P $(nproc) -I {} \
               iwyu_tool.py -p . "{}" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
               2>/dev/null | tee iwyu_report_qt.txt
           else
             echo "Running IWYU for non-Qt files (no mapping)..."
-            grep -v '/sources/.*Q.*\.cpp' chunk_files.txt | xargs -r -n 1 -P $(nproc) -I {} \
+            grep -v '/sources/.*Q.*\.cpp' chunk_files.txt > non_qt_files.txt
+            cat non_qt_files.txt
+            cat non_qt_files.txt | xargs -r -n 1 -P $(nproc) -I {} \
               iwyu_tool.py -p . "{}" -- -Xiwyu \
               2>/dev/null | tee iwyu_report_non_qt.txt
           fi
 
-          # Verificação do IWYU
-          if [[ "${{ matrix.chunk }}" -le 2 ]]; then
+          if [ "$chunk" -le 2 ]; then
             if grep -q "should remove" iwyu_report_qt.txt; then
               echo "❌ IWYU found unnecessary headers in Qt files!"
             else
