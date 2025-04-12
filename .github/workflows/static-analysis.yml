@@ -123,51 +123,52 @@ jobs:
           name: build-artifacts-clang
           path: toonz/build
 
-      - name: Run parallel IWYU analysis
+      - name: Run IWYU analysis and show output with tee
+        id: analyze
         run: |
           cd toonz/build
           
-          # Generate optimized file list
           jq -r '.[] | select(.file | test("\\.(cpp|c)$")) | .file' \
             compile_commands.json > all_files.txt
           
-          # Split into chunks
           total_files=$(wc -l < all_files.txt)
           files_per_chunk=$(( (total_files + 3) / 4 ))
           start_line=$(( (${{ matrix.chunk }} - 1) * files_per_chunk + 1 ))
           end_line=$(( ${{ matrix.chunk }} * files_per_chunk ))
           
           sed -n "${start_line},${end_line}p" all_files.txt > chunk_files.txt
-          
-          # Process files sequentially (replaced parallel with while loop)
+
+          mkdir -p iwyu_reports
+
           while IFS= read -r file; do
+            base=$(basename "$file" .cpp | tr '/' '_')
+            echo "▶ Processing $file..."
             if [[ "$file" == *"Q"* ]]; then
               iwyu_tool.py -p . "$file" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
-                > "iwyu_report_$(basename "$file").txt" 2>&1 || true
+                2>&1 | tee "iwyu_reports/${base}.txt"
             else
               iwyu_tool.py -p . "$file" -- -Xiwyu \
-                > "iwyu_report_$(basename "$file").txt" 2>&1 || true
+                2>&1 | tee "iwyu_reports/${base}.txt"
             fi
           done < chunk_files.txt
-          
-          # Combine results
-          cat iwyu_report_*.txt > combined_report.txt
+
+          cat iwyu_reports/*.txt > combined_report.txt
           grep -E "should (add|remove)" combined_report.txt | sort | uniq > actionable_items.txt
-          
-          # Count issues
+
           add_count=$(grep -c "should add" combined_report.txt || true)
           remove_count=$(grep -c "should remove" combined_report.txt || true)
+
           echo "add_issues=$add_count" >> $GITHUB_OUTPUT
           echo "remove_issues=$remove_count" >> $GITHUB_OUTPUT
 
-      - name: Upload analysis results
+      - name: Upload IWYU reports
         uses: actions/upload-artifact@v4
         with:
           name: analysis-chunk-${{ matrix.chunk }}
           path: |
             toonz/build/combined_report.txt
             toonz/build/actionable_items.txt
-            toonz/build/iwyu_report_*.txt
+            toonz/build/iwyu_reports
           retention-days: 7
 
       - name: Generate summary
@@ -182,13 +183,3 @@ jobs:
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           head -n 10 actionable_items.txt >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-
-  report:
-    needs: analyze
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Aggregate results
-        run: |
-          echo "### Complete IWYU Analysis Summary" >> $GITHUB_STEP_SUMMARY
-          echo "All chunks processed successfully." >> $GITHUB_STEP_SUMMARY
-          echo "Download artifacts for full reports." >> $GITHUB_STEP_SUMMARY
