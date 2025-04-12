@@ -288,7 +288,7 @@ if(BUILD_ENV_MSVC)
     include_directories(
         SYSTEM
         ${SDKROOT}/glut/3.7.6/include
-        ${SDKROOT}/zlib-1.2.8
+        ${SDKROOT}/zlib-1.2.13
         #${SDKROOT}/LibJPEG/jpeg-9
         ${SDKROOT}/libjpeg-turbo/include
     )
@@ -344,8 +344,8 @@ if(BUILD_ENV_MSVC)
     set(GLUT_LIB ${SDKROOT}/glut/3.7.6/lib/glut${PLATFORM}.lib)
     set(GL_LIB opengl32.lib)
     set(Z_LIB
-        optimized ${SDKROOT}/zlib-1.2.8/lib/zlib-1.2.8_${MSVC_LIB_VERSION}${PLATFORM2}.lib
-        debug ${SDKROOT}/zlib-1.2.8/lib/zlib-1.2.8_${MSVC_LIB_VERSION}${PLATFORM2}d.lib
+        optimized ${SDKROOT}/zlib-1.2.13/lib/zlib-1.2.13_${MSVC_LIB_VERSION}${PLATFORM2}.lib
+        debug ${SDKROOT}/zlib-1.2.13/lib/zlib-1.2.13_${MSVC_LIB_VERSION}${PLATFORM2}d.lib
     )
     #set(JPEG_LIB ${SDKROOT}/LibJPEG/jpeg-9/lib/LibJPEG-9_${MSVC_LIB_VERSION}${PLATFORM2}.lib)
     set(JPEG_LIB ${SDKROOT}/libjpeg-turbo/lib/jpeg-static_${MSVC_LIB_VERSION}${PLATFORM2}.lib)
