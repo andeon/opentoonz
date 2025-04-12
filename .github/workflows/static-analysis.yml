@@ -106,8 +106,12 @@ jobs:
           # Run IWYU using the generated compile_commands.json
           cd toonz/build
           
-          find ../sources \( -name "*.cpp" -o -name "*.c" -o -name "*.h" -o -name "*.hpp" \) | \
-          xargs -n 1 -P $(nproc) iwyu_tool.py -p . -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp
+          jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/.*\.(cpp|c)$" > source_files.txt
+
+          # Roda IWYU em paralelo, um arquivo por vez (ajustável)
+          cat source_files.txt | xargs -n 1 -P $(nproc) -I {} \
+            iwyu_tool.py -p . "{}" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
+            2>/dev/null | tee iwyu_report.txt
     
          
           if grep -q "should remove" iwyu_report.txt; then
