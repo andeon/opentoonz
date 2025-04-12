@@ -125,7 +125,7 @@ jobs:
           total_files=$(wc -l < source_files.txt)
           echo "Found $total_files source files"
 
-         files_per_chunk=$(( (total_files + 3) / 4 ))
+          files_per_chunk=$(( (total_files + 3) / 4 ))
           chunk=${{ matrix.chunk }}
           start_line=$(( (chunk - 1) * files_per_chunk + 1 ))
           end_line=$(( chunk * files_per_chunk ))
@@ -162,3 +162,4 @@ jobs:
             echo "✅ IWYU OK for non-Qt files!"
             cat iwyu_report_non_qt.txt
           fi
+
