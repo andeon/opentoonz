@@ -126,8 +126,8 @@ jobs:
           files_per_chunk=$((total_files / 4))  # Divide em 4 partes
 
           # Define o intervalo de arquivos a serem processados
-          start_line=$(( (matrix.chunk - 1) * files_per_chunk + 1 ))
-          end_line=$(( matrix.chunk * files_per_chunk ))
+          start_line=$(( ({{ matrix.chunk }} - 1) * files_per_chunk + 1 ))
+          end_line=$(( {{ matrix.chunk }} * files_per_chunk ))        
 
           # Pega o intervalo de arquivos para este chunk
           sed -n "${start_line},${end_line}p" source_files.txt > chunk_files.txt
