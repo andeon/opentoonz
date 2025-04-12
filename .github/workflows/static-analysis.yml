@@ -99,10 +99,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download build artifacts
+      - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
-          name: build-artifacts-clang
+          name: toonz-build-dir
           path: toonz/build
 
       - name: Run IWYU analysis and show output with tee
