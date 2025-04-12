@@ -3,10 +3,9 @@ name: Enhanced OpenToonz Code Analysis
 on: [push, pull_request]
 
 jobs:
-  build:
-    name: Build with ${{ matrix.compiler }}
+  Ubuntu:
     runs-on: ubuntu-22.04
-    timeout-minutes: 360
+    timeout-minutes: 360  # Set the timeout to 6 hours (360 minutes).
     strategy:
       matrix:
         compiler: [gcc, clang]
@@ -20,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install libraries
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake pkg-config ninja-build ccache \
@@ -31,22 +30,9 @@ jobs:
             libjpeg-dev libglew-dev freeglut3-dev libfreetype6-dev libjson-c-dev \
             libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2 \
             clang-14 llvm-14 libclang-14-dev llvm-14-dev \
-            clang-tidy jq
-
-      - name: Set up ccache directory
-        run: mkdir -p /home/runner/.ccache
-
-      - name: Restore ccache
-        uses: actions/cache@v4
-        with:
-          path: /home/runner/.ccache
-          key: ${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.compiler }}-
-            ${{ runner.os }}-
-
+            clang-tidy pkg-config
       - name: Install IWYU (Include-What-You-Use)
-        if: matrix.compiler == 'clang'
+        if: matrix.compiler == 'clang'                
         run: |
           git clone --recursive https://github.com/include-what-you-use/include-what-you-use.git
           cd include-what-you-use
@@ -58,15 +44,31 @@ jobs:
             -DCMAKE_CXX_COMPILER=clang++-14
           ninja
           sudo ninja install
-
+          
           IWYU_DIR=$(include-what-you-use -print-resource-dir 2>/dev/null || true)
           CLANG_DIR=$(clang -print-resource-dir)
           if [ -n "$IWYU_DIR" ] && [ ! -e "$IWYU_DIR" ]; then
             sudo mkdir -p "$(dirname "$IWYU_DIR")"
             sudo ln -s "$CLANG_DIR" "$IWYU_DIR"
           fi
+      - name: Set up cache
+        run: mkdir -p /home/runner/.ccache
 
-      - name: Build project
+      - uses: actions/cache@v4
+        with:
+          path: /home/runner/.ccache
+          key: ${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.compiler }}-
+            ${{ runner.os }}-
+      - name: Build libtiff
+        run: |
+          if [ ! -f thirdparty/tiff-4.0.3/libtiff.a ]; then
+            cd thirdparty/tiff-4.0.3
+            CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
+            make -j$(nproc)
+          fi
+      - name: Build
         run: |
           export CCACHE_DIR=/home/runner/.ccache
           export CC="ccache ${{ matrix.cc }}"
@@ -80,77 +82,39 @@ jobs:
             -DWITH_TRANSLATION=OFF \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           ninja
+#       - name: Run Static Analysis (GCC)
+#         if: matrix.compiler == 'gcc'
+#         run: |
+#           echo "Executing static code analysis with GCC..."
+#           INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | sed 's/^/-I/')
+ #          QT_INCLUDES=$(pkg-config --cflags Qt5Core)
+   #        find toonz/sources -name "*.cpp" -exec ${{ matrix.cc }} -c -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES {} \;
 
-      - name: Upload build directory
+#      - name: Run Static Analysis (Clang-Tidy)
+ #       if: matrix.compiler == 'clang'
+  #      run: |
+   #       echo "Executing static code analysis with clang-tidy..."
+    #      QT_INCLUDES=$(pkg-config --cflags Qt5Core)
+      #    find toonz/sources -name "*.cpp" | \
+     #     xargs -n 1 -P $(nproc) clang-tidy -p=toonz/build --extra-arg="$QT_INCLUDES" --quiet
+
+      - name: Run Include-What-You-Use (IWYU)
         if: matrix.compiler == 'clang'
-        uses: actions/upload-artifact@v4
-        with:
-          name: toonz-build-dir
-          path: toonz/build
-
-  iwyu-analysis:
-    name: IWYU Analysis (Chunk ${{ matrix.chunk }})
-    needs: build
-    if: always()
-    runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        chunk: [1, 2, 3, 4]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install jq
-        run: sudo apt-get install -y jq
-
-      - name: Download build
-        uses: actions/download-artifact@v4
-        with:
-          name: toonz-build-dir
-          path: toonz/build
-
-      - name: Run IWYU analysis (chunked)
         run: |
+          echo "Running IWYU on OpenToonz..."
+          
+          # Run IWYU using the generated compile_commands.json
           cd toonz/build
-
-          # Get all C/C++ source files
+          
           jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/.*\.(cpp|c)$" > source_files.txt
-
-          # Split into 4 chunks (chunk_aa, ab, ac, ad)
-          split -n l/4 source_files.txt chunk_
-
-          # Map matrix.chunk (1-4) to chunk file
-          declare -a CHUNKS=(chunk_aa chunk_ab chunk_ac chunk_ad)
-          CHUNK_FILE="${CHUNKS[$(( ${{ matrix.chunk }} - 1 ))]}"
-
-          echo "Running IWYU on $CHUNK_FILE"
-          cp "$CHUNK_FILE" chunk_files.txt
-
-          # Run IWYU only on the current chunk
-          cat chunk_files.txt | xargs -n 1 -P $(nproc) -I {} \
+          # Roda IWYU em paralelo, um arquivo por vez (ajustável)
+          cat source_files.txt | xargs -n 1 -P $(nproc) -I {} \
             iwyu_tool.py -p . "{}" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
             2>/dev/null | tee iwyu_report.txt
-
-          # Save actionable includes
-          grep -E 'should (add|remove)' iwyu_report.txt > actionable_items.txt || true
-
-      - name: Upload IWYU report
-        uses: actions/upload-artifact@v4
-        with:
-          name: iwyu-report-chunk-${{ matrix.chunk }}
-          path: |
-            toonz/build/iwyu_report.txt
-            toonz/build/actionable_items.txt
-
-      - name: Summary
-        run: |
-          cd toonz/build
-          echo "### Chunk ${{ matrix.chunk }} Analysis Summary" >> $GITHUB_STEP_SUMMARY
-          echo "**Files Processed:** $(wc -l < chunk_files.txt)" >> $GITHUB_STEP_SUMMARY
-          echo "**Includes to add/remove:**" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          if [ -s actionable_items.txt ]; then
-            head -n 10 actionable_items.txt >> $GITHUB_STEP_SUMMARY
+    
+         
+          if grep -q "should remove" iwyu_report.txt; then
+            echo "❌ IWYU found unnecessary headers!"
           else
-            echo "No actionable includes found in this chunk." >> $GITHUB_STEP_SUMMARY
+            echo "✅ IWYU OK!"
           fi
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
