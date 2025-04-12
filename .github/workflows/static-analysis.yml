@@ -5,6 +5,7 @@ on: [push, pull_request]
 jobs:
   Ubuntu:
     runs-on: ubuntu-22.04
+    timeout-minutes: 360  # Set the timeout to 6 hours (360 minutes).
     strategy:
       matrix:
         compiler: [gcc, clang]
@@ -30,29 +31,26 @@ jobs:
             libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2 \
             clang-14 llvm-14 libclang-14-dev llvm-14-dev \
             clang-tidy pkg-config
-
-#      - name: Install IWYU (Include-What-You-Use)
-#        if: matrix.compiler == 'clang'                
-#        run: |
-#          git clone --recursive https://github.com/include-what-you-use/include-what-you-use.git
-#          cd include-what-you-use
-#          git checkout clang_14
-#          mkdir build && cd build
-#          cmake .. -G Ninja \
-#            -DCMAKE_PREFIX_PATH="/usr/lib/llvm-14" \
-#            -DCMAKE_C_COMPILER=clang-14 \
-#            -DCMAKE_CXX_COMPILER=clang++-14
-#          ninja
-#          sudo ninja install
+      - name: Install IWYU (Include-What-You-Use)
+        if: matrix.compiler == 'clang'                
+        run: |
+          git clone --recursive https://github.com/include-what-you-use/include-what-you-use.git
+          cd include-what-you-use
+          git checkout clang_14
+          mkdir build && cd build
+          cmake .. -G Ninja \
+            -DCMAKE_PREFIX_PATH="/usr/lib/llvm-14" \
+            -DCMAKE_C_COMPILER=clang-14 \
+            -DCMAKE_CXX_COMPILER=clang++-14
+          ninja
+          sudo ninja install
           
-
-#          IWYU_DIR=$(include-what-you-use -print-resource-dir 2>/dev/null || true)
-#          CLANG_DIR=$(clang -print-resource-dir)
-#          if [ -n "$IWYU_DIR" ] && [ ! -e "$IWYU_DIR" ]; then
-#            sudo mkdir -p "$(dirname "$IWYU_DIR")"
-#            sudo ln -s "$CLANG_DIR" "$IWYU_DIR"
-#          fi
-
+          IWYU_DIR=$(include-what-you-use -print-resource-dir 2>/dev/null || true)
+          CLANG_DIR=$(clang -print-resource-dir)
+          if [ -n "$IWYU_DIR" ] && [ ! -e "$IWYU_DIR" ]; then
+            sudo mkdir -p "$(dirname "$IWYU_DIR")"
+            sudo ln -s "$CLANG_DIR" "$IWYU_DIR"
+          fi
       - name: Set up cache
         run: mkdir -p /home/runner/.ccache
 
@@ -63,7 +61,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.compiler }}-
             ${{ runner.os }}-
-
       - name: Build libtiff
         run: |
           if [ ! -f thirdparty/tiff-4.0.3/libtiff.a ]; then
@@ -71,7 +68,6 @@ jobs:
             CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
             make -j$(nproc)
           fi
-
       - name: Build
         run: |
           export CCACHE_DIR=/home/runner/.ccache
@@ -86,74 +82,36 @@ jobs:
             -DWITH_TRANSLATION=OFF \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           ninja
-
 #       - name: Run Static Analysis (GCC)
 #         if: matrix.compiler == 'gcc'
 #         run: |
 #           echo "Executing static code analysis with GCC..."
 #           INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | sed 's/^/-I/')
-#           QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-#           find toonz/sources -name "*.cpp" -exec ${{ matrix.cc }} -c -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES {} \;
+ #          QT_INCLUDES=$(pkg-config --cflags Qt5Core)
+   #        find toonz/sources -name "*.cpp" -exec ${{ matrix.cc }} -c -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES {} \;
 
 #      - name: Run Static Analysis (Clang-Tidy)
-#        if: matrix.compiler == 'clang'
-#        run: |
-#          echo "Executing static code analysis with clang-tidy..."
-#          QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-#          find toonz/sources -name "*.cpp" | \
-#          xargs -n 1 -P $(nproc) clang-tidy -p=toonz/build --extra-arg="$QT_INCLUDES" --quiet
+ #       if: matrix.compiler == 'clang'
+  #      run: |
+   #       echo "Executing static code analysis with clang-tidy..."
+    #      QT_INCLUDES=$(pkg-config --cflags Qt5Core)
+      #    find toonz/sources -name "*.cpp" | \
+     #     xargs -n 1 -P $(nproc) clang-tidy -p=toonz/build --extra-arg="$QT_INCLUDES" --quiet
 
-      - name: Run Static Analysis (Clang-Tidy)
+      - name: Run Include-What-You-Use (IWYU)
         if: matrix.compiler == 'clang'
         run: |
-          echo "Executing comprehensive static analysis with clang-tidy..."
-          QT_INCLUDES=$(pkg-config --cflags Qt5Core Qt5Gui Qt5Widgets)
-          
-          # Run clang-tidy with comprehensive checks
-          find toonz/sources -type f \( -name "*.cpp" -o -name "*.h" \) | \
-          xargs -n1 -P$(nproc) clang-tidy-14 \
-            -p=toonz/build \
-            --quiet \
-            --extra-arg="$QT_INCLUDES" \
-            --checks='
-              -*,
-              modernize-*,
-              -modernize-use-trailing-return-type,
-              hicpp-*,
-              readability-*,
-              performance-*,
-              clang-analyzer-*,
-              misc-include-cleaner,
-              misc-unused-using-decls,
-              misc-unused-alias-decls'
-          
-          # Special pass for header dependencies
-          echo "Running focused header dependency analysis..."
-          find toonz/sources -type f \( -name "*.h" \) | \
-          xargs -n1 -P$(nproc) clang-tidy-14 \
-            -p=toonz/build \
-            --quiet \
-            --extra-arg="$QT_INCLUDES" \
-            --checks='
-              -*,
-              misc-include-cleaner,
-              misc-unused-using-decls,
-              misc-unused-alias-decls,
-              readability-redundant-declaration'
-
-
-#      - name: Run Include-What-You-Use (IWYU)
-#        if: matrix.compiler == 'clang'
-#        run: |
-#          echo "Running IWYU on OpenToonz..."
+          echo "Running IWYU on OpenToonz..."
           
           # Run IWYU using the generated compile_commands.json
-#          cd toonz/build
+          cd toonz/build
           
-#          iwyu_tool.py -p . ../sources/toonz -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp | tee iwyu_report.txt
+          find ../sources \( -name "*.cpp" -o -name "*.c" -o -name "*.h" -o -name "*.hpp" \) | \
+          xargs -n 1 -P $(nproc) iwyu_tool.py -p . -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp
+    
          
-#          if grep -q "should remove" iwyu_report.txt; then
-#            echo "❌ IWYU found unnecessary headers!"
-#          else
-#            echo "✅ IWYU OK!"
-#          fi
+          if grep -q "should remove" iwyu_report.txt; then
+            echo "❌ IWYU found unnecessary headers!"
+          else
+            echo "✅ IWYU OK!"
+          fi
