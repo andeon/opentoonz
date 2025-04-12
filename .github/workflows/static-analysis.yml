@@ -109,7 +109,6 @@ jobs:
         with:
           name: toonz-build-dir
           path: toonz/build
-      - uses: actions/checkout@v4
 
       - name: Run IWYU for chunk ${{ matrix.chunk }}
         if: matrix.chunk
