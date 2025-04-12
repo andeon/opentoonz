@@ -1,11 +1,11 @@
-name: Linux Code Analysis
+name: Enhanced OpenToonz Code Analysis
 
 on: [push, pull_request]
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 360  # 6 hours
+    timeout-minutes: 360
     strategy:
       matrix:
         compiler: [gcc, clang]
@@ -19,47 +19,54 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install libraries
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake pkg-config ninja-build ccache \
-            libboost-all-dev qtbase5-dev qt5-qmake qtscript5-dev qttools5-dev \
-            qttools5-dev-tools qtmultimedia5-dev qtwayland5 libqt5svg5-dev \
-            libqt5opengl5-dev libqt5multimedia5-plugins libqt5serialport5-dev \
-            libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev libpng-dev \
-            libjpeg-dev libglew-dev freeglut3-dev libfreetype6-dev libjson-c-dev \
-            libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2 \
+          sudo apt-get install -y \
+            build-essential cmake pkg-config ninja-build ccache \
+            libboost-all-dev qtbase5-dev qt5-qmake qtscript5-dev \
+            qttools5-dev qttools5-dev-tools qtmultimedia5-dev \
+            qtwayland5 libqt5svg5-dev libqt5opengl5-dev \
+            libqt5multimedia5-plugins libqt5serialport5-dev \
+            libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev \
+            libpng-dev libjpeg-dev libglew-dev freeglut3-dev \
+            libfreetype6-dev libjson-c-dev libmypaint-dev \
+            libopencv-dev libturbojpeg-dev libomp-dev libfuse2 \
             clang-14 llvm-14 libclang-14-dev llvm-14-dev \
-            clang-tidy pkg-config
+            clang-tidy-14 parallel pkg-config
 
       - name: Install IWYU (Include-What-You-Use)
         if: matrix.compiler == 'clang'
         run: |
-          git clone --recursive https://github.com/include-what-you-use/include-what-you-use.git
-          cd include-what-you-use
-          git checkout clang_14
-          mkdir build && cd build
-          cmake .. -G Ninja \
-            -DCMAKE_PREFIX_PATH="/usr/lib/llvm-14" \
-            -DCMAKE_C_COMPILER=clang-14 \
-            -DCMAKE_CXX_COMPILER=clang++-14
-          ninja
-          sudo ninja install
-          
-          IWYU_DIR=$(include-what-you-use -print-resource-dir 2>/dev/null || true)
-          CLANG_DIR=$(clang -print-resource-dir)
-          if [ -n "$IWYU_DIR" ] && [ ! -e "$IWYU_DIR" ]; then
-            sudo mkdir -p "$(dirname "$IWYU_DIR")"
-            sudo ln -s "$CLANG_DIR" "$IWYU_DIR"
+          if ! command -v include-what-you-use >/dev/null 2>&1; then
+            git clone --depth 1 --branch clang_14 \
+              https://github.com/include-what-you-use/include-what-you-use.git
+            cd include-what-you-use
+            mkdir build && cd build
+            cmake .. -G Ninja \
+              -DCMAKE_PREFIX_PATH="/usr/lib/llvm-14" \
+              -DCMAKE_C_COMPILER=clang-14 \
+              -DCMAKE_CXX_COMPILER=clang++-14
+            ninja
+            sudo ninja install
+            cd ../..
           fi
 
-      - name: Set up cache
-        run: mkdir -p /home/runner/.ccache
+          sudo mkdir -p /usr/local/share/include-what-you-use
+          sudo wget -q -O /usr/local/share/include-what-you-use/qt5_11.imp \
+            https://raw.githubusercontent.com/include-what-you-use/include-what-you-use/master/qt5_11.imp
+
+      - name: Set up build cache
+        run: |
+          mkdir -p /home/runner/.ccache
+          mkdir -p /tmp/iwyu_cache
 
       - uses: actions/cache@v4
         with:
-          path: /home/runner/.ccache
-          key: ${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
+          path: |
+            /home/runner/.ccache
+            /tmp/iwyu_cache
+          key: ${{ runner.os }}-${{ matrix.compiler }}-${{ hashFiles('**/CMakeLists.txt') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.compiler }}-
             ${{ runner.os }}-
@@ -72,29 +79,35 @@ jobs:
             make -j$(nproc)
           fi
 
-      - name: Build
+      - name: Configure and build
         run: |
           export CCACHE_DIR=/home/runner/.ccache
           export CC="ccache ${{ matrix.cc }}"
           export CXX="ccache ${{ matrix.cxx }}"
+          
           mkdir -p toonz/build
           cd toonz/build
+          
           cmake ../sources -G Ninja \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
             -DCMAKE_C_COMPILER=${{ matrix.cc }} \
             -DWITH_TRANSLATION=OFF \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          
           ninja
 
-      - name: Upload build directory as artifact
+      - name: Upload build artifacts
         if: matrix.compiler == 'clang'
         uses: actions/upload-artifact@v4
         with:
-          name: toonz-build-dir
-          path: toonz/build
+          name: build-artifacts-${{ matrix.compiler }}
+          path: |
+            toonz/build/compile_commands.json
+            toonz/build/CMakeCache.txt
+          retention-days: 3
 
-  iwyu-chunked:
+  analyze:
     needs: build
     runs-on: ubuntu-22.04
     timeout-minutes: 360
@@ -104,62 +117,74 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download build artifact
+      - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: toonz-build-dir
+          name: build-artifacts-clang
           path: toonz/build
 
-      - name: Run IWYU for chunk ${{ matrix.chunk }}
+      - name: Run parallel IWYU analysis
         run: |
-          echo "Running IWYU for chunk ${{ matrix.chunk }}..."
           cd toonz/build
-
-          if [ ! -f compile_commands.json ]; then
-            echo "❌ compile_commands.json not found!"
-            exit 1
-          fi
-
-          jq -r '.[].file' compile_commands.json | grep -E "\.(cpp|c)$" > source_files.txt
-
-          total_files=$(wc -l < source_files.txt)
-          echo "Found $total_files source files"
-
+          
+          # Generate optimized file list
+          jq -r '.[] | select(.file | test("\\.(cpp|c)$")) | .file' \
+            compile_commands.json > all_files.txt
+          
+          # Split into chunks
+          total_files=$(wc -l < all_files.txt)
           files_per_chunk=$(( (total_files + 3) / 4 ))
-          chunk=${{ matrix.chunk }}
-          start_line=$(( (chunk - 1) * files_per_chunk + 1 ))
-          end_line=$(( chunk * files_per_chunk ))
+          start_line=$(( (${{ matrix.chunk }} - 1) * files_per_chunk + 1 ))
+          end_line=$(( ${{ matrix.chunk }} * files_per_chunk ))
+          
+          sed -n "${start_line},${end_line}p" all_files.txt > chunk_files.txt
+          
+          # Process with parallel execution
+          parallel --joblog parallel.log --progress \
+            --halt now,fail=1 -j$(nproc) \
+            'iwyu_tool.py -p . {} -- -Xiwyu \
+            $(grep -q "Q" <<< {} && echo "--mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp") \
+            > iwyu_report_{#}.txt 2>&1' :::: chunk_files.txt
+          
+          # Combine results
+          cat iwyu_report_*.txt > combined_report.txt
+          grep -E "should (add|remove)" combined_report.txt | sort | uniq > actionable_items.txt
+          
+          # Count issues
+          add_count=$(grep -c "should add" combined_report.txt || true)
+          remove_count=$(grep -c "should remove" combined_report.txt || true)
+          echo "add_issues=$add_count" >> $GITHUB_OUTPUT
+          echo "remove_issues=$remove_count" >> $GITHUB_OUTPUT
 
-          echo "Processing lines $start_line to $end_line"
-          sed -n "${start_line},${end_line}p" source_files.txt > chunk_files.txt
+      - name: Upload analysis results
+        uses: actions/upload-artifact@v4
+        with:
+          name: analysis-chunk-${{ matrix.chunk }}
+          path: |
+            toonz/build/combined_report.txt
+            toonz/build/actionable_items.txt
+            toonz/build/parallel.log
+          retention-days: 7
 
-          chunk_count=$(wc -l < chunk_files.txt)
-          echo "Processing $chunk_count files in chunk $chunk"
-          cat chunk_files.txt
+      - name: Generate summary
+        run: |
+          cd toonz/build
+          echo "### Chunk ${{ matrix.chunk }} Analysis Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Files Processed:** $(wc -l < chunk_files.txt)" >> $GITHUB_STEP_SUMMARY
+          echo "**Includes to add:** ${{ steps.analyze.outputs.add_issues }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Includes to remove:** ${{ steps.analyze.outputs.remove_issues }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Sample Issues:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          head -n 10 actionable_items.txt >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
-          if [ "$chunk" -le 2 ]; then
-            echo "Running IWYU for Qt files (with mapping)..."
-            grep '/sources/.*Q.*\.cpp' chunk_files.txt > qt_files.txt
-            cat qt_files.txt
-            cat qt_files.txt | xargs -r -n 1 \
-              iwyu_tool.py -p . "{}" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
-              2>&1 | tee iwyu_report_qt.txt
-          else
-            echo "Running IWYU for non-Qt files (no mapping)..."
-            grep -v '/sources/.*Q.*\.cpp' chunk_files.txt > non_qt_files.txt
-            cat non_qt_files.txt
-            cat non_qt_files.txt | xargs -r -n 1 \
-              iwyu_tool.py -p . "{}" -- -Xiwyu \
-              2>&1 | tee iwyu_report_non_qt.txt
-          fi
-
-          # Certifique-se de que os arquivos de relatório contenham a saída do IWYU
-          if [ -f iwyu_report_qt.txt ]; then
-            echo "✅ IWYU OK for Qt files!"
-            cat iwyu_report_qt.txt
-          fi
-          if [ -f iwyu_report_non_qt.txt ]; then
-            echo "✅ IWYU OK for non-Qt files!"
-            cat iwyu_report_non_qt.txt
-          fi
-
+  report:
+    needs: analyze
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Aggregate results
+        run: |
+          echo "### Complete IWYU Analysis Summary" >> $GITHUB_STEP_SUMMARY
+          echo "All chunks processed successfully." >> $GITHUB_STEP_SUMMARY
+          echo "Download artifacts for full reports." >> $GITHUB_STEP_SUMMARY
