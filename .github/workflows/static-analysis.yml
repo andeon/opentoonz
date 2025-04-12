@@ -31,6 +31,7 @@ jobs:
             libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2 \
             clang-14 llvm-14 libclang-14-dev llvm-14-dev \
             clang-tidy pkg-config
+
       - name: Install IWYU (Include-What-You-Use)
         if: matrix.compiler == 'clang'                
         run: |
@@ -51,6 +52,7 @@ jobs:
             sudo mkdir -p "$(dirname "$IWYU_DIR")"
             sudo ln -s "$CLANG_DIR" "$IWYU_DIR"
           fi
+
       - name: Set up cache
         run: mkdir -p /home/runner/.ccache
 
@@ -61,6 +63,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.compiler }}-
             ${{ runner.os }}-
+
       - name: Build libtiff
         run: |
           if [ ! -f thirdparty/tiff-4.0.3/libtiff.a ]; then
@@ -68,6 +71,7 @@ jobs:
             CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
             make -j$(nproc)
           fi
+
       - name: Build
         run: |
           export CCACHE_DIR=/home/runner/.ccache
@@ -96,25 +100,40 @@ jobs:
    #       echo "Executing static code analysis with clang-tidy..."
     #      QT_INCLUDES=$(pkg-config --cflags Qt5Core)
       #    find toonz/sources -name "*.cpp" | \
-     #     xargs -n 1 -P $(nproc) clang-tidy -p=toonz/build --extra-arg="$QT_INCLUDES" --quiet
+     #     xargs -n 1 -P $(nproc) clang-tidy -p=toonz/build --extra-arg="$QT_INCLUDES" --quiet		  
 
       - name: Run Include-What-You-Use (IWYU)
         if: matrix.compiler == 'clang'
         run: |
-          echo "Running IWYU on OpenToonz..."
-          
-          # Run IWYU using the generated compile_commands.json
+          echo "Running IWYU in chunks: Qt and Non-Qt..."
+
           cd toonz/build
-          
-          jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/.*\.(cpp|c)$" > source_files.txt
-          # Roda IWYU em paralelo, um arquivo por vez (ajustável)
-          cat source_files.txt | xargs -n 1 -P $(nproc) -I {} \
+
+          # 1. Lista de arquivos fonte do projeto
+          jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/.*\.(cpp|c)$" > all_sources.txt
+
+          # 2. Separa arquivos que usam Qt
+          grep -rlE '#include\s+<Q[^>]+>' ../sources > qt_files.txt
+
+          # 3. Calcula arquivos sem Qt
+          grep -vxFf qt_files.txt all_sources.txt > non_qt_files.txt
+
+          echo "🧩 Rodando IWYU nos arquivos com Qt..."
+          cat qt_files.txt | xargs -n 1 -P $(nproc) -I {} \
             iwyu_tool.py -p . "{}" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
-            2>/dev/null | tee iwyu_report.txt
-    
-         
-          if grep -q "should remove" iwyu_report.txt; then
-            echo "❌ IWYU found unnecessary headers!"
+            2>/dev/null | tee qt_iwyu_report.txt
+
+          echo "🧩 Rodando IWYU nos arquivos sem Qt..."
+          cat non_qt_files.txt | xargs -n 1 -P $(nproc) -I {} \
+            iwyu_tool.py -p . "{}" \
+            2>/dev/null | tee non_qt_iwyu_report.txt
+
+          echo "📊 Análise final:"
+          cat qt_iwyu_report.txt non_qt_iwyu_report.txt > full_iwyu_report.txt
+
+          if grep -q "should remove" full_iwyu_report.txt; then
+            echo "❌ IWYU encontrou headers desnecessários."
+            exit 1
           else
             echo "✅ IWYU OK!"
           fi
