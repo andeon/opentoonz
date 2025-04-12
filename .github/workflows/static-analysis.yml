@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 360
+    timeout-minutes: 360  # 6 hours
     strategy:
       matrix:
         compiler: [gcc, clang]
@@ -19,22 +19,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      - name: Install libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential cmake pkg-config ninja-build ccache \
-            libboost-all-dev qtbase5-dev qt5-qmake qtscript5-dev \
-            qttools5-dev qttools5-dev-tools qtmultimedia5-dev \
-            qtwayland5 libqt5svg5-dev libqt5opengl5-dev \
-            libqt5multimedia5-plugins libqt5serialport5-dev \
-            libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev \
-            libpng-dev libjpeg-dev libglew-dev freeglut3-dev \
-            libfreetype6-dev libjson-c-dev libmypaint-dev \
-            libopencv-dev libturbojpeg-dev libomp-dev libfuse2 \
+          sudo apt-get install -y build-essential cmake pkg-config ninja-build ccache \
+            libboost-all-dev qtbase5-dev qt5-qmake qtscript5-dev qttools5-dev \
+            qttools5-dev-tools qtmultimedia5-dev qtwayland5 libqt5svg5-dev \
+            libqt5opengl5-dev libqt5multimedia5-plugins libqt5serialport5-dev \
+            libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev libpng-dev \
+            libjpeg-dev libglew-dev freeglut3-dev libfreetype6-dev libjson-c-dev \
+            libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2 \
             clang-14 llvm-14 libclang-14-dev llvm-14-dev \
-            clang-tidy-14 parallel pkg-config
-
+            clang-tidy pkg-config
       - name: Install IWYU (Include-What-You-Use)
         if: matrix.compiler == 'clang'
         run: |
@@ -55,22 +51,16 @@ jobs:
             sudo mkdir -p "$(dirname "$IWYU_DIR")"
             sudo ln -s "$CLANG_DIR" "$IWYU_DIR"
           fi
-          
-      - name: Set up build cache
-        run: |
-          mkdir -p /home/runner/.ccache
-          mkdir -p /tmp/iwyu_cache
+      - name: Set up cache
+        run: mkdir -p /home/runner/.ccache
 
       - uses: actions/cache@v4
         with:
-          path: |
-            /home/runner/.ccache
-            /tmp/iwyu_cache
-          key: ${{ runner.os }}-${{ matrix.compiler }}-${{ hashFiles('**/CMakeLists.txt') }}
+          path: /home/runner/.ccache
+          key: ${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.compiler }}-
             ${{ runner.os }}-
-
       - name: Build libtiff
         run: |
           if [ ! -f thirdparty/tiff-4.0.3/libtiff.a ]; then
@@ -78,34 +68,26 @@ jobs:
             CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
             make -j$(nproc)
           fi
-
-      - name: Configure and build
+      - name: Build
         run: |
           export CCACHE_DIR=/home/runner/.ccache
           export CC="ccache ${{ matrix.cc }}"
           export CXX="ccache ${{ matrix.cxx }}"
-          
           mkdir -p toonz/build
           cd toonz/build
-          
           cmake ../sources -G Ninja \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
             -DCMAKE_C_COMPILER=${{ matrix.cc }} \
             -DWITH_TRANSLATION=OFF \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-          
           ninja
-
-      - name: Upload build artifacts
+      - name: Upload build directory as artifact
         if: matrix.compiler == 'clang'
         uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts-${{ matrix.compiler }}
-          path: |
-            toonz/build/compile_commands.json
-            toonz/build/CMakeCache.txt
-          retention-days: 3
+          name: toonz-build-dir
+          path: toonz/build
 
   analyze:
     needs: build
