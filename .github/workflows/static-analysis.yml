@@ -3,9 +3,9 @@ name: Linux Code Analysis
 on: [push, pull_request]
 
 jobs:
-  Ubuntu:
+  build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 360  # Set the timeout to 6 hours (360 minutes).
+    timeout-minutes: 360  # 6 hours
     strategy:
       matrix:
         compiler: [gcc, clang]
@@ -31,8 +31,9 @@ jobs:
             libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2 \
             clang-14 llvm-14 libclang-14-dev llvm-14-dev \
             clang-tidy pkg-config
+
       - name: Install IWYU (Include-What-You-Use)
-        if: matrix.compiler == 'clang'                
+        if: matrix.compiler == 'clang'
         run: |
           git clone --recursive https://github.com/include-what-you-use/include-what-you-use.git
           cd include-what-you-use
@@ -51,6 +52,7 @@ jobs:
             sudo mkdir -p "$(dirname "$IWYU_DIR")"
             sudo ln -s "$CLANG_DIR" "$IWYU_DIR"
           fi
+
       - name: Set up cache
         run: mkdir -p /home/runner/.ccache
 
@@ -61,6 +63,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.compiler }}-
             ${{ runner.os }}-
+
       - name: Build libtiff
         run: |
           if [ ! -f thirdparty/tiff-4.0.3/libtiff.a ]; then
@@ -68,6 +71,7 @@ jobs:
             CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
             make -j$(nproc)
           fi
+
       - name: Build
         run: |
           export CCACHE_DIR=/home/runner/.ccache
@@ -82,40 +86,65 @@ jobs:
             -DWITH_TRANSLATION=OFF \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           ninja
-#       - name: Run Static Analysis (GCC)
-#         if: matrix.compiler == 'gcc'
-#         run: |
-#           echo "Executing static code analysis with GCC..."
-#           INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | sed 's/^/-I/')
- #          QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-   #        find toonz/sources -name "*.cpp" -exec ${{ matrix.cc }} -c -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES {} \;
 
-#      - name: Run Static Analysis (Clang-Tidy)
- #       if: matrix.compiler == 'clang'
-  #      run: |
-   #       echo "Executing static code analysis with clang-tidy..."
-    #      QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-      #    find toonz/sources -name "*.cpp" | \
-     #     xargs -n 1 -P $(nproc) clang-tidy -p=toonz/build --extra-arg="$QT_INCLUDES" --quiet
+  iwyu-chunked:
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360  # 6 hours
+    strategy:
+      matrix:
+        chunk: [1, 2, 3, 4]  # Divide os arquivos em 4 chunks
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Run Include-What-You-Use (IWYU)
-        if: matrix.compiler == 'clang'
+      - name: Run IWYU for chunk ${{ matrix.chunk }}
+        if: matrix.chunk
         run: |
-          echo "Running IWYU on OpenToonz..."
+          echo "Running IWYU for chunk ${{ matrix.chunk }}..."
           
           # Run IWYU using the generated compile_commands.json
           cd toonz/build
           
+          # Filtra os arquivos com base no chunk
           jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/.*\.(cpp|c)$" > source_files.txt
 
-          # Roda IWYU em paralelo, um arquivo por vez (ajustável)
-          cat source_files.txt | xargs -n 1 -P $(nproc) -I {} \
-            iwyu_tool.py -p . "{}" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
-            2>/dev/null | tee iwyu_report.txt
-    
-         
-          if grep -q "should remove" iwyu_report.txt; then
-            echo "❌ IWYU found unnecessary headers!"
+          # Divide os arquivos em chunks
+          total_files=$(wc -l < source_files.txt)
+          files_per_chunk=$((total_files / 4))  # Divide em 4 partes
+
+          # Define o intervalo de arquivos a serem processados
+          start_line=$(( (matrix.chunk - 1) * files_per_chunk + 1 ))
+          end_line=$(( matrix.chunk * files_per_chunk ))
+
+          # Pega o intervalo de arquivos para este chunk
+          sed -n "${start_line},${end_line}p" source_files.txt > chunk_files.txt
+
+          # Condicional: Roda IWYU com mapeamento para Qt apenas para os chunks 1 e 2
+          if [[ "${matrix.chunk}" -le 2 ]]; then
+            echo "Running IWYU for Qt files (with mapping)..."
+            # Filtra os arquivos que são Qt (contêm 'Q')
+            grep '/sources/.*Q.*\.cpp' chunk_files.txt | xargs -n 1 -P $(nproc) -I {} \
+              iwyu_tool.py -p toonz/build "{}" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
+              2>/dev/null | tee iwyu_report_qt.txt
           else
-            echo "✅ IWYU OK!"
+            echo "Running IWYU for non-Qt files (no mapping)..."
+            # Filtra os arquivos que **não** são Qt
+            grep -v '/sources/.*Q.*\.cpp' chunk_files.txt | xargs -n 1 -P $(nproc) -I {} \
+              iwyu_tool.py -p toonz/build "{}" -- -Xiwyu \
+              2>/dev/null | tee iwyu_report_non_qt.txt
+          fi
+
+          # Verificação do IWYU
+          if [[ "${matrix.chunk}" -le 2 ]]; then
+            if grep -q "should remove" iwyu_report_qt.txt; then
+              echo "❌ IWYU found unnecessary headers in Qt files!"
+            else
+              echo "✅ IWYU OK for Qt files!"
+            fi
+          else
+            if grep -q "should remove" iwyu_report_non_qt.txt; then
+              echo "❌ IWYU found unnecessary headers in non-Qt files!"
+            else
+              echo "✅ IWYU OK for non-Qt files!"
+            fi
           fi
