@@ -139,12 +139,16 @@ jobs:
           
           sed -n "${start_line},${end_line}p" all_files.txt > chunk_files.txt
           
-          # Process with parallel execution
-          parallel --joblog parallel.log --progress \
-            --halt now,fail=1 -j$(nproc) \
-            'iwyu_tool.py -p . {} -- -Xiwyu \
-            $(grep -q "Q" <<< {} && echo "--mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp") \
-            > iwyu_report_{#}.txt 2>&1' :::: chunk_files.txt
+          # Process files sequentially (replaced parallel with while loop)
+          while IFS= read -r file; do
+            if [[ "$file" == *"Q"* ]]; then
+              iwyu_tool.py -p . "$file" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
+                > "iwyu_report_$(basename "$file").txt" 2>&1 || true
+            else
+              iwyu_tool.py -p . "$file" -- -Xiwyu \
+                > "iwyu_report_$(basename "$file").txt" 2>&1 || true
+            fi
+          done < chunk_files.txt
           
           # Combine results
           cat iwyu_report_*.txt > combined_report.txt
@@ -163,7 +167,7 @@ jobs:
           path: |
             toonz/build/combined_report.txt
             toonz/build/actionable_items.txt
-            toonz/build/parallel.log
+            toonz/build/iwyu_report_*.txt
           retention-days: 7
 
       - name: Generate summary
