@@ -87,6 +87,13 @@ jobs:
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           ninja
 
+      - name: Upload build directory as artifact
+        if: matrix.compiler == 'clang'
+        uses: actions/upload-artifact@v4
+        with:
+          name: toonz-build-dir
+          path: toonz/build
+
   iwyu-chunked:
     needs: build
     runs-on: ubuntu-22.04
@@ -95,6 +102,13 @@ jobs:
       matrix:
         chunk: [1, 2, 3, 4]  # Divide os arquivos em 4 chunks
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: toonz-build-dir
+          path: toonz/build
       - uses: actions/checkout@v4
 
       - name: Run IWYU for chunk ${{ matrix.chunk }}
