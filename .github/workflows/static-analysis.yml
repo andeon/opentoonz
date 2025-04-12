@@ -111,7 +111,6 @@ jobs:
           path: toonz/build
 
       - name: Run IWYU for chunk ${{ matrix.chunk }}
-        if: matrix.chunk
         run: |
           echo "Running IWYU for chunk ${{ matrix.chunk }}..."
           
@@ -126,14 +125,14 @@ jobs:
           files_per_chunk=$((total_files / 4))  # Divide em 4 partes
 
           # Define o intervalo de arquivos a serem processados
-          start_line=$(( ({{ matrix.chunk }} - 1) * files_per_chunk + 1 ))
-          end_line=$(( {{ matrix.chunk }} * files_per_chunk ))        
+          start_line=$(( (${{ matrix.chunk }} - 1) * files_per_chunk + 1 ))
+          end_line=$(( ${{ matrix.chunk }} * files_per_chunk ))        
 
           # Pega o intervalo de arquivos para este chunk
           sed -n "${start_line},${end_line}p" source_files.txt > chunk_files.txt
 
           # Condicional: Roda IWYU com mapeamento para Qt apenas para os chunks 1 e 2
-          if [[ "${matrix.chunk}" -le 2 ]]; then
+          if [[ "${{ matrix.chunk }}" -le 2 ]]; then
             echo "Running IWYU for Qt files (with mapping)..."
             # Filtra os arquivos que são Qt (contêm 'Q')
             grep '/sources/.*Q.*\.cpp' chunk_files.txt | xargs -n 1 -P $(nproc) -I {} \
@@ -148,7 +147,7 @@ jobs:
           fi
 
           # Verificação do IWYU
-          if [[ "${matrix.chunk}" -le 2 ]]; then
+          if [[ "${{ matrix.chunk }}" -le 2 ]]; then
             if grep -q "should remove" iwyu_report_qt.txt; then
               echo "❌ IWYU found unnecessary headers in Qt files!"
             else
