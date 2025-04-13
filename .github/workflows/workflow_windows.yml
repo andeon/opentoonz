@@ -76,45 +76,6 @@ jobs:
           msbuild /p:Configuration=RelWithDebInfo /m /verbosity:minimal ALL_BUILD.vcxproj
         shell: cmd
 
-      - name: Runtime Library Validation
-        shell: cmd
-        run: |
-          cd toonz\build
-          
-          echo "===================================="
-          echo "1/2 - VERIFICAÇÃO NOS ARQUIVOS .vcxproj"
-          echo "===================================="
-          set PROJECTS=tnzcore.vcxproj toonzlib.vcxproj image.vcxproj toonzqt.vcxproj
-          for %%p in (%PROJECTS%) do (
-            echo.
-            echo [Verificando %%p]
-            type "%%p" | findstr /C:"RuntimeLibrary" || echo "> Configuração não encontrada em %%p"
-          )
-
-          echo.
-          echo "===================================="
-          echo "2/2 - VERIFICAÇÃO DO EXECUTÁVEL FINAL"
-          echo "===================================="
-          if exist RelWithDebInfo\Opentoonz.exe (
-            echo "Dependências do Runtime:"
-            dumpbin /DEPENDENTS RelWithDebInfo\Opentoonz.exe | findstr /I "MSVCR"
-            
-            echo.
-            echo "Flags de compilação:"
-            dumpbin /HEADERS RelWithDebInfo\Opentoonz.exe | findstr /C:"Debug" /C:"Release" /C:"Runtime"
-          ) else (
-            echo "AVISO: Opentoonz.exe não encontrado em RelWithDebInfo/"
-          )
-          
-          echo.
-          echo "===================================="
-          echo "RESUMO DA CONFIGURAÇÃO DE RUNTIME"
-          echo "===================================="
-          echo "Se vir 'msvcr140.dll' acima: OpenToonz está usando /MD"
-          echo "Se não encontrar DLLs de runtime: está usando /MT"
-          echo "Se houver conflitos: verifique projetos listados acima"
-        continue-on-error: true
-
       - name: Create Package
         run: |
           @echo on
