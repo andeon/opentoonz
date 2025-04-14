@@ -33,7 +33,26 @@ jobs:
           key: ${{ runner.os }}-${{ github.sha }}
           restore-keys: ${{ runner.os }}-
 
-      - name: Install OpenCV and Boost
+      - name: Cache OpenCV and Boost
+        uses: actions/cache@v4
+        with:
+          path: |
+            C:\tools\opencv
+            C:\local\boost_1_74_0
+          key: ${{ runner.os }}-opencv-boost-v1
+          restore-keys: |
+            ${{ runner.os }}-opencv-boost-
+
+      - name: Check if OpenCV and Boost are already installed
+        id: check_opencv_boost
+        run: |
+          IF EXIST "C:\tools\opencv\build" (echo "OpenCV found.") ELSE (exit 1)
+          IF EXIST "C:\local\boost_1_74_0" (echo "Boost found.") ELSE (exit 1)
+        shell: cmd
+        continue-on-error: true
+
+      - name: Install OpenCV and Boost if missing
+        if: steps.check_opencv_boost.outcome == 'failure'
         run: |
           @echo on
           choco install opencv --version=4.10.0 -y
