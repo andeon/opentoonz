@@ -44,7 +44,7 @@ jobs:
           ${{ runner.os }}-${{ matrix.compiler }}-
           ${{ runner.os }}-
         options: |
-          compression-level=3
+          compression-level=3 #re-test
 
     - name: Build libtiff
       run: |
