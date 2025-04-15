@@ -43,6 +43,8 @@ jobs:
         restore-keys: | 
           ${{ runner.os }}-${{ matrix.compiler }}-
           ${{ runner.os }}-
+        options: |
+          compression-level=3
 
     - name: Build libtiff
       run: |
