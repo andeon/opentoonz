@@ -43,8 +43,8 @@ jobs:
         restore-keys: | 
           ${{ runner.os }}-${{ matrix.compiler }}-
           ${{ runner.os }}-
-        options: |
-          compression-level=3 #re-test
+      env:
+          ACTIONS_CACHE_COMPRESSION_LEVEL: 3  # Activate zstd indirectly
 
     - name: Build libtiff
       run: |
