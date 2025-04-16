@@ -8,7 +8,7 @@ on:
       - '**/*'  # Include all files in the repository
       - '!**/.github/workflows/workflow_linux.yml'  # Exclude Linux workflow file
       - '!**/.github/workflows/workflow_macos.yml'  # Exclude macOS workflow file
-  pull_request:  # Here no specific branches are listed to allow all pull requests to generate a workflow run
+  pull_request:
     paths:
       - '**/*'  # Include all files in the repository
       - '!**/.github/workflows/workflow_linux.yml'  # Exclude Linux workflow file
@@ -28,6 +28,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           lfs: true
+
       - name: Install and Configure ccache
         run: |
           @echo on
@@ -43,7 +44,27 @@ jobs:
           key: ${{ runner.os }}-${{ github.sha }}
           restore-keys: ${{ runner.os }}-
 
-      - name: Install OpenCV and Boost
+      # New caching steps for dependencies
+      - name: Cache Boost
+        id: cache-boost
+        uses: actions/cache@v4
+        with:
+          path: C:/local/boost_1_87_0
+          key: boost-${{ runner.os }}-1.87.0
+          restore-keys: |
+            boost-${{ runner.os }}-
+
+      - name: Cache OpenCV
+        id: cache-opencv
+        uses: actions/cache@v4
+        with:
+          path: C:/tools/opencv
+          key: opencv-${{ runner.os }}-4.11.0
+          restore-keys: |
+            opencv-${{ runner.os }}-
+
+      - name: Install OpenCV and Boost (if cache missed)
+        if: steps.cache-boost.outputs.cache-hit != 'true' || steps.cache-opencv.outputs.cache-hit != 'true'
         run: |
           @echo on
           choco install opencv --version=4.11.0 -y
