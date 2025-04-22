@@ -110,10 +110,10 @@ jobs:
           cd toonz/build
 
           # 1. Lista de arquivos fonte do projeto
-          jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/.*\.(cpp|c)$" > all_sources.txt
+          jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/toonzfarm.*\.(cpp|c)$" > all_sources.txt
 
           # 2. Separa arquivos que usam Qt
-          grep -rlE '#include\s+<Q[^>]+>' ../sources > qt_files.txt
+          grep -rlE '#include\s+<Q[^>]+>' ../sources/toonzfarm > qt_files.txt
 
           # 3. Calcula arquivos sem Qt
           grep -vxFf qt_files.txt all_sources.txt > non_qt_files.txt
