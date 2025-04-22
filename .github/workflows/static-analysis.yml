@@ -105,12 +105,12 @@ jobs:
       - name: Run Include-What-You-Use (IWYU)
         if: matrix.compiler == 'clang'
         run: |
-          echo "📦 Executando IWYU em todos os arquivos do toonzfarm com paralelismo..."
+          echo "📦 Executando IWYU em todos os arquivos do tnztools com paralelismo..."
 
           cd toonz/build
 
-          # Gera lista de arquivos fonte relevantes (ex: toonzfarm/*.cpp)
-          jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/toonzfarm.*\.(cpp|c)$" > all_sources.txt
+          # Gera lista de arquivos fonte relevantes (ex: tnztools/*.cpp)
+          jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/tnztools.*\.(cpp|c)$" > all_sources.txt
 
           # Executa IWYU com paralelismo
           cat all_sources.txt | xargs -n 1 -P $(nproc) -I {} \
