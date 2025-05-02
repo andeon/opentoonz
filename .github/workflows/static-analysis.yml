@@ -110,7 +110,7 @@ jobs:
           cd toonz/build
 
           # Gera lista de arquivos fonte relevantes (ex: tnztools/*.cpp)
-          jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/tnztools.*\.(cpp|c)$" > all_sources.txt
+          jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/toonzlib.*\.(cpp|c)$" > all_sources.txt
 
           # Executa IWYU com paralelismo
           cat all_sources.txt | xargs -n 1 -P $(nproc) -I {} \
