@@ -28,8 +28,9 @@
 #include <QPainter>
 #include <QRadioButton>
 #include <QThread>
-#include <QDesktopWidget>
 #include <QCheckBox>
+#include <QScreen>
+#include <QGuiApplication>
 
 #include <algorithm>
 
