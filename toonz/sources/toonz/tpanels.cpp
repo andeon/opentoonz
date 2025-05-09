@@ -29,9 +29,7 @@
 
 #include "expressionreferencemanager.h"
 
-#if defined(x64)
 #include "stopmotioncontroller.h"
-#endif
 
 #include "tasksviewer.h"
 #include "batchserversviewer.h"
@@ -101,7 +99,6 @@
 
 // Qt includes
 #include <QAction>
-#include <QScreen>
 
 //=============================================================================
 // XsheetViewer
@@ -242,7 +239,7 @@ void SchematicScenePanel::onDeleteFxs(const FxSelection *selection) {
   TApp *app = TApp::instance();
   TFxCommand::deleteSelection(
       std::list<TFxP>(selection->getFxs().begin(), selection->getFxs().end()),
-      std::list<TFxCommand::Link>(selection->getLinks().begin(), selection->getLinks().end()),
+      std::list<Link>(selection->getLinks().begin(), selection->getLinks().end()),
       std::list<int>(selection->getColumnIndexes().begin(), selection->getColumnIndexes().end()),
       app->getCurrentXsheet(), app->getCurrentFx());
 }
@@ -257,9 +254,9 @@ void SchematicScenePanel::onDeleteStageObjects(
 
   TApp *app = TApp::instance();
   TStageObjectCmd::deleteSelection(
-      std::vector<TStageObjectId>(selection->getObjects().begin(), selection->getObjects().end()),
+      std::vector<TStageObjectId>(selection->getObjects().toVector().begin(), selection->getObjects().toVector().end()),
       std::list<QPair<TStageObjectId, TStageObjectId>>(selection->getLinks().begin(), selection->getLinks().end()),
-      std::list<TStageObjectId>(selection->getSplines().begin(), selection->getSplines().end()),
+      std::list<int>(selection->getSplines().begin(), selection->getSplines().end()),
       app->getCurrentXsheet(), app->getCurrentObject(), app->getCurrentFx());
 }
 
@@ -1573,7 +1570,7 @@ void FxSettingsPanel::restoreFloatingPanelState() {
 
   QRect geom = settings.value("geometry", saveGeometry()).toRect();
   // check if it can be visible in the current screen
-  if (!(geom & QApplication::desktop()->availableGeometry(this)).isEmpty())
+  if (!(geom & this->screen()->availableGeometry()).isEmpty())
     move(geom.topLeft());
 
   // FxSettings has no optional settings (SaveLoadQSettings) to load
