@@ -83,7 +83,6 @@
 #include "toonz/fxcommand.h"
 #include "toonz/tstageobjectcmd.h"
 
-
 #include "../../toonz/locatorpopup.h"
 
 // TnzBase includes
@@ -99,6 +98,7 @@
 
 // Qt includes
 #include <QAction>
+#include <QScreen>
 
 //=============================================================================
 // XsheetViewer

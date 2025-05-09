@@ -1517,7 +1517,7 @@ void CellArea::drawExtenderHandles(QPainter &p) {
                                    .translated(properPoint + smartTabPosOffset);
     p.setPen(Qt::black);
     p.setBrush(SmartTabColor);
-    p.drawRoundedRec(m_upperLevelExtenderRect, xyRadius.x(), xyRadius.y());
+    p.drawRoundedRect(m_upperLevelExtenderRect, xyRadius.x(), xyRadius.y());
     QColor color = (distance > 0 && ((selRow0 - offset) % distance) != 0)
                        ? m_viewer->getLightLineColor()
                        : m_viewer->getMarkerLineColor();
