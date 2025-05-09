@@ -241,10 +241,10 @@ void SchematicScenePanel::onDeleteFxs(const FxSelection *selection) {
 
   TApp *app = TApp::instance();
   TFxCommand::deleteSelection(
-    std::list<TFx*>(selection->getFxs().begin(), selection->getFxs().end()),
-    std::list<TFx*>(selection->getLinks().begin(), selection->getLinks().end()), 
-    std::list<int>(selection->getColumnIndexes().begin(), selection->getColumnIndexes().end()),
-    app->getCurrentXsheet(), app->getCurrentFx());
+      std::list<TFxP>(selection->getFxs().begin(), selection->getFxs().end()),
+      std::list<TFxCommand::Link>(selection->getLinks().begin(), selection->getLinks().end()),
+      std::list<int>(selection->getColumnIndexes().begin(), selection->getColumnIndexes().end()),
+      app->getCurrentXsheet(), app->getCurrentFx());
 }
 
 //-----------------------------------------------------------------------------
@@ -257,10 +257,10 @@ void SchematicScenePanel::onDeleteStageObjects(
 
   TApp *app = TApp::instance();
   TStageObjectCmd::deleteSelection(
-    std::vector<TStageObjectId>(selection->getObjects().begin(), selection->getObjects().end()),
-    std::list<TStageObjectId>(selection->getLinks().begin(), selection->getLinks().end()),
-    std::list<TStageObjectSpline*>(selection->getSplines().begin(), selection->getSplines().end()),
-    app->getCurrentXsheet(), app->getCurrentObject(), app->getCurrentFx());
+      std::vector<TStageObjectId>(selection->getObjects().begin(), selection->getObjects().end()),
+      std::list<QPair<TStageObjectId, TStageObjectId>>(selection->getLinks().begin(), selection->getLinks().end()),
+      std::list<TStageObjectId>(selection->getSplines().begin(), selection->getSplines().end()),
+      app->getCurrentXsheet(), app->getCurrentObject(), app->getCurrentFx());
 }
 
 //-----------------------------------------------------------------------------
