@@ -1235,7 +1235,7 @@ void PropertyMenuButton::onActionTriggered(QAction *action) {
 namespace {
 // calculate maximum field size (once) with 10 pixels margin
 int getMaximumWidthForSelectionToolField(QWidget *widget) {
-  static int fieldMaxWidth = widget->fontMetrics().width("-000.00 %") + 10;
+  static int fieldMaxWidth = widget->fontMetrics().horizontalAdvance("-000.00 %") + 10;
   return fieldMaxWidth;
 }
 }  // namespace
