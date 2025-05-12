@@ -1,4 +1,7 @@
 version: 1.7.1.{build}
+queue:
+  cancel:
+    in_progress: true
 skip_commits:
   files:
     - 'doc/**'        # Skip everything inside doc/ (recursive)
