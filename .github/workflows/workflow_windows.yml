@@ -3,7 +3,7 @@ name: Windows Build
 on:
   push:
     branches:
-      - master  # Specify branches where the workflow should run
+      - '*'  # Specify branches where the workflow should run
     paths:
       - '**/*'                   # Include all files in the repository
       - '!appveyor.yml'          # Ignore changes in AppVeyor
@@ -20,6 +20,10 @@ on:
       - '!**/.github/**'
       - '.github/workflows/workflow_windows.yml'
 
+concurrency:
+  group: windows-build-${{ github.ref }}  # Group by branch or PR
+  cancel-in-progress: true  # Cancel any in-progress workflow when a new one starts
+  
 jobs:
   Windows:
     runs-on: windows-2025
