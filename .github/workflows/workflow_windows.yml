@@ -65,11 +65,11 @@ jobs:
           move Qt5.15.2_wintab\5.15.2_wintab thirdparty\qt
         shell: cmd
 
-      - name: Install libraries to avoid LFS quota
+      - name: Install third-party prebuilt libs (LFS workaround)
         run: |
           @echo on
-          curl -fsSL -o thirdparty.zip https://github.com/andeon/opentoonz-thirdparty-libs/releases/download/v1.0.0/thirdparty.zip
-          7z x -y thirdparty.zip
+          curl -fsSL -o thirdparty-libs.zip https://github.com/andeon/opentoonz-thirdparty-libs/releases/download/prebuilt-libs-v1/thirdparty-libs.zip
+          7z x -y thirdparty-libs.zip
         shell: cmd        
 
       - name: Add msbuild to PATH
