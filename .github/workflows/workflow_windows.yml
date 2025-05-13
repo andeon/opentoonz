@@ -3,7 +3,7 @@ name: Windows Build
 on:
   push:
     branches:
-      - master  # Specify branches where the workflow should run
+      - '*'  # Specify branches where the workflow should run
     paths:
       - '**/*'                   # Include all files in the repository
       - '!appveyor.yml'          # Ignore changes in AppVeyor
@@ -31,9 +31,6 @@ jobs:
       OpenCV_DIR: C:\tools\opencv\build  # Path to OpenCV.
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: true
       - name: Install and Configure ccache
         run: |
           @echo on
