@@ -72,7 +72,7 @@ jobs:
       - name: Install Zlib
         run: |
           @echo on
-          curl -fsSL -o zlib-static-libs-md.zip https://github.com/andeon/zlib_custom/actions/runs/15010404609/artifacts/3119192915
+          curl -fsSL -o zlib-static-libs-md.zip https://github.com/andeon/zlib_custom/releases/download/v1.2.13/zlib-static-libs-md.zip
           7z x -y zlib-static-libs-md.zip -othirdparty\zlib-1.2.13\lib
         shell: cmd        
 
