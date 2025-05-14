@@ -3,7 +3,7 @@ name: Windows Build
 on:
   push:
     branches:
-      - '*'  # Specify branches where the workflow should run
+      - '*'  # Specify branches where the workflow should run now
   pull_request:  # Here no specific branches are listed to allow all pull requests to generate a workflow run
 #  workflow_dispatch:  # Só permite execução manual
 
