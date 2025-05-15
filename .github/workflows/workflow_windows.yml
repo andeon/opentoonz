@@ -74,16 +74,9 @@ jobs:
       - name: Install third-party prebuilt libs (LFS workaround)
         run: |
           @echo on
-          curl -fsSL -o thirdparty-libs.zip https://github.com/andeon/opentoonz-thirdparty-libs/releases/download/prebuilt-libs-v1/thirdparty-libs.zip
+          curl -fsSL -o thirdparty-libs.zip https://github.com/andeon/ot-thirdparty-libs/releases/download/v0-alpha/thirdparty-libs.zip
           7z x -y thirdparty-libs.zip
         shell: cmd         
-
-      - name: Install Zlib
-        run: |
-          @echo on
-          curl -fsSL -o zlib-static-libs-md.zip https://github.com/andeon/zlib_custom/releases/download/v1.2.13/zlib-static-libs-md.zip
-          7z x -y zlib-static-libs-md.zip -othirdparty\zlib-1.2.13\lib
-        shell: cmd        
 
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v2

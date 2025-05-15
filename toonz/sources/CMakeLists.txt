@@ -288,7 +288,7 @@ if(BUILD_ENV_MSVC)
     include_directories(
         SYSTEM
         ${SDKROOT}/glut/3.7.6/include
-        ${SDKROOT}/zlib-1.2.13
+        ${SDKROOT}/zlib-1.3.1
         #${SDKROOT}/LibJPEG/jpeg-9
         ${SDKROOT}/libjpeg-turbo/include
     )
@@ -344,22 +344,22 @@ if(BUILD_ENV_MSVC)
     set(GLUT_LIB ${SDKROOT}/glut/3.7.6/lib/glut${PLATFORM}.lib)
     set(GL_LIB opengl32.lib)
     set(Z_LIB
-        optimized ${SDKROOT}/zlib-1.2.13/lib/zlib-1.2.13_2019${PLATFORM2}.lib  # Hardcoded 2019
+        optimized ${SDKROOT}/zlib-1.3.1/lib/zlib.1.3.1_2022_64.lib  # Hardcoded 2019
         debug ${SDKROOT}/zlib-1.2.13/lib/zlib-1.2.13_2019${PLATFORM2}d.lib # Hardcoded 2019
     )
     #set(JPEG_LIB ${SDKROOT}/LibJPEG/jpeg-9/lib/LibJPEG-9_${MSVC_LIB_VERSION}${PLATFORM2}.lib)
     set(JPEG_LIB ${SDKROOT}/libjpeg-turbo/lib/jpeg-static_${MSVC_LIB_VERSION}${PLATFORM2}.lib)
     set(TURBOJPEG_LIB ${SDKROOT}/libjpeg-turbo/lib/turbojpeg-static_${MSVC_LIB_VERSION}${PLATFORM2}.lib)
-    set(TIFF_INCLUDE_DIR ${SDKROOT}/tiff-4.0.3/libtiff)
+    set(TIFF_INCLUDE_DIR ${SDKROOT}/tiff-4.7.0/libtiff)
     set(TIFF_LIB
-        optimized ${SDKROOT}/tiff-4.0.3/lib/LibTIFF-4.0.3_${MSVC_LIB_VERSION}${PLATFORM2}.lib
-        debug  ${SDKROOT}/tiff-4.0.3/lib/LibTIFF-4.0.3_${MSVC_LIB_VERSION}${PLATFORM2}d.lib
+        optimized ${SDKROOT}/tiff-4.7.0/lib/LibTIFF-4.7.0_2022_64.lib.lib
+        debug  ${SDKROOT}/tiff-4.7.0/lib/LibTIFF-4.0.3_${MSVC_LIB_VERSION}${PLATFORM2}d.lib
     )
     set(PNG_LIB
         optimized ${SDKROOT}/libpng-1.6.21/lib/libpng16_${MSVC_LIB_VERSION}${PLATFORM2}.lib
         debug  ${SDKROOT}/libpng-1.6.21/lib/libpng16_${MSVC_LIB_VERSION}${PLATFORM2}d.lib
     )
-    set(GLEW_LIB ${SDKROOT}/glew/glew-1.9.0/lib/glew${PLATFORM}.lib)
+    set(GLEW_LIB ${SDKROOT}/glew/glew-2.2.0/lib/glew64.lib)
     set(LZ4_LIB ${SDKROOT}/Lz4/Lz4_131/lz4_${PLATFORM}.lib)
     set(SUPERLU_LIB ${SDKROOT}/superlu/SuperLU_${MSVC_LIB_VERSION}_${PLATFORM}.lib)
     set(OPENBLAS_LIB ${SDKROOT}/openblas/libopenblas_${PLATFORM}.lib)
