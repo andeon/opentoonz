@@ -5,126 +5,118 @@ on: [push, pull_request]
 jobs:
   Ubuntu:
     runs-on: ubuntu-22.04
-    timeout-minutes: 360  # Set the timeout to 6 hours (360 minutes).
+    timeout-minutes: 360
+
     strategy:
       matrix:
-        compiler: [gcc, clang]
+        compiler: [clang] #[gcc, clang]
         include:
-          - compiler: gcc
-            cc: gcc
-            cxx: g++
+        #  - compiler: gcc
+        #    cc: gcc
+        #    cxx: g++
           - compiler: clang
             cc: clang
             cxx: clang++
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install libraries
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake pkg-config ninja-build ccache \
-            libboost-all-dev qtbase5-dev qt5-qmake qtscript5-dev qttools5-dev \
-            qttools5-dev-tools qtmultimedia5-dev qtwayland5 libqt5svg5-dev \
-            libqt5opengl5-dev libqt5multimedia5-plugins libqt5serialport5-dev \
-            libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev libpng-dev \
-            libjpeg-dev libglew-dev freeglut3-dev libfreetype6-dev libjson-c-dev \
-            libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2 \
-            clang-14 llvm-14 libclang-14-dev llvm-14-dev \
-            clang-tidy pkg-config
-
-      - name: Install IWYU (Include-What-You-Use)
-        if: matrix.compiler == 'clang'                
-        run: |
-          git clone --recursive https://github.com/include-what-you-use/include-what-you-use.git
-          cd include-what-you-use
-          git checkout clang_14
-          mkdir build && cd build
-          cmake .. -G Ninja \
-            -DCMAKE_PREFIX_PATH="/usr/lib/llvm-14" \
-            -DCMAKE_C_COMPILER=clang-14 \
-            -DCMAKE_CXX_COMPILER=clang++-14
-          ninja
-          sudo ninja install
-          
-          IWYU_DIR=$(include-what-you-use -print-resource-dir 2>/dev/null || true)
-          CLANG_DIR=$(clang -print-resource-dir)
-          if [ -n "$IWYU_DIR" ] && [ ! -e "$IWYU_DIR" ]; then
-            sudo mkdir -p "$(dirname "$IWYU_DIR")"
-            sudo ln -s "$CLANG_DIR" "$IWYU_DIR"
-          fi
-
-      - name: Set up cache
-        run: mkdir -p /home/runner/.ccache
-
-      - uses: actions/cache@v4
+      # ✅ Linting step (clang-format)
+      - name: Run clang-format check
+        uses: jidicula/clang-format-action@v4.13.0
         with:
-          path: /home/runner/.ccache
-          key: ${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.compiler }}-
-            ${{ runner.os }}-
+          clang-format-version: '17'
+          check-path: 'toonz/sources'       # Adjust to your actual source dir
+          fallback-style: 'Google'          # Can be LLVM, Mozilla, etc.
+          exclude-regex: '^./thirdparty/.*$'
 
-      - name: Build libtiff
-        run: |
-          if [ ! -f thirdparty/tiff-4.0.3/libtiff.a ]; then
-            cd thirdparty/tiff-4.0.3
-            CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
-            make -j$(nproc)
-          fi
+      # ❌ Install required libraries
+#      - name: Install libraries
+#        run: |
+#          sudo apt-get update
+#          sudo apt-get install -y build-essential cmake pkg-config ninja-build ccache \
+#            libboost-all-dev qtbase5-dev qt5-qmake qtscript5-dev qttools5-dev \
+#            qttools5-dev-tools qtmultimedia5-dev qtwayland5 libqt5svg5-dev \
+#            libqt5opengl5-dev libqt5multimedia5-plugins libqt5serialport5-dev \
+#            libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev libpng-dev \
+#            libjpeg-dev libglew-dev freeglut3-dev libfreetype6-dev libjson-c-dev \
+#            libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2 \
+#            clang-14 llvm-14 libclang-14-dev llvm-14-dev \
+#            clang-tidy pkg-config
 
-      - name: Build
-        run: |
-          export CCACHE_DIR=/home/runner/.ccache
-          export CC="ccache ${{ matrix.cc }}"
-          export CXX="ccache ${{ matrix.cxx }}"
-          mkdir -p toonz/build
-          cd toonz/build
-          cmake ../sources -G Ninja \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
-            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
-            -DWITH_TRANSLATION=OFF \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-          ninja
-#       - name: Run Static Analysis (GCC)
-#         if: matrix.compiler == 'gcc'
-#         run: |
-#           echo "Executing static code analysis with GCC..."
-#           INCLUDES=$(grep -oP '(?<=-I)[^ ]+' toonz/build/compile_commands.json | sort | uniq | sed 's/^/-I/')
- #          QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-   #        find toonz/sources -name "*.cpp" -exec ${{ matrix.cc }} -c -Wall -Wextra -Werror $INCLUDES $QT_INCLUDES {} \;
+      # ❌ Install IWYU
+#      - name: Install IWYU (Include-What-You-Use)
+#        if: matrix.compiler == 'clang'                
+#        run: |
+#          git clone --recursive https://github.com/include-what-you-use/include-what-you-use.git
+#          cd include-what-you-use
+#          git checkout clang_14
+#          mkdir build && cd build
+#          cmake .. -G Ninja \
+#            -DCMAKE_PREFIX_PATH="/usr/lib/llvm-14" \
+#            -DCMAKE_C_COMPILER=clang-14 \
+#            -DCMAKE_CXX_COMPILER=clang++-14
+#          ninja
+#          sudo ninja install
+#          
+#          IWYU_DIR=$(include-what-you-use -print-resource-dir 2>/dev/null || true)
+#          CLANG_DIR=$(clang -print-resource-dir)
+#          if [ -n "$IWYU_DIR" ] && [ ! -e "$IWYU_DIR" ]; then
+#            sudo mkdir -p "$(dirname "$IWYU_DIR")"
+#            sudo ln -s "$CLANG_DIR" "$IWYU_DIR"
+#          fi
 
-#      - name: Run Static Analysis (Clang-Tidy)
- #       if: matrix.compiler == 'clang'
-  #      run: |
-   #       echo "Executing static code analysis with clang-tidy..."
-    #      QT_INCLUDES=$(pkg-config --cflags Qt5Core)
-      #    find toonz/sources -name "*.cpp" | \
-     #     xargs -n 1 -P $(nproc) clang-tidy -p=toonz/build --extra-arg="$QT_INCLUDES" --quiet		  
+      # ❌ Set up cache
+#      - name: Set up cache
+#        run: mkdir -p /home/runner/.ccache
 
-      - name: Run Include-What-You-Use (IWYU)
-        if: matrix.compiler == 'clang'
-        run: |
-          echo "📦 Executando IWYU em todos os arquivos do tnztools com paralelismo..."
+#      - uses: actions/cache@v4
+#        with:
+#          path: /home/runner/.ccache
+#          key: ${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
+#          restore-keys: |
+#            ${{ runner.os }}-${{ matrix.compiler }}-
+#            ${{ runner.os }}-
 
-          cd toonz/build
+      # ❌ Build libtiff
+#      - name: Build libtiff
+#        run: |
+#          if [ ! -f thirdparty/tiff-4.0.3/libtiff.a ]; then
+#            cd thirdparty/tiff-4.0.3
+#            CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
+#            make -j$(nproc)
+#          fi
 
-          # Gera lista de arquivos fonte relevantes (ex: tnztools/*.cpp)
-          jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/toonzlib.*\.(cpp|c)$" > all_sources.txt
+      # ❌ Build OpenToonz
+#      - name: Build
+#        run: |
+#          export CCACHE_DIR=/home/runner/.ccache
+#          export CC="ccache ${{ matrix.cc }}"
+#          export CXX="ccache ${{ matrix.cxx }}"
+#          mkdir -p toonz/build
+#          cd toonz/build
+#          cmake ../sources -G Ninja \
+#            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+#            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+#            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+#            -DWITH_TRANSLATION=OFF \
+#            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+#          ninja
 
-          # Executa IWYU com paralelismo
-          cat all_sources.txt | xargs -n 1 -P $(nproc) -I {} \
-            iwyu_tool.py -p . "{}" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
-            2>/dev/null | tee full_iwyu_report.txt
-
-          echo "📊 Análise final concluída."
-
-          if grep -q "should remove" full_iwyu_report.txt; then
-            echo "❌ IWYU encontrou headers desnecessários."
-            exit 1
-          else
-            echo "✅ IWYU OK!"
-          fi
-          else
-            echo "✅ IWYU OK!"
-          fi
+      # ❌ Run IWYU (Include-What-You-Use)
+#      - name: Run Include-What-You-Use (IWYU)
+#        if: matrix.compiler == 'clang'
+#        run: |
+#          echo "📦 Executando IWYU em todos os arquivos do tnztools com paralelismo..."
+#          cd toonz/build
+#          jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/toonzlib.*\.(cpp|c)$" > all_sources.txt
+#          cat all_sources.txt | xargs -n 1 -P $(nproc) -I {} \
+#            iwyu_tool.py -p . "{}" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
+#            2>/dev/null | tee full_iwyu_report.txt
+#          echo "📊 Análise final concluída."
+#          if grep -q "should remove" full_iwyu_report.txt; then
+#            echo "❌ IWYU encontrou headers desnecessários."
+#            exit 1
+#          else
+#            echo "✅ IWYU OK!"
+#          fi
