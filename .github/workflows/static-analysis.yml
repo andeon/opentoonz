@@ -27,7 +27,7 @@ jobs:
         with:
           clang-format-version: '17'
           fallback-style: 'Google'          # Can be LLVM, Mozilla, etc.
-          exclude-regex: '^./thirdparty/.*$'
+          exclude-regex: '^./thirdparty/.*$|^//.*$'
 
       # ❌ Install required libraries
 #      - name: Install libraries
