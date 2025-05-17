@@ -26,7 +26,6 @@ jobs:
         uses: jidicula/clang-format-action@v4.13.0
         with:
           clang-format-version: '14'
-          check-path: 'toonz/sources'       # Adjust to your actual source dir
           fallback-style: 'Google'          # Can be LLVM, Mozilla, etc.
           exclude-regex: '^./thirdparty/.*$'
 
