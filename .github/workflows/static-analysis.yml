@@ -25,7 +25,7 @@ jobs:
       - name: Run clang-format check
         uses: jidicula/clang-format-action@v4.13.0
         with:
-          clang-format-version: '14'
+          clang-format-version: '17'
           fallback-style: 'Google'          # Can be LLVM, Mozilla, etc.
           exclude-regex: '^./thirdparty/.*$'
 
