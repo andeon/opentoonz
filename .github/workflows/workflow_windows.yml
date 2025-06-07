@@ -3,7 +3,7 @@ name: Windows Build
 on:
   push:
     branches:
-      - '*' Specify branches where the workflow should runs
+      - '*'  # Specify branches where the workflow should run now
     paths:
       - '**/*'                   # Include all files in the repository
       - '!appveyor.yml'          # Ignore changes in AppVeyor
