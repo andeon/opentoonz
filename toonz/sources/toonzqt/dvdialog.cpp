@@ -233,14 +233,14 @@ Dialog::Dialog(QWidget *parent, bool hasButton, bool hasFixedSize,
     , m_labelWidth(100)
     , m_name() {
   QVBoxLayout *mainLayout = new QVBoxLayout;
-  mainLayout->setMargin(0);
+  mainLayout->setContentsMargins(0, 0, 0, 0);
   mainLayout->setSpacing(0);
   m_mainFrame = new QFrame(this);
   m_mainFrame->setObjectName("dialogMainFrame");
   m_mainFrame->setMinimumHeight(41);
   m_mainFrame->setFrameStyle(QFrame::StyledPanel);
   m_topLayout = new QVBoxLayout;
-  m_topLayout->setMargin(12);
+  m_topLayout->setContentsMargins(12, 12, 12, 12);
   m_topLayout->setSpacing(m_layoutSpacing);
   m_topLayout->setAlignment(Qt::AlignCenter);
   m_mainFrame->setLayout(m_topLayout);
@@ -257,7 +257,7 @@ Dialog::Dialog(QWidget *parent, bool hasButton, bool hasFixedSize,
     m_buttonFrame->setFixedHeight(45);
 
     m_buttonLayout = new QHBoxLayout;
-    m_buttonLayout->setMargin(0);
+    m_buttonLayout->setContentsMargins(0, 0, 0, 0);
     m_buttonLayout->setSpacing(20);
     m_buttonLayout->setAlignment(Qt::AlignHCenter);
 
@@ -289,45 +289,59 @@ Dialog::Dialog(QWidget *parent, bool hasButton, bool hasFixedSize,
   QSettings settings(settingsPath, QSettings::IniFormat);
 
   if (name == QString()) return;
-  m_name      = name + "DialogGeometry";
+  m_name = name + "DialogGeometry";
   QString geo = settings.value(m_name).toString();
   if (geo != QString()) {
     QStringList values = geo.split(" ");
-    assert(values.size() == 4);
-    // Ensure that the dialog is visible in the screen.
-    // The dialog opens with some offset to bottom-right direction
-    // if a flag Qt::WindowMaximizeButtonHint is set. (e.g. PencilTestPopup)
-    // Therefore, if the dialog is moved to the bottom-end of the screen,
-    // it will be got out of the screen on the next launch.
-    // The following position adjustment will also prevent such behavior.
+    if (values.size() == 4) {
+      auto screens = QGuiApplication::screens();
+      if (!screens.isEmpty()) {
+      // Ensure that the dialog is visible in the screen.
+      // The dialog opens with some offset to bottom-right direction
+      // if a flag Qt::WindowMaximizeButtonHint is set. (e.g. PencilTestPopup)
+      // Therefore, if the dialog is moved to the bottom-end of the screen,
+      // it will be got out of the screen on the next launch.
+      // The following position adjustment will also prevent such behavior.
 
-    // try and get active screen
-    if (parent != NULL) {
-      QScreen *screen = QGuiApplication::screenAt(parent->pos());
-      m_currentScreen = screen ? QGuiApplication::screens().indexOf(screen) : 0;
+        // try and get active screen
+        if (parent != NULL) {
+          QScreen *screen = QGuiApplication::screenAt(parent->pos());
+          m_currentScreen = screen ? screens.indexOf(screen) : 0;
+        }
+        if (m_currentScreen < 0 || m_currentScreen >= screens.size()) {
+          m_currentScreen = 0;
+        }
+        QScreen *screenPtr = screens.value(m_currentScreen);
+        if (screenPtr) {
+          QRect screen = screenPtr->availableGeometry();
+          int x = values.at(0).toInt();
+          int y = values.at(1).toInt();
+
+        // make sure that the window is visible on the screen
+        // all popups will popup on the active window the first time
+        // so popups moved to other monitors will be moved back
+        // when restarting OpenToonz.
+
+        // This may be somewhat annoying if a user REALLY wants the popup
+        // on another monitor by default, but this is better than
+        // a user thinking the program is broken because they didn't notice
+        // the popup on another monitor
+          if (x > screen.right() - 50) x = screen.right() - 50;
+          if (x < screen.left()) x = screen.left();
+          if (y > screen.bottom() - 90) y = screen.bottom() - 90;
+          if (y <= screen.top()) y = screen.top() + 50;
+          setGeometry(x, y, values.at(2).toInt(), values.at(3).toInt());
+          settings.setValue(m_name, QString::number(x) + " " + 
+                                    QString::number(y) + " " + 
+                                    QString::number(values.at(2).toInt()) + " " + 
+                                    QString::number(values.at(3).toInt()));
+          return;
+        }
+      }
     }
-    QRect screen = QGuiApplication::screens().at(m_currentScreen)->availableGeometry();
-    int x        = values.at(0).toInt();
-    int y        = values.at(1).toInt();
-
-    // make sure that the window is visible on the screen
-    // all popups will popup on the active window the first time
-    // so popups moved to other monitors will be moved back
-    // when restarting OpenToonz.
-
-    // This may be somewhat annoying if a user REALLY wants the popup
-    // on another monitor by default, but this is better than
-    // a user thinking the program is broken because they didn't notice
-    // the popup on another monitor
-    if (x > screen.right() - 50) x = screen.right() - 50;
-    if (x < screen.left()) x = screen.left();
-    if (y > screen.bottom() - 90) y = screen.bottom() - 90;
-    if (y <= screen.top()) y = screen.top() + 50;  // pad for window title
-    setGeometry(x, y, values.at(2).toInt(), values.at(3).toInt());
-    settings.setValue(m_name, QString::number(x) + " " + QString::number(y) +
-                                  " " + QString::number(values.at(2).toInt()) +
-                                  " " + QString::number(values.at(3).toInt()));
   }
+  // Fallback for all error cases
+  setGeometry(30, 30, 300, 300);
 }
 
 //-----------------------------------------------------------------------------
@@ -337,10 +351,10 @@ Dialog::~Dialog() {
 
   QRect r = geometry();
   QSettings settings(settingsPath, QSettings::IniFormat);
-  settings.setValue(m_name, QString::number(r.left()) + " " +
-                                QString::number(r.top()) + " " +
-                                QString::number(r.width()) + " " +
-                                QString::number(r.height()));
+  settings.setValue(m_name, QString::number(r.left()) + " " + 
+                            QString::number(r.top()) + " " + 
+                            QString::number(r.width()) + " " + 
+                            QString::number(r.height()));
 }
 
 //---------------------------------------------------------------------------------
@@ -359,34 +373,41 @@ void Dialog::resizeEvent(QResizeEvent *e) {
 //! reimplemented
 //! for this purpose.
 void Dialog::hideEvent(QHideEvent *event) {
-  int x = pos().rx();
-  int y = pos().ry();
-  // make sure the dialog is actually visible on a screen
+  int x = pos().x();
+  int y = pos().y();
   auto screens = QGuiApplication::screens();
-  int currentScreen = 0;
+  int currentScreen = -1;
+
   for (int i = 0; i < screens.count(); i++) {
     if (screens[i]->geometry().contains(pos())) {
-        currentScreen = i;
-        break;
-    } else {
-      // if not - put it back on the main window
-      currentScreen = m_currentScreen;
+      currentScreen = i;
+      break;
     }
   }
-  QRect screen = QGuiApplication::screens().at(currentScreen)->availableGeometry();
 
-  if (x > screen.right() - 50) x = screen.right() - 50;
-  if (x < screen.left()) x = screen.left();
-  if (y > screen.bottom() - 90) y = screen.bottom() - 90;
-  if (y < screen.top()) y = screen.top();
+  if (currentScreen == -1) {
+    currentScreen = (m_currentScreen >= 0 && m_currentScreen < screens.size()) ? m_currentScreen : 0;
+  }
+
+  QScreen *screenPtr = screens.value(currentScreen);
+  if (screenPtr) {
+    QRect screen = screenPtr->availableGeometry();
+    if (x > screen.right() - 50) x = screen.right() - 50;
+    if (x < screen.left()) x = screen.left();
+    if (y > screen.bottom() - 90) y = screen.bottom() - 90;
+    if (y < screen.top()) y = screen.top();
+  }
+
   move(QPoint(x, y));
   resize(size());
+
   QRect r = geometry();
   QSettings settings(settingsPath, QSettings::IniFormat);
-  settings.setValue(m_name, QString::number(r.left()) + " " +
-                                QString::number(r.top()) + " " +
-                                QString::number(r.width()) + " " +
-                                QString::number(r.height()));
+  settings.setValue(m_name, QString::number(r.left()) + " " + 
+                            QString::number(r.top()) + " " + 
+                            QString::number(r.width()) + " " + 
+                            QString::number(r.height()));
+
   emit dialogClosed();
 }
 
@@ -397,11 +418,11 @@ void Dialog::beginVLayout() {
   m_isMainVLayout = true;
 
   m_leftVLayout = new QVBoxLayout;
-  m_leftVLayout->setMargin(m_layoutMargin);
+  m_leftVLayout->setContentsMargins(m_layoutMargin, m_layoutMargin, m_layoutMargin, m_layoutMargin);
   m_leftVLayout->setSpacing(m_layoutSpacing);
 
   m_rightVLayout = new QVBoxLayout;
-  m_rightVLayout->setMargin(m_layoutMargin);
+  m_rightVLayout->setContentsMargins(m_layoutMargin, m_layoutMargin, m_layoutMargin, m_layoutMargin);
   m_rightVLayout->setSpacing(m_layoutSpacing);
 }
 
@@ -414,7 +435,7 @@ void Dialog::endVLayout() {
   m_isMainVLayout = false;
 
   QHBoxLayout *layout = new QHBoxLayout;
-  layout->setMargin(m_layoutMargin);
+  layout->setContentsMargins(m_layoutMargin, m_layoutMargin, m_layoutMargin, m_layoutMargin);
   layout->setSpacing(m_layoutSpacing);
   layout->setSizeConstraint(QLayout::SetFixedSize);
 
@@ -435,7 +456,7 @@ void Dialog::endVLayout() {
 void Dialog::beginHLayout() {
   m_isMainHLayout = true;
   m_mainHLayout   = new QHBoxLayout;
-  m_mainHLayout->setMargin(m_layoutMargin);
+  m_mainHLayout->setContentsMargins(m_layoutMargin, m_layoutMargin, m_layoutMargin, m_layoutMargin);
   m_mainHLayout->setSpacing(m_layoutSpacing);
 }
 
@@ -496,7 +517,7 @@ void Dialog::addWidgets(QWidget *firstW, QWidget *secondW) {
     return;
   }
   QHBoxLayout *pairLayout = new QHBoxLayout;
-  pairLayout->setMargin(m_layoutMargin);
+  pairLayout->setContentsMargins(m_layoutMargin, m_layoutMargin, m_layoutMargin, m_layoutMargin);
   pairLayout->setSpacing(m_layoutSpacing);
   pairLayout->addWidget(firstW);
   pairLayout->addWidget(secondW);
@@ -562,7 +583,7 @@ layout containing
                 \b widget and \b layout and add it to horizontal layout.
 */
 void Dialog::addWidgetLayout(QWidget *widget, QLayout *layout) {
-  layout->setMargin(m_layoutMargin);
+  layout->setContentsMargins(m_layoutMargin, m_layoutMargin, m_layoutMargin, m_layoutMargin);
   layout->setSpacing(m_layoutSpacing);
 
   if (m_isMainVLayout) {
@@ -573,7 +594,7 @@ void Dialog::addWidgetLayout(QWidget *widget, QLayout *layout) {
   }
 
   QHBoxLayout *pairLayout = new QHBoxLayout;
-  pairLayout->setMargin(m_layoutMargin);
+  pairLayout->setContentsMargins(m_layoutMargin, m_layoutMargin, m_layoutMargin, m_layoutMargin);
   pairLayout->setSpacing(m_layoutSpacing);
   pairLayout->addWidget(widget);
   pairLayout->addLayout(layout);
@@ -614,9 +635,9 @@ layout containing
                 \b firstL and \b secondL and add it to horizontal layout.
 */
 void Dialog::addLayouts(QLayout *firstL, QLayout *secondL) {
-  firstL->setMargin(m_layoutMargin);
+  firstL->setContentsMargins(m_layoutMargin, m_layoutMargin, m_layoutMargin, m_layoutMargin);
   firstL->setSpacing(m_layoutSpacing);
-  secondL->setMargin(m_layoutMargin);
+  secondL->setContentsMargins(m_layoutMargin, m_layoutMargin, m_layoutMargin, m_layoutMargin);
   secondL->setSpacing(m_layoutSpacing);
 
   if (m_isMainVLayout) {
@@ -627,7 +648,7 @@ void Dialog::addLayouts(QLayout *firstL, QLayout *secondL) {
   }
 
   QHBoxLayout *pairLayout = new QHBoxLayout;
-  pairLayout->setMargin(m_layoutMargin);
+  pairLayout->setContentsMargins(m_layoutMargin, m_layoutMargin, m_layoutMargin, m_layoutMargin);
   pairLayout->setSpacing(m_layoutSpacing);
   pairLayout->addLayout(firstL);
   pairLayout->addLayout(secondL);
@@ -715,13 +736,15 @@ int Dialog::getLayoutInsertedSpacing() { return m_layoutSpacing; }
 //-----------------------------------------------------------------------------
 /*! Set to \b margin margin of main part of dialog.
  */
-void Dialog::setTopMargin(int margin) { m_topLayout->setMargin(margin); }
+void Dialog::setTopMargin(int margin) { 
+    m_topLayout->setContentsMargins(margin, margin, margin, margin); 
+}
 
 //-----------------------------------------------------------------------------
 /*! Set to \b margin margin of button part of dialog.
  */
 void Dialog::setButtonBarMargin(int margin) {
-  m_buttonLayout->setMargin(margin);
+  m_buttonLayout->setContentsMargins(margin, margin, margin, margin);
 }
 
 //-----------------------------------------------------------------------------
