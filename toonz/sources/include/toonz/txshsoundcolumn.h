@@ -29,7 +29,7 @@ class TFilePath;
 //  ColumnLevel
 //=============================================================================
 
-class ColumnLevel {
+class DVAPI ColumnLevel {
   TXshSoundLevelP m_soundLevel;
 
   /*!Offsets: in frames. Start offset is a positive number.*/
