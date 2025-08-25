@@ -118,50 +118,58 @@ void pri_funct_msg_vr(const char *fmt, ...) {
 /* print  Title, Time_stamp, Valiable_argument, Return_code */
 void pri_funct_msg_ttvr(const char *fmt, ...) {
   time_t tt;
-  char *cc;
-
-  int i_ret;
-  va_list ap;
-  char buf[FILENAME_MAX]; /* redhat9 : stdio.h --> bits/stdio_lim.h */
-
-  tt     = time(NULL);
-  cc     = asctime(localtime(&tt)); /* 注意：ccはstatic変数 */
-  cc[24] = '\0'; /* 26-character Example : "Fri Sep 13 00:00:00 1986\n\0" */
-
-  va_start(ap, fmt);
-  i_ret = vsnprintf(buf, FILENAME_MAX, fmt, ap);
-  va_end(ap);
-  if (i_ret < 0) {
-    (void)strcpy(buf, "bad argument for fprintf stdout");
-  }
-
-  /* ベル,タイトル,日時,可変引数,改行 */
-  (void)fprintf(stdout, "%s  %s  %s\n", pri_param_cp_com_name, cc, buf);
-  (void)fflush(stdout);
-}
-/* print  Bell, Title, Time_stamp, Valiable_argument, Return_code */
-void pri_funct_err_bttvr(const char *fmt, ...) {
-  time_t tt;
-  char *cc;
+  struct tm tm_info;
+  char time_str[32]; // "Fri Sep 13 00:00:00 1986" = 25 + '\0'
 
   int i_ret;
   va_list ap;
   char buf[FILENAME_MAX];
 
-  tt     = time(NULL);
-  cc     = asctime(localtime(&tt)); /* 注意：ccはstatic変数 */
-  cc[24] = '\0'; /* 26-character Example : "Fri Sep 13 00:00:00 1986\n\0" */
+  tt = time(NULL);
+#ifdef _MSC_VER
+  localtime_s(&tm_info, &tt);
+#else
+  tm_info = *localtime(&tt);
+#endif
+  strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S %Y", &tm_info);
 
   va_start(ap, fmt);
   i_ret = vsnprintf(buf, FILENAME_MAX, fmt, ap);
   va_end(ap);
   if (i_ret < 0) {
-    (void)strcpy(buf, "bad argument for fprintf stderr");
+    strcpy(buf, "bad argument for fprintf stdout");
   }
 
-  /* ベル,タイトル,日時,可変引数,改行 */
-  (void)fprintf(stderr, "\007%s  %s  %s\n", pri_param_cp_com_name, cc, buf);
-  (void)fflush(stderr);
+  fprintf(stdout, "%s  %s  %s\n", pri_param_cp_com_name, time_str, buf);
+  fflush(stdout);
+}
+
+void pri_funct_err_bttvr(const char *fmt, ...) {
+  time_t tt;
+  struct tm tm_info;
+  char time_str[32];
+
+  int i_ret;
+  va_list ap;
+  char buf[FILENAME_MAX];
+
+  tt = time(NULL);
+#ifdef _MSC_VER
+  localtime_s(&tm_info, &tt);
+#else
+  tm_info = *localtime(&tt);
+#endif
+  strftime(time_str, sizeof(time_str), "%a %b %d %H:%M:%S %Y", &tm_info);
+
+  va_start(ap, fmt);
+  i_ret = vsnprintf(buf, FILENAME_MAX, fmt, ap);
+  va_end(ap);
+  if (i_ret < 0) {
+    strcpy(buf, "bad argument for fprintf stderr");
+  }
+
+  fprintf(stderr, "\007%s  %s  %s\n", pri_param_cp_com_name, time_str, buf);
+  fflush(stderr);
 }
 
 class list_node {
