@@ -2625,8 +2625,15 @@ void LinePrimitive::leftButtonUp(const TPointD &pos, const TMouseEvent &e) {
   else
     m_vertex.push_back(newPos);
 
-  endLine();
+  // Check if vertices are valid and distinct before calling endLine
+  if (m_vertex.size() < 2 || m_vertex[0] == m_vertex[1]) {
+    m_vertex.clear();
+    m_isEditing = false;
+    resetSnap();
+    return;
+  }
 
+  endLine();
   resetSnap();
 }
 //-----------------------------------------------------------------------------
