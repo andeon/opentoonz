@@ -81,8 +81,8 @@ Toolbar::Toolbar(QWidget *parent, bool isVertical)
 
   m_expandAction = addWidget(m_expandButton);
 
-  connect(m_expandButton, SIGNAL(toggled(bool)), this,
-          SLOT(setIsExpanded(bool)));
+  connect(m_expandButton, &QToolButton::toggled,
+        this, &Toolbar::setIsExpanded);
 
   updateToolbar();
 }
@@ -238,49 +238,61 @@ bool Toolbar::addAction(QAction *act) {
 
 void Toolbar::showEvent(QShowEvent *e) {
   TColumnHandle *columnHandle = TApp::instance()->getCurrentColumn();
-  connect(columnHandle, SIGNAL(columnIndexSwitched()), this,
-          SLOT(updateToolbar()));
+  connect(columnHandle, &TColumnHandle::columnIndexSwitched,
+          this, &Toolbar::updateToolbar);
 
   TFrameHandle *frameHandle = TApp::instance()->getCurrentFrame();
-  connect(frameHandle, SIGNAL(frameSwitched()), this, SLOT(updateToolbar()));
-  connect(frameHandle, SIGNAL(frameTypeChanged()), this, SLOT(updateToolbar()));
+  connect(frameHandle, &TFrameHandle::frameSwitched,
+          this, &Toolbar::updateToolbar);
+  connect(frameHandle, &TFrameHandle::frameTypeChanged,
+          this, &Toolbar::updateToolbar);
 
   TXsheetHandle *xsheetHandle = TApp::instance()->getCurrentXsheet();
-  connect(xsheetHandle, SIGNAL(xsheetChanged()), this, SLOT(updateToolbar()));
+  connect(xsheetHandle, &TXsheetHandle::xsheetChanged,
+          this, &Toolbar::updateToolbar);
 
-  connect(TApp::instance()->getCurrentTool(), SIGNAL(toolSwitched()),
-          SLOT(onToolChanged()));
+  connect(TApp::instance()->getCurrentTool(),
+          &ToolHandle::toolSwitched,
+          this, &Toolbar::onToolChanged);
 
   TXshLevelHandle *levelHandle = TApp::instance()->getCurrentLevel();
-  connect(levelHandle, SIGNAL(xshLevelSwitched(TXshLevel *)), this,
-          SLOT(updateToolbar()));
+  connect(levelHandle, &TXshLevelHandle::xshLevelSwitched,
+          this, &Toolbar::updateToolbar);
 
   connect(TApp::instance()->getCurrentScene(),
-          SIGNAL(preferenceChanged(const QString &)), this,
-          SLOT(onPreferenceChanged(const QString &)));
+          &TSceneHandle::preferenceChanged,
+          this, &Toolbar::onPreferenceChanged);
 }
 
 //-----------------------------------------------------------------------------
 
 void Toolbar::hideEvent(QHideEvent *e) {
-  disconnect(TApp::instance()->getCurrentLevel(), 0, this, 0);
-  disconnect(TApp::instance()->getCurrentTool(), SIGNAL(toolSwitched()), this,
-             SLOT(onToolChanged()));
+  disconnect(TApp::instance()->getCurrentLevel(),
+             &TXshLevelHandle::xshLevelSwitched,
+             this, &Toolbar::updateToolbar);
+
+  disconnect(TApp::instance()->getCurrentTool(),
+             &ToolHandle::toolSwitched,
+             this, &Toolbar::onToolChanged);
 
   disconnect(TApp::instance()->getCurrentColumn(),
-             SIGNAL(columnIndexSwitched()), this, SLOT(updateToolbar()));
+             &TColumnHandle::columnIndexSwitched,
+             this, &Toolbar::updateToolbar);
 
-  disconnect(TApp::instance()->getCurrentFrame(), SIGNAL(frameSwitched()), this,
-             SLOT(updateToolbar()));
-  disconnect(TApp::instance()->getCurrentFrame(), SIGNAL(frameTypeChanged()),
-             this, SLOT(updateToolbar()));
+  disconnect(TApp::instance()->getCurrentFrame(),
+             &TFrameHandle::frameSwitched,
+             this, &Toolbar::updateToolbar);
+  disconnect(TApp::instance()->getCurrentFrame(),
+             &TFrameHandle::frameTypeChanged,
+             this, &Toolbar::updateToolbar);
 
-  disconnect(TApp::instance()->getCurrentXsheet(), SIGNAL(xsheetChanged()),
-             this, SLOT(updateToolbar()));
+  disconnect(TApp::instance()->getCurrentXsheet(),
+             &TXsheetHandle::xsheetChanged,
+             this, &Toolbar::updateToolbar);
 
   disconnect(TApp::instance()->getCurrentScene(),
-             SIGNAL(preferenceChanged(const QString &)), this,
-             SLOT(onPreferenceChanged(const QString &)));
+             &TSceneHandle::preferenceChanged,
+             this, &Toolbar::onPreferenceChanged);
 }
 
 //-----------------------------------------------------------------------------
