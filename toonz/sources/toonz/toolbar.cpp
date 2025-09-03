@@ -1,5 +1,3 @@
-
-
 #include "toolbar.h"
 #include "tapp.h"
 #include "pane.h"
@@ -28,43 +26,68 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QObject>
+#include <QStringLiteral>
 
 TEnv::IntVar ShowAllToolsToggle("ShowAllToolsToggle", 1);
 
 namespace {
-struct {
-  const char *toolName;
+
+// Struct for button layout with QString and default nullptr for QAction*
+struct ToolButton {
+  QString toolName;
   bool collapsible;
-  QAction *action;
-} buttonLayout[] = {{T_Edit, false, 0},        {T_Selection, false, 0},
-                    {"Separator_1", false, 0}, {T_Brush, false, 0},
-                    {T_Geometric, false, 0},   {T_Type, true, 0},
-                    {T_Fill, false, 0},        {T_PaintBrush, false, 0},
-                    {"Separator_2", false, 0}, {T_Eraser, false, 0},
-                    {T_Tape, false, 0},        {T_Finger, false, 0},
-                    {"Separator_3", false, 0}, {T_StylePicker, false, 0},
-                    {T_RGBPicker, false, 0},   {T_Ruler, false, 0},
-                    {T_EditAssistants, false, 0},
-                    {"Separator_4", false, 0}, {T_ControlPointEditor, false, 0},
-                    {T_Pinch, true, 0},        {T_Pump, true, 0},
-                    {T_Magnet, true, 0},       {T_Bender, true, 0},
-                    {T_Iron, true, 0},         {T_Cutter, true, 0},
-                    {"Separator_5", true, 0},  {T_Skeleton, true, 0},
-                    {T_Tracker, true, 0},      {T_Hook, true, 0},
-                    {T_Plastic, true, 0},      {"Separator_6", false, 0},
-                    {T_Zoom, false, 0},        {T_Rotate, true, 0},
-                    {T_Hand, false, 0},        {0, false, 0}};
+  QAction *action = nullptr;
+};
+
+ToolButton buttonLayout[] = {
+    {QStringLiteral(T_Edit), false},
+    {QStringLiteral(T_Selection), false},
+    {QStringLiteral("Separator_1"), false},
+    {QStringLiteral(T_Brush), false},
+    {QStringLiteral(T_Geometric), false},
+    {QStringLiteral(T_Type), true},
+    {QStringLiteral(T_Fill), false},
+    {QStringLiteral(T_PaintBrush), false},
+    {QStringLiteral("Separator_2"), false},
+    {QStringLiteral(T_Eraser), false},
+    {QStringLiteral(T_Tape), false},
+    {QStringLiteral(T_Finger), false},
+    {QStringLiteral("Separator_3"), false},
+    {QStringLiteral(T_StylePicker), false},
+    {QStringLiteral(T_RGBPicker), false},
+    {QStringLiteral(T_Ruler), false},
+    {QStringLiteral(T_EditAssistants), false},
+    {QStringLiteral("Separator_4"), false},
+    {QStringLiteral(T_ControlPointEditor), false},
+    {QStringLiteral(T_Pinch), true},
+    {QStringLiteral(T_Pump), true},
+    {QStringLiteral(T_Magnet), true},
+    {QStringLiteral(T_Bender), true},
+    {QStringLiteral(T_Iron), true},
+    {QStringLiteral(T_Cutter), true},
+    {QStringLiteral("Separator_5"), true},
+    {QStringLiteral(T_Skeleton), true},
+    {QStringLiteral(T_Tracker), true},
+    {QStringLiteral(T_Hook), true},
+    {QStringLiteral(T_Plastic), true},
+    {QStringLiteral("Separator_6"), false},
+    {QStringLiteral(T_Zoom), false},
+    {QStringLiteral(T_Rotate), true},
+    {QStringLiteral(T_Hand), false},
+    {QString()},  // marks end
+};
+
 }  // namespace
+
 //=============================================================================
 // Toolbar
 //-----------------------------------------------------------------------------
 
 Toolbar::Toolbar(QWidget *parent, bool isVertical)
     : QToolBar(parent), m_isExpanded(ShowAllToolsToggle != 0) {
-  // Fondamentale per lo style sheet
-  setObjectName("toolBar");
-
+  setObjectName(QStringLiteral("toolBar"));
   setMovable(false);
+
   if (isVertical)
     setOrientation(Qt::Vertical);
   else
@@ -74,15 +97,14 @@ Toolbar::Toolbar(QWidget *parent, bool isVertical)
   setToolButtonStyle(Qt::ToolButtonIconOnly);
 
   m_expandButton = new QToolButton(this);
-  m_expandButton->setObjectName("expandButton");
+  m_expandButton->setObjectName(QStringLiteral("expandButton"));
   m_expandButton->setCheckable(true);
   m_expandButton->setChecked(m_isExpanded);
-  m_expandButton->setArrowType((isVertical) ? Qt::DownArrow : Qt::RightArrow);
+  m_expandButton->setArrowType(isVertical ? Qt::DownArrow : Qt::RightArrow);
 
   m_expandAction = addWidget(m_expandButton);
 
-  connect(m_expandButton, &QToolButton::toggled,
-        this, &Toolbar::setIsExpanded);
+  connect(m_expandButton, &QToolButton::toggled, this, &Toolbar::setIsExpanded);
 
   updateToolbar();
 }
@@ -91,44 +113,41 @@ Toolbar::Toolbar(QWidget *parent, bool isVertical)
 /*! Layout the tool buttons according to the state of the expandButton
  */
 void Toolbar::updateToolbar() {
-  TApp *app                 = TApp::instance();
+  TApp *app = TApp::instance();
   TFrameHandle *frameHandle = app->getCurrentFrame();
 
   if (frameHandle->isPlaying()) return;
 
   TXshLevelHandle *currlevel = app->getCurrentLevel();
-  TXshLevel *level           = currlevel ? currlevel->getLevel() : 0;
-  int levelType              = level ? level->getType() : NO_XSHLEVEL;
+  TXshLevel *level = currlevel ? currlevel->getLevel() : nullptr;
+  int levelType = level ? level->getType() : NO_XSHLEVEL;
 
   TColumnHandle *colHandle = app->getCurrentColumn();
-  int colIndex             = colHandle->getColumnIndex();
+  int colIndex = colHandle->getColumnIndex();
 
   int rowIndex = frameHandle->getFrameIndex();
 
   if (Preferences::instance()->isAutoCreateEnabled() &&
       Preferences::instance()->isAnimationSheetEnabled()) {
-    // If in an empty cell, find most recent level
     if (levelType == NO_XSHLEVEL) {
       TXsheetHandle *xshHandle = app->getCurrentXsheet();
-      TXsheet *xsh             = xshHandle->getXsheet();
+      TXsheet *xsh = xshHandle->getXsheet();
 
       if (colIndex >= 0 && !xsh->isColumnEmpty(colIndex)) {
         int r0, r1;
         xsh->getCellRange(colIndex, r0, r1);
         if (0 <= r0 && r0 <= r1) {
-          // level type depends on previous occupied cell
           for (int r = std::min(r1, rowIndex); r >= r0; r--) {
             TXshCell cell = xsh->getCell(r, colIndex);
             if (cell.isEmpty()) continue;
             levelType = cell.m_level->getType();
-            rowIndex  = r;
+            rowIndex = r;
             break;
           }
-
           if (levelType == NO_XSHLEVEL) {
             TXshCell cell = xsh->getCell(r0, colIndex);
-            levelType     = cell.m_level->getType();
-            rowIndex      = r0;
+            levelType = cell.m_level->getType();
+            rowIndex = r0;
           }
         }
       }
@@ -140,61 +159,71 @@ void Toolbar::updateToolbar() {
   TTool::ToolTargetType targetType = TTool::NoTarget;
 
   switch (m_toolbarLevel) {
-  case OVL_XSHLEVEL:
-    targetType = TTool::RasterImage;
-    break;
-  case TZP_XSHLEVEL:
-    targetType = TTool::ToonzImage;
-    break;
-  case PLI_XSHLEVEL:
-  default:
-    targetType = TTool::VectorImage;
-    break;
-  case MESH_XSHLEVEL:
-    targetType = TTool::MeshImage;
-    break;
+    case OVL_XSHLEVEL:
+      targetType = TTool::RasterImage;
+      break;
+    case TZP_XSHLEVEL:
+      targetType = TTool::ToonzImage;
+      break;
+    case PLI_XSHLEVEL:
+      [[fallthrough]];
+    default:
+      targetType = TTool::VectorImage;
+      break;
+    case MESH_XSHLEVEL:
+      targetType = TTool::MeshImage;
+      break;
   }
 
-  // Hide action for now
-  for (int idx = 0; buttonLayout[idx].toolName; idx++) {
-    if (buttonLayout[idx].action) removeAction(buttonLayout[idx].action);
+  // Remove existing actions
+  for (auto &btn : buttonLayout) {
+    if (!btn.toolName.isEmpty() && btn.action) removeAction(btn.action);
   }
-
   removeAction(m_expandAction);
 
   int levelBasedDisplay = Preferences::instance()->getLevelBasedToolsDisplay();
 
-  bool actionEnabled     = false;
-  ToolHandle *toolHandle = TApp::instance()->getCurrentTool();
+  bool actionEnabled = false;
 
-  for (int idx = 0; buttonLayout[idx].toolName; idx++) {
-    TTool *tool = TTool::getTool(buttonLayout[idx].toolName, targetType);
+  for (auto &btn : buttonLayout) {
+    if (btn.toolName.isEmpty()) break;  // End of list
+
+    TTool *tool = TTool::getTool(btn.toolName.toUtf8().constData(), targetType);
     if (tool) tool->updateEnabled(rowIndex, colIndex);
-    bool isSeparator = !strncmp(buttonLayout[idx].toolName, "Separator", 9);
-    bool enable =
-        !levelBasedDisplay ? true : (!tool ? actionEnabled : tool->isEnabled());
 
-    // Plastic tool should always be available so you can create a mesh
-    if (!enable && !strncmp(buttonLayout[idx].toolName, T_Plastic, 9) &&
-        (m_toolbarLevel & LEVELCOLUMN_XSHLEVEL))
+    bool isSeparator = btn.toolName.startsWith(QStringLiteral("Separator"));
+    
+    bool enable = false;
+    if (!levelBasedDisplay) {
       enable = true;
+    } else if (!tool) {
+      enable = actionEnabled;
+    } else {
+      enable = tool->isEnabled();
+    }
 
-    if (!m_isExpanded && buttonLayout[idx].collapsible) continue;
+    // Plastic tool always enabled to allow mesh creation
+    if (!enable && btn.toolName == QStringLiteral(T_Plastic) &&
+        (m_toolbarLevel & LEVELCOLUMN_XSHLEVEL)) {
+      enable = true;
+    }
 
-    if (!buttonLayout[idx].action) {
-      if (isSeparator)
-        buttonLayout[idx].action = addSeparator();
-      else
-        buttonLayout[idx].action =
-            CommandManager::instance()->getAction(buttonLayout[idx].toolName);
+    if (!m_isExpanded && btn.collapsible) continue;
+
+    if (!btn.action) {
+      if (isSeparator) {
+        btn.action = addSeparator();
+      } else {
+        btn.action = CommandManager::instance()->getAction(btn.toolName);
+      }
     }
 
     if (levelBasedDisplay != 2)
-      buttonLayout[idx].action->setEnabled(enable);
+      btn.action->setEnabled(enable);
     else if (!enable)
       continue;
 
-    actionEnabled = addAction(buttonLayout[idx].action) || actionEnabled;
+    actionEnabled = addAction(btn.action) || actionEnabled;
 
     if (isSeparator) actionEnabled = false;
   }
@@ -202,29 +231,28 @@ void Toolbar::updateToolbar() {
   addAction(m_expandAction);
 
   if (m_isExpanded) {
-    m_expandButton->setArrowType(
-        (orientation() == Qt::Vertical) ? Qt::UpArrow : Qt::LeftArrow);
+    m_expandButton->setArrowType(orientation() == Qt::Vertical ? Qt::UpArrow : Qt::LeftArrow);
     m_expandButton->setToolTip(tr("Collapse toolbar"));
   } else {
-    m_expandButton->setArrowType(
-        (orientation() == Qt::Vertical) ? Qt::DownArrow : Qt::RightArrow);
+    m_expandButton->setArrowType(orientation() == Qt::Vertical ? Qt::DownArrow : Qt::RightArrow);
     m_expandButton->setToolTip(tr("Expand toolbar"));
   }
 
+  setUpdatesEnabled(true);
   update();
 }
 
-//----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
 
 void Toolbar::setIsExpanded(bool expand) {
-  m_isExpanded       = expand;
-  ShowAllToolsToggle = (expand) ? 1 : 0;
+  m_isExpanded = expand;
+  ShowAllToolsToggle = expand ? 1 : 0;
   updateToolbar();
 }
 
 //-----------------------------------------------------------------------------
 
-Toolbar::~Toolbar() {}
+Toolbar::~Toolbar() = default;
 
 //-----------------------------------------------------------------------------
 
@@ -237,70 +265,46 @@ bool Toolbar::addAction(QAction *act) {
 //-----------------------------------------------------------------------------
 
 void Toolbar::showEvent(QShowEvent *e) {
+  QToolBar::showEvent(e);
+
   TColumnHandle *columnHandle = TApp::instance()->getCurrentColumn();
-  connect(columnHandle, &TColumnHandle::columnIndexSwitched,
-          this, &Toolbar::updateToolbar);
+  connect(columnHandle, &TColumnHandle::columnIndexSwitched, this, &Toolbar::updateToolbar, Qt::UniqueConnection);
 
   TFrameHandle *frameHandle = TApp::instance()->getCurrentFrame();
-  connect(frameHandle, &TFrameHandle::frameSwitched,
-          this, &Toolbar::updateToolbar);
-  connect(frameHandle, &TFrameHandle::frameTypeChanged,
-          this, &Toolbar::updateToolbar);
+  connect(frameHandle, &TFrameHandle::frameSwitched, this, &Toolbar::updateToolbar, Qt::UniqueConnection);
+  connect(frameHandle, &TFrameHandle::frameTypeChanged, this, &Toolbar::updateToolbar, Qt::UniqueConnection);
 
   TXsheetHandle *xsheetHandle = TApp::instance()->getCurrentXsheet();
-  connect(xsheetHandle, &TXsheetHandle::xsheetChanged,
-          this, &Toolbar::updateToolbar);
+  connect(xsheetHandle, &TXsheetHandle::xsheetChanged, this, &Toolbar::updateToolbar, Qt::UniqueConnection);
 
-  connect(TApp::instance()->getCurrentTool(),
-          &ToolHandle::toolSwitched,
-          this, &Toolbar::onToolChanged);
+  connect(TApp::instance()->getCurrentTool(), &ToolHandle::toolSwitched, this, &Toolbar::onToolChanged, Qt::UniqueConnection);
 
   TXshLevelHandle *levelHandle = TApp::instance()->getCurrentLevel();
-  connect(levelHandle, &TXshLevelHandle::xshLevelSwitched,
-          this, &Toolbar::updateToolbar);
+  connect(levelHandle, &TXshLevelHandle::xshLevelSwitched, this, &Toolbar::updateToolbar, Qt::UniqueConnection);
 
-  connect(TApp::instance()->getCurrentScene(),
-          &TSceneHandle::preferenceChanged,
-          this, &Toolbar::onPreferenceChanged);
+  connect(TApp::instance()->getCurrentScene(), &TScene::preferenceChanged, this, &Toolbar::onPreferenceChanged, Qt::UniqueConnection);
 }
 
 //-----------------------------------------------------------------------------
 
 void Toolbar::hideEvent(QHideEvent *e) {
-  disconnect(TApp::instance()->getCurrentLevel(),
-             &TXshLevelHandle::xshLevelSwitched,
-             this, &Toolbar::updateToolbar);
+  QToolBar::hideEvent(e);
 
-  disconnect(TApp::instance()->getCurrentTool(),
-             &ToolHandle::toolSwitched,
-             this, &Toolbar::onToolChanged);
-
-  disconnect(TApp::instance()->getCurrentColumn(),
-             &TColumnHandle::columnIndexSwitched,
-             this, &Toolbar::updateToolbar);
-
-  disconnect(TApp::instance()->getCurrentFrame(),
-             &TFrameHandle::frameSwitched,
-             this, &Toolbar::updateToolbar);
-  disconnect(TApp::instance()->getCurrentFrame(),
-             &TFrameHandle::frameTypeChanged,
-             this, &Toolbar::updateToolbar);
-
-  disconnect(TApp::instance()->getCurrentXsheet(),
-             &TXsheetHandle::xsheetChanged,
-             this, &Toolbar::updateToolbar);
-
-  disconnect(TApp::instance()->getCurrentScene(),
-             &TSceneHandle::preferenceChanged,
-             this, &Toolbar::onPreferenceChanged);
+  disconnect(TApp::instance()->getCurrentLevel(), nullptr, this, nullptr);
+  disconnect(TApp::instance()->getCurrentTool(), &ToolHandle::toolSwitched, this, &Toolbar::onToolChanged);
+  disconnect(TApp::instance()->getCurrentColumn(), &TColumnHandle::columnIndexSwitched, this, &Toolbar::updateToolbar);
+  disconnect(TApp::instance()->getCurrentFrame(), &TFrameHandle::frameSwitched, this, &Toolbar::updateToolbar);
+  disconnect(TApp::instance()->getCurrentFrame(), &TFrameHandle::frameTypeChanged, this, &Toolbar::updateToolbar);
+  disconnect(TApp::instance()->getCurrentXsheet(), &TXsheetHandle::xsheetChanged, this, &Toolbar::updateToolbar);
+  disconnect(TApp::instance()->getCurrentScene(), &TScene::preferenceChanged, this, &Toolbar::onPreferenceChanged);
 }
 
 //-----------------------------------------------------------------------------
 
 void Toolbar::onToolChanged() {
   ToolHandle *toolHandle = TApp::instance()->getCurrentTool();
-  std::string toolName   = toolHandle->getRequestedToolName().toStdString();
-  QAction *act = CommandManager::instance()->getAction(toolName.c_str());
+  QString toolName = toolHandle->getRequestedToolName();
+  QAction *act = CommandManager::instance()->getAction(toolName);
   if (!act || act->isChecked()) return;
   act->setChecked(true);
 }
@@ -308,7 +312,7 @@ void Toolbar::onToolChanged() {
 //-----------------------------------------------------------------------------
 
 void Toolbar::onPreferenceChanged(const QString &prefName) {
-  if (prefName == "ToolbarDisplay" || prefName.isEmpty()) updateToolbar();
+  if (prefName == QStringLiteral("ToolbarDisplay") || prefName.isEmpty()) updateToolbar();
 }
 
 //=============================================================================
