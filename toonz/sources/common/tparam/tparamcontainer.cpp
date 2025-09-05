@@ -6,50 +6,63 @@
 
 #include "tparam.h"
 
-void TParamVar::setParamObserver(TParamObserver *obs) {
-  if (m_paramObserver == obs) return;
-  TParam *param = getParam();
-  if (param) {
-    if (obs) param->addObserver(obs);
-    if (m_paramObserver) param->removeObserver(m_paramObserver);
-  }
-  m_paramObserver = obs;
-}
+class TParamVar::Imp {
+public:
+  std::string m_name;
+  bool m_isHidden;
+  bool m_isObsolete;
+  TParamObserver* m_paramObserver;
+
+  Imp(std::string name, bool hidden, bool obsolete)
+      : m_name(name), m_isHidden(hidden), m_isObsolete(obsolete), m_paramObserver(0) {}
+};
 
 class TParamContainer::Imp {
 public:
-  std::map<std::string, TParamVar *> m_nameTable;
-  std::vector<std::unique_ptr<TParamVar>> m_vars;  // unique_ptr manages the memory
-  TParamObserver *m_paramObserver;
+  std::map<std::string, TParamVar*> m_nameTable;
+  std::vector<std::unique_ptr<TParamVar>> m_vars;
+  TParamObserver* m_paramObserver;
 
   Imp() : m_paramObserver(0) {}
-  ~Imp() = default;
 };
 
-TParamContainer::TParamContainer() : m_imp(std::make_unique<Imp>()) {}
+// TParamVar implementation
+TParamVar::TParamVar(std::string name, bool hidden, bool obsolete)
+    : m_imp(std::make_unique<Imp>(name, hidden, obsolete)) {}
 
+TParamVar::~TParamVar() = default;
+
+std::string TParamVar::getName() const { return m_imp->m_name; }
+bool TParamVar::isHidden() const { return m_imp->m_isHidden; }
+void TParamVar::setIsHidden(bool hidden) { m_imp->m_isHidden = hidden; }
+bool TParamVar::isObsolete() const { return m_imp->m_isObsolete; }
+
+void TParamVar::setParamObserver(TParamObserver* obs) {
+  if (m_imp->m_paramObserver == obs) return;
+  TParam* param = getParam();
+  if (param) {
+    if (obs) param->addObserver(obs);
+    if (m_imp->m_paramObserver) param->removeObserver(m_imp->m_paramObserver);
+  }
+  m_imp->m_paramObserver = obs;
+}
+
+// TParamContainer implementation
+TParamContainer::TParamContainer() : m_imp(std::make_unique<Imp>()) {}
 TParamContainer::~TParamContainer() = default;
 
-void TParamContainer::setParamObserver(TParamObserver *observer) {
-  m_imp->m_paramObserver = observer;
-}
-
-TParamObserver *TParamContainer::getParamObserver() const {
-  return m_imp->m_paramObserver;
-}
-
-void TParamContainer::add(TParamVar *var) {
-  m_imp->m_nameTable[var->getName()] = var;
-  m_imp->m_vars.emplace_back(var);
-  var->setParamObserver(m_imp->m_paramObserver);
-  var->getParam()->setName(var->getName());
+void TParamContainer::add(std::unique_ptr<TParamVar> var) {
+  m_imp->m_nameTable[var->getName()] = var.get(); // Store raw pointer
+  m_imp->m_vars.push_back(std::move(var)); // Move unique_ptr into vector
+  m_imp->m_vars.back()->setParamObserver(m_imp->m_paramObserver);
+  m_imp->m_vars.back()->getParam()->setName(m_imp->m_vars.back()->getName());
 }
 
 int TParamContainer::getParamCount() const {
   return static_cast<int>(m_imp->m_vars.size());
 }
 
-TParam *TParamContainer::getParam(int index) const {
+TParam* TParamContainer::getParam(int index) const {
   assert(0 <= index && index < getParamCount());
   return m_imp->m_vars[index]->getParam();
 }
@@ -64,17 +77,17 @@ std::string TParamContainer::getParamName(int index) const {
   return m_imp->m_vars[index]->getName();
 }
 
-const TParamVar *TParamContainer::getParamVar(int index) const {
+const TParamVar* TParamContainer::getParamVar(int index) const {
   assert(0 <= index && index < getParamCount());
   return m_imp->m_vars[index].get();
 }
 
-TParam *TParamContainer::getParam(std::string name) const {
-  TParamVar *var = getParamVar(name);
+TParam* TParamContainer::getParam(std::string name) const {
+  TParamVar* var = getParamVar(name);
   return (var) ? var->getParam() : 0;
 }
 
-TParamVar *TParamContainer::getParamVar(std::string name) const {
+TParamVar* TParamContainer::getParamVar(std::string name) const {
   auto it = m_imp->m_nameTable.find(name);
   if (it == m_imp->m_nameTable.end())
     return 0;
@@ -84,21 +97,20 @@ TParamVar *TParamContainer::getParamVar(std::string name) const {
 
 void TParamContainer::unlink() {
   for (int i = 0; i < getParamCount(); i++) {
-    // TRangeParam *p0;//,*p1;
-    TParamVar *var = m_imp->m_vars[i];
-    TParam *param  = var->getParam();
+    TParamVar* var = m_imp->m_vars[i].get();
+    TParam* param = var->getParam();
     // p0 = dynamic_cast<TRangeParam *>(param);
     var->setParam(param->clone());
     /*p1 = dynamic_cast<TRangeParam *>(var->getParam());
-if(p0 && p1)
-{
-string name = p0->getName();
-name = p1->getName();
-}*/
+    0 && p1)
+    
+    ng name = p0->getName();
+     = p1->getName();
+    }*/
   }
 }
 
-void TParamContainer::link(const TParamContainer *src) {
+void TParamContainer::link(const TParamContainer* src) {
   assert(getParamCount() == src->getParamCount());
   for (int i = 0; i < getParamCount(); i++) {
     assert(getParamName(i) == src->getParamName(i));
@@ -107,7 +119,7 @@ void TParamContainer::link(const TParamContainer *src) {
   }
 }
 
-void TParamContainer::copy(const TParamContainer *src) {
+void TParamContainer::copy(const TParamContainer* src) {
   assert(getParamCount() == src->getParamCount());
   for (int i = 0; i < getParamCount(); i++) {
     assert(getParamName(i) == src->getParamName(i));

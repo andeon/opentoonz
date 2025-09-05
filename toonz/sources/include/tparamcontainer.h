@@ -4,6 +4,7 @@
 #define TPARAMCONTAINER_INCLUDED
 
 #include <memory>
+#include <string>
 
 #include "tparam.h"
 // #include "tfx.h"
@@ -24,33 +25,25 @@ class TOStream;
 class TParamObserver;
 class TParam;
 
+// Forward declaration for TParamVar::Imp
+class TParamVar::Imp;
+
 class DVAPI TParamVar {
-  std::string m_name;
-  // hidden parameter will be hidden from the fx settings or the function editor
-  bool m_isHidden;
-  // Flag for an obsolete parameter used for maintaining backward-compatiblity.
-  // - The obsolete parameter will call a special function
-  // (TFx::onObsoleteParameterLoaded) on loaded which enables to do some special
-  // action. (e.g. converting to a new parameter etc.)
-  // - The obsolete parameter will not be saved.
-  bool m_isObsolete;
-  TParamObserver *m_paramObserver;
+private:
+  std::unique_ptr<Imp> m_imp; // PIMPL to hide implementation details
 
 public:
-  TParamVar(std::string name, bool hidden = false, bool obsolete = false)
-      : m_name(name)
-      , m_isHidden(hidden)
-      , m_isObsolete(obsolete)
-      , m_paramObserver(0) {}
-  virtual ~TParamVar() {}
-  virtual TParamVar *clone() const = 0;
-  std::string getName() const { return m_name; }
-  bool isHidden() const { return m_isHidden; }
-  void setIsHidden(bool hidden) { m_isHidden = hidden; }
-  bool isObsolete() const { return m_isObsolete; }
-  virtual void setParam(TParam *param) = 0;
-  virtual TParam *getParam() const     = 0;
-  void setParamObserver(TParamObserver *obs);
+  TParamVar(std::string name, bool hidden = false, bool obsolete = false);
+  virtual ~TParamVar();
+
+  virtual TParamVar* clone() const = 0;
+  std::string getName() const;
+  bool isHidden() const;
+  void setIsHidden(bool hidden);
+  bool isObsolete() const;
+  virtual void setParam(TParam* param) = 0;
+  virtual TParam* getParam() const = 0;
+  void setParamObserver(TParamObserver* obs);
 };
 
 template <class T>
@@ -60,33 +53,37 @@ class TParamVarT final : public TParamVar {
   // Note that for now link fx is available only with built-in fx, since m_var
   // must be "pointer to pointer" of parameter to make the link fx to work
   // properly.
-  T *m_var            = nullptr;
-  TParamP m_pluginVar = 0;
+  T* m_var;
+  TParamP m_pluginVar;
 
 public:
-  TParamVarT(std::string name, T *var = nullptr, TParamP pluginVar = 0,
+  TParamVarT(std::string name, T* var = NULL, TParamP pluginVar = 0,
              bool hidden = false, bool obsolete = false)
       : TParamVar(name, hidden, obsolete), m_var(var), m_pluginVar(pluginVar) {}
   TParamVarT() = delete;
-  void setParam(TParam *param) {
+
+  void setParam(TParam* param) override {
     if (m_var)
       *m_var = TParamP(param);
     else
       m_pluginVar = TParamP(param);
   }
-  virtual TParam *getParam() const {
+
+  TParam* getParam() const override {
     if (m_var)
       return m_var->getPointer();
     else
       return m_pluginVar.getPointer();
   }
-  TParamVar *clone() const {
+
+  TParamVar* clone() const override {
     return new TParamVarT<T>(getName(), m_var, m_pluginVar, isHidden(),
                              isObsolete());
   }
 };
 
 class DVAPI TParamContainer {
+private:
   class Imp;
   std::unique_ptr<Imp> m_imp;
 
@@ -94,28 +91,26 @@ public:
   TParamContainer();
   ~TParamContainer();
 
-  void add(TParamVar *var);
+  void add(std::unique_ptr<TParamVar> var);
 
   int getParamCount() const;
-
   bool isParamHidden(int index) const;
-
-  TParam *getParam(int index) const;
+  TParam* getParam(int index) const;
   std::string getParamName(int index) const;
-  TParam *getParam(std::string name) const;
-  TParamVar *getParamVar(std::string name) const;
-  const TParamVar *getParamVar(int index) const;
+  TParam* getParam(std::string name) const;
+  TParamVar* getParamVar(std::string name) const;
+  const TParamVar* getParamVar(int index) const;
 
   void unlink();
-  void link(const TParamContainer *src);
-  void copy(const TParamContainer *src);
+  void link(const TParamContainer* src);
+  void copy(const TParamContainer* src);
 
-  void setParamObserver(TParamObserver *);
-  TParamObserver *getParamObserver() const;
+  void setParamObserver(TParamObserver*);
+  TParamObserver* getParamObserver() const;
 
 private:
-  TParamContainer(const TParamContainer &);
-  TParamContainer &operator=(const TParamContainer &);
+  TParamContainer(const TParamContainer&);
+  TParamContainer& operator=(const TParamContainer&);
 };
 
 #endif
