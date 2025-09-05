@@ -19,15 +19,16 @@ void TParamVar::setParamObserver(TParamObserver *obs) {
 class TParamContainer::Imp {
 public:
   std::map<std::string, TParamVar *> m_nameTable;
-  std::vector<TParamVar *> m_vars;
+  std::vector<std::unique_ptr<TParamVar>> m_vars;  // unique_ptr manages the memory
   TParamObserver *m_paramObserver;
+
   Imp() : m_paramObserver(0) {}
-  ~Imp() { clearPointerContainer(m_vars); }
+  ~Imp() = default;
 };
 
-TParamContainer::TParamContainer() : m_imp(new Imp()) {}
+TParamContainer::TParamContainer() : m_imp(std::make_unique<Imp>()) {}
 
-TParamContainer::~TParamContainer() {}
+TParamContainer::~TParamContainer() = default;
 
 void TParamContainer::setParamObserver(TParamObserver *observer) {
   m_imp->m_paramObserver = observer;
@@ -38,13 +39,15 @@ TParamObserver *TParamContainer::getParamObserver() const {
 }
 
 void TParamContainer::add(TParamVar *var) {
-  m_imp->m_vars.push_back(var);
   m_imp->m_nameTable[var->getName()] = var;
+  m_imp->m_vars.emplace_back(var);
   var->setParamObserver(m_imp->m_paramObserver);
   var->getParam()->setName(var->getName());
 }
 
-int TParamContainer::getParamCount() const { return m_imp->m_vars.size(); }
+int TParamContainer::getParamCount() const {
+  return static_cast<int>(m_imp->m_vars.size());
+}
 
 TParam *TParamContainer::getParam(int index) const {
   assert(0 <= index && index < getParamCount());
@@ -63,7 +66,7 @@ std::string TParamContainer::getParamName(int index) const {
 
 const TParamVar *TParamContainer::getParamVar(int index) const {
   assert(0 <= index && index < getParamCount());
-  return m_imp->m_vars[index];
+  return m_imp->m_vars[index].get();
 }
 
 TParam *TParamContainer::getParam(std::string name) const {
@@ -72,8 +75,7 @@ TParam *TParamContainer::getParam(std::string name) const {
 }
 
 TParamVar *TParamContainer::getParamVar(std::string name) const {
-  std::map<std::string, TParamVar *>::const_iterator it;
-  it = m_imp->m_nameTable.find(name);
+  auto it = m_imp->m_nameTable.find(name);
   if (it == m_imp->m_nameTable.end())
     return 0;
   else
@@ -113,3 +115,4 @@ void TParamContainer::copy(const TParamContainer *src) {
     getParam(i)->copy(src->getParam(i));
   }
 }
+
