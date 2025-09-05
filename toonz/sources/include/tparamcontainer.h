@@ -25,11 +25,9 @@ class TOStream;
 class TParamObserver;
 class TParam;
 
-// Forward declaration for TParamVar::Imp
-class TParamVar::Imp;
-
 class DVAPI TParamVar {
 private:
+  class Imp; // Forward declaration inside TParamVar
   std::unique_ptr<Imp> m_imp; // PIMPL to hide implementation details
 
 public:
@@ -57,7 +55,7 @@ class TParamVarT final : public TParamVar {
   TParamP m_pluginVar;
 
 public:
-  TParamVarT(std::string name, T* var = NULL, TParamP pluginVar = 0,
+  TParamVarT(std::string name, T* var = 0, TParamP pluginVar = 0,
              bool hidden = false, bool obsolete = false)
       : TParamVar(name, hidden, obsolete), m_var(var), m_pluginVar(pluginVar) {}
   TParamVarT() = delete;
