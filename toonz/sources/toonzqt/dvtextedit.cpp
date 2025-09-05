@@ -427,3 +427,7 @@ void DvTextEdit::onSelectionChanged() {
 }
 
 //-----------------------------------------------------------------------------
+
+DvTextEdit::~DvTextEdit() {
+  // Explicit destructor; implement custom cleanup if required
+}
