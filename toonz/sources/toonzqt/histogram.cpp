@@ -539,7 +539,7 @@ Histogram::Histogram(QWidget *parent) : QWidget(parent) {
   logScaleButton->setFixedSize(20, 20);
   logScaleButton->setCheckable(true);
 
-  upperLayout->addWidget(m_logScaleButton);
+  upperLayout->addWidget(logScaleButton);
   upperLayout->addSpacing(HistogramGraph::drawMargin);
 
   m_histograms = new Histograms(this);
