@@ -134,15 +134,15 @@ DvTextEdit::DvTextEdit(QWidget *parent)
 void DvTextEdit::createActions() {
   m_boldAction = new QAction(createQIcon("bold"), tr("Bold"), this);
   m_boldAction->setCheckable(true);
-  connect(m_boldAction, QOverload<>::of(&QAction::triggered), this, &DvTextEdit::setTextBold);
+  connect(m_boldAction, QOverload<bool>::of(&QAction::triggered), this, &DvTextEdit::setTextBold);
 
   m_italicAction = new QAction(createQIcon("italic"), tr("Italic"), this);
   m_italicAction->setCheckable(true);
-  connect(m_italicAction, QOverload<>::of(&QAction::triggered), this, &DvTextEdit::setTextItalic);
+  connect(m_italicAction, QOverload<bool>::of(&QAction::triggered), this, &DvTextEdit::setTextItalic);
 
   m_underlineAction = new QAction(createQIcon("underline"), tr("Underline"), this);
   m_underlineAction->setCheckable(true);
-  connect(m_underlineAction, QOverload<>::of(&QAction::triggered), this, &DvTextEdit::setTextUnderline);
+  connect(m_underlineAction, QOverload<bool>::of(&QAction::triggered), this, &DvTextEdit::setTextUnderline);
 
   m_colorField = new DVGui::ColorField(this, true, TPixel32(), 30);
   m_colorField->hideChannelsFields(true);

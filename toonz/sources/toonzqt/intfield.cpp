@@ -303,9 +303,9 @@ IntField::IntField(QWidget *parent, bool isMaxRangeLimited, bool isRollerHide,
   m_inc->setFixedSize(QSize(20, 20));
   m_dec->setFixedSize(QSize(20, 20));
   ret = ret &&
-        connect(m_inc, QOverload<>::of(&QPushButton::clicked), this,
+        connect(m_inc, QOverload<bool>::of(&QPushButton::clicked), this,
                 &IntField::onIncClicked) &&
-        connect(m_dec, QOverload<>::of(&QPushButton::clicked), this,
+        connect(m_dec, QOverload<bool>::of(&QPushButton::clicked), this,
                 &IntField::onDecClicked);
 
   if (isSpinnerHide) enableSpinner(false);

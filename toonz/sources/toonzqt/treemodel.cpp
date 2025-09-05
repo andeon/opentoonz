@@ -364,7 +364,8 @@ void TreeView::setModel(TreeModel *model) {
   // bottom horizontal scrollbar to resize contents...
   connect(this, &QTreeView::expanded, this, &TreeView::resizeToConts);
   connect(this, &QTreeView::collapsed, this, &TreeView::resizeToConts);
-  connect(this->model(), QOverload<>::of(&QAbstractItemModel::layoutChanged),
+  connect(this->model(),
+          QOverload<const QList<QPersistentModelIndex> &, QAbstractItemModel::LayoutChangeHint>::of(&QAbstractItemModel::layoutChanged),
           this, &TreeView::resizeToConts);
 }
 
