@@ -5,10 +5,10 @@
 
 #include "toonzqt/dvdialog.h"
 
-#include <QList>
+#include <QObject>
 
 class QLabel;
-
+class QPushButton;
 namespace DVGui {
 class IntLineEdit;
 }
@@ -28,6 +28,7 @@ class ReframePopup final : public DVGui::Dialog {
   DVGui::IntLineEdit *m_step, *m_blank;
   QWidget *m_blankFieldContainer, *m_blankCellCountContainer;
   QLabel* m_blankCellCountLbl;
+  QPushButton *m_okBtn, *m_cancelBtn;
 
 public:
   ReframePopup();

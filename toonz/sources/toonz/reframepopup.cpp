@@ -25,13 +25,14 @@ ReframePopup::ReframePopup()
 
   m_blankCellCountLbl = new QLabel("", this);
 
-  QPushButton* okBtn        = new QPushButton(tr("OK"), this);
-  QPushButton* cancelBtn    = new QPushButton(tr("Cancel"), this);
+  QPushButton* m_okBtn      = new QPushButton(tr("OK"), this);
+  QPushButton* m_cancelBtn  = new QPushButton(tr("Cancel"), this);
   m_blankFieldContainer     = new QWidget(this);
   m_blankCellCountContainer = new QWidget(this);
 
   m_step->setObjectName("LargeSizedText");
   m_blank->setObjectName("LargeSizedText");
+  
   // layout
   QHBoxLayout* mainLay = new QHBoxLayout();
   mainLay->setContentsMargins(0, 0, 0, 0);
@@ -65,15 +66,15 @@ ReframePopup::ReframePopup()
   m_topLayout->addWidget(m_blankCellCountContainer, 0);
 
   // buttons
-  m_buttonLayout->addWidget(okBtn);
-  m_buttonLayout->addWidget(cancelBtn);
+  m_buttonLayout->addWidget(m_okBtn);
+  m_buttonLayout->addWidget(m_cancelBtn);
 
   // signal-slot connections
   bool ret = true;
   ret = ret && connect(m_step, &DVGui::IntLineEdit::editingFinished, this, &ReframePopup::updateBlankCellCount);
   ret = ret && connect(m_blank, &DVGui::IntLineEdit::editingFinished, this, &ReframePopup::updateBlankCellCount);
-  ret = ret && connect(okBtn, QOverload<>::of(&QPushButton::clicked), this, &ReframePopup::accept);
-  ret = ret && connect(cancelBtn, QOverload<>::of(&QPushButton::clicked), this, &ReframePopup::reject);
+  ret = ret && connect(m_okBtn, QOverload<bool>::of(&QPushButton::clicked), this, &QDialog::accept);
+  ret = ret && connect(m_cancelBtn, QOverload<bool>::of(&QPushButton::clicked), this, &QDialog::reject);
   assert(ret);
 }
 
