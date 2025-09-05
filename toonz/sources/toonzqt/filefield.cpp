@@ -51,8 +51,8 @@ FileField::FileField(QWidget *parent, QString path, bool readOnly,
 
   //--- signal-slot connections
   if (!readOnly)
-    connect(m_field, SIGNAL(editingFinished()), SIGNAL(pathChanged()));
-  connect(m_fileBrowseButton, SIGNAL(pressed()), this, SLOT(browseDirectory()));
+    connect(m_field, &QLineEdit::editingFinished, this, &FileField::pathChanged);
+  connect(m_fileBrowseButton, &QPushButton::pressed, this, &FileField::browseDirectory);
 }
 
 //-----------------------------------------------------------------------------

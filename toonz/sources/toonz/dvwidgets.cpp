@@ -15,8 +15,8 @@ using namespace DVGui;
 
 PropertyComboBox::PropertyComboBox(QWidget *parent, TEnumProperty *prop)
     : QComboBox(parent), PropertyWidget(prop) {
-  connect(this, SIGNAL(currentIndexChanged(const QString &)), this,
-          SLOT(onCurrentIndexChanged(const QString &)));
+  connect(this, QOverload<const QString &>::of(&QComboBox::currentIndexChanged),
+          this, &PropertyComboBox::onCurrentIndexChanged);
   setMaximumHeight(WidgetHeight);
 }
 
@@ -49,7 +49,7 @@ void PropertyComboBox::onPropertyChanged() {
 PropertyCheckBox::PropertyCheckBox(const QString &text, QWidget *parent,
                                    TBoolProperty *prop)
     : CheckBox(text, parent), PropertyWidget(prop) {
-  connect(this, SIGNAL(stateChanged(int)), this, SLOT(onStateChanged(int)));
+  connect(this, &CheckBox::stateChanged, this, &PropertyCheckBox::onStateChanged);
   setMaximumHeight(WidgetHeight);
 }
 
@@ -73,8 +73,7 @@ void PropertyCheckBox::onPropertyChanged() {
 
 PropertyLineEdit::PropertyLineEdit(QWidget *parent, TStringProperty *prop)
     : LineEdit(parent), PropertyWidget(prop) {
-  connect(this, SIGNAL(textChanged(const QString &)), this,
-          SLOT(onTextChanged(const QString &)));
+  connect(this, &LineEdit::textChanged, this, &PropertyLineEdit::onTextChanged);
   setMaximumSize(100, WidgetHeight);
 }
 
@@ -99,7 +98,7 @@ void PropertyLineEdit::onPropertyChanged() {
 
 PropertyIntField::PropertyIntField(QWidget *parent, TIntProperty *prop)
     : IntField(parent), PropertyWidget(prop) {
-  connect(this, SIGNAL(valueChanged(bool)), this, SLOT(onValueChanged(bool)));
+  connect(this, &IntField::valueChanged, this, &PropertyIntField::onValueChanged);
 }
 
 //-----------------------------------------------------------------------------
@@ -122,7 +121,7 @@ void PropertyIntField::onPropertyChanged() {
 
 PropertyDoubleField::PropertyDoubleField(QWidget *parent, TDoubleProperty *prop)
     : DoubleField(parent), PropertyWidget(prop) {
-  connect(this, SIGNAL(valueChanged(bool)), this, SLOT(onValueChanged(bool)));
+  connect(this, &DoubleField::valueChanged, this, &PropertyDoubleField::onValueChanged);
 }
 
 //-----------------------------------------------------------------------------

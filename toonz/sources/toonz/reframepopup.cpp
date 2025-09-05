@@ -13,7 +13,8 @@
 #include <QPushButton>
 #include <QHBoxLayout>
 
-#include <iostream>
+#include <cassert>
+
 //-----------------------------------------------------------------------------
 
 ReframePopup::ReframePopup()
@@ -33,7 +34,7 @@ ReframePopup::ReframePopup()
   m_blank->setObjectName("LargeSizedText");
   // layout
   QHBoxLayout* mainLay = new QHBoxLayout();
-  mainLay->setMargin(0);
+  mainLay->setContentsMargins(0, 0, 0, 0);
   mainLay->setSpacing(5);
   {
     mainLay->addWidget(new QLabel(tr("Number of steps:"), this));
@@ -41,7 +42,7 @@ ReframePopup::ReframePopup()
     mainLay->addWidget(new QLabel(tr("s"), this));
 
     QHBoxLayout* blankLay = new QHBoxLayout();
-    blankLay->setMargin(0);
+    blankLay->setContentsMargins(0, 0, 0, 0);
     blankLay->setSpacing(5);
     {
       blankLay->addSpacing(10);
@@ -55,7 +56,7 @@ ReframePopup::ReframePopup()
   m_topLayout->addLayout(mainLay);
 
   QHBoxLayout* textLay = new QHBoxLayout();
-  textLay->setMargin(0);
+  textLay->setContentsMargins(0, 0, 0, 0);
   {
     textLay->addStretch(1);
     textLay->addWidget(m_blankCellCountLbl);
@@ -69,12 +70,10 @@ ReframePopup::ReframePopup()
 
   // signal-slot connections
   bool ret = true;
-  ret      = ret && connect(m_step, SIGNAL(editingFinished()), this,
-                            SLOT(updateBlankCellCount()));
-  ret      = ret && connect(m_blank, SIGNAL(editingFinished()), this,
-                            SLOT(updateBlankCellCount()));
-  ret      = ret && connect(okBtn, SIGNAL(clicked()), this, SLOT(accept()));
-  ret      = ret && connect(cancelBtn, SIGNAL(clicked()), this, SLOT(reject()));
+  ret = ret && connect(m_step, &DVGui::IntLineEdit::editingFinished, this, &ReframePopup::updateBlankCellCount);
+  ret = ret && connect(m_blank, &DVGui::IntLineEdit::editingFinished, this, &ReframePopup::updateBlankCellCount);
+  ret = ret && connect(okBtn, QOverload<>::of(&QPushButton::clicked), this, &ReframePopup::accept);
+  ret = ret && connect(cancelBtn, QOverload<>::of(&QPushButton::clicked), this, &ReframePopup::reject);
   assert(ret);
 }
 

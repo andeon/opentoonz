@@ -118,72 +118,46 @@ DvTextEdit::DvTextEdit(QWidget *parent)
 
   m_button = new DvTextEditButton(0);
   m_button->hide();
-  connect(m_button, SIGNAL(clicked()), this, SLOT(onShowMiniToolBarClicked()));
+  connect(m_button, &DvTextEditButton::clicked, this, &DvTextEdit::onShowMiniToolBarClicked);
 
   fontChanged(font());
   setTextColor(TPixel32::Black, false);
   alignmentChanged(alignment());
 
-  connect(this, SIGNAL(currentCharFormatChanged(const QTextCharFormat &)), this,
-          SLOT(onCurrentCharFormatChanged(const QTextCharFormat &)));
-
-  connect(this, SIGNAL(cursorPositionChanged()), this,
-          SLOT(onCursorPositionChanged()));
-
-  connect(this, SIGNAL(selectionChanged()), this, SLOT(onSelectionChanged()));
+  connect(this, &QTextEdit::currentCharFormatChanged, this,
+          &DvTextEdit::onCurrentCharFormatChanged);
+  connect(this, &QTextEdit::cursorPositionChanged, this,
+          &DvTextEdit::onCursorPositionChanged);
+  connect(this, &QTextEdit::selectionChanged, this, &DvTextEdit::onSelectionChanged);
 }
-
-//-----------------------------------------------------------------------------
-void DvTextEdit::changeFont(const QFont &f) {
-  QTextCharFormat fmt = currentCharFormat();
-  // bool aux = fmt.fontUnderline();
-  fmt.setFont(f);
-  // fmt.setFontHintingPreference(QFont::PreferFullHinting);
-  mergeFormatOnWordOrSelection(fmt);
-}
-
-//-----------------------------------------
-
-DvTextEdit::~DvTextEdit() {}
-
-//-----------------------------------------------------------------------------
 
 void DvTextEdit::createActions() {
   m_boldAction = new QAction(createQIcon("bold"), tr("Bold"), this);
   m_boldAction->setCheckable(true);
-  connect(m_boldAction, SIGNAL(triggered()), this, SLOT(setTextBold()));
+  connect(m_boldAction, QOverload<>::of(&QAction::triggered), this, &DvTextEdit::setTextBold);
 
   m_italicAction = new QAction(createQIcon("italic"), tr("Italic"), this);
   m_italicAction->setCheckable(true);
-  connect(m_italicAction, SIGNAL(triggered()), this, SLOT(setTextItalic()));
+  connect(m_italicAction, QOverload<>::of(&QAction::triggered), this, &DvTextEdit::setTextItalic);
 
-  m_underlineAction =
-      new QAction(createQIcon("underline"), tr("Underline"), this);
+  m_underlineAction = new QAction(createQIcon("underline"), tr("Underline"), this);
   m_underlineAction->setCheckable(true);
-  connect(m_underlineAction, SIGNAL(triggered()), this,
-          SLOT(setTextUnderline()));
+  connect(m_underlineAction, QOverload<>::of(&QAction::triggered), this, &DvTextEdit::setTextUnderline);
 
   m_colorField = new DVGui::ColorField(this, true, TPixel32(), 30);
   m_colorField->hideChannelsFields(true);
-  connect(m_colorField, SIGNAL(colorChanged(const TPixel32 &, bool)), this,
-          SLOT(setTextColor(const TPixel32 &, bool)));
+  connect(m_colorField, &DVGui::ColorField::colorChanged, this, &DvTextEdit::setTextColor);
 
   m_alignActionGroup = new QActionGroup(this);
-  connect(m_alignActionGroup, SIGNAL(triggered(QAction *)), this,
-          SLOT(setTextAlign(QAction *)));
+  connect(m_alignActionGroup, &QActionGroup::triggered, this, &DvTextEdit::setTextAlign);
 
-  m_alignLeftAction = new QAction(createQIcon("align_left"), tr("Align Left"),
-                                  m_alignActionGroup);
+  m_alignLeftAction = new QAction(createQIcon("align_left"), tr("Align Left"), m_alignActionGroup);
   m_alignLeftAction->setCheckable(true);
-  m_alignCenterAction = new QAction(createQIcon("align_center"),
-                                    tr("Align Center"), m_alignActionGroup);
+  m_alignCenterAction = new QAction(createQIcon("align_center"), tr("Align Center"), m_alignActionGroup);
   m_alignCenterAction->setCheckable(true);
-  m_alignRightAction = new QAction(createQIcon("align_right"),
-                                   tr("Align Right"), m_alignActionGroup);
+  m_alignRightAction = new QAction(createQIcon("align_right"), tr("Align Right"), m_alignActionGroup);
   m_alignRightAction->setCheckable(true);
 }
-
-//-----------------------------------------------------------------------------
 
 void DvTextEdit::createMiniToolBar() {
   m_miniToolBar = new DvMiniToolBar();
@@ -196,9 +170,8 @@ void DvTextEdit::createMiniToolBar() {
   m_fontComboBox = new QFontComboBox(toolBarUp);
   m_fontComboBox->setMaximumHeight(20);
   m_fontComboBox->setMinimumWidth(140);
-
-  connect(m_fontComboBox, SIGNAL(activated(const QString &)), this,
-          SLOT(setTextFamily(const QString &)));
+  connect(m_fontComboBox, QOverload<const QString &>::of(&QFontComboBox::activated),
+          this, &DvTextEdit::setTextFamily);
 
   m_sizeComboBox = new QComboBox(toolBarUp);
   m_sizeComboBox->setEditable(true);
@@ -209,8 +182,8 @@ void DvTextEdit::createMiniToolBar() {
   for (int size : db.standardSizes())
     m_sizeComboBox->addItem(QString::number(size));
 
-  connect(m_sizeComboBox, SIGNAL(activated(const QString &)), this,
-          SLOT(setTextSize(const QString &)));
+  connect(m_sizeComboBox, QOverload<const QString &>::of(&QComboBox::activated),
+          this, &DvTextEdit::setTextSize);
 
   toolBarUp->addWidget(m_fontComboBox);
   toolBarUp->addWidget(m_sizeComboBox);
@@ -232,7 +205,7 @@ void DvTextEdit::createMiniToolBar() {
 
   QVBoxLayout *m_mainLayout = new QVBoxLayout(m_miniToolBar);
   m_mainLayout->setSizeConstraint(QLayout::SetFixedSize);
-  m_mainLayout->setMargin(2);
+  m_mainLayout->setContentsMargins(2, 2, 2, 2);
   m_mainLayout->setSpacing(2);
   m_mainLayout->addWidget(toolBarUp);
   m_mainLayout->addWidget(toolBarDown);

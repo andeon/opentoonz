@@ -286,14 +286,13 @@ IntField::IntField(QWidget *parent, bool isMaxRangeLimited, bool isRollerHide,
   vLayout->setSpacing(0);
 
   m_lineEdit = new DVGui::IntLineEdit(field);
-  bool ret   = connect(m_lineEdit, SIGNAL(editingFinished()), this,
-                     SLOT(onEditingFinished()));
+  bool ret = connect(m_lineEdit, &IntLineEdit::editingFinished, this,
+                     &IntField::onEditingFinished);
   vLayout->addWidget(m_lineEdit);
 
   m_roller = new RollerField(field);
-  ret      = ret && connect(m_roller, SIGNAL(valueChanged(bool)), this,
-                       SLOT(onRollerValueChanged(bool)));
-  vLayout->addWidget(m_roller);
+  ret = ret && connect(m_roller, &RollerField::valueChanged, this,
+                       &IntField::onRollerValueChanged);
 
   if (isRollerHide) enableRoller(false);
 
@@ -303,12 +302,14 @@ IntField::IntField(QWidget *parent, bool isMaxRangeLimited, bool isRollerHide,
   m_dec = new QPushButton(QString("-"));
   m_inc->setFixedSize(QSize(20, 20));
   m_dec->setFixedSize(QSize(20, 20));
-  ret = ret
-     && connect(m_inc, SIGNAL(clicked()), this, SLOT(onIncClicked()))
-     && connect(m_dec, SIGNAL(clicked()), this, SLOT(onDecClicked()));
-   
+  ret = ret &&
+        connect(m_inc, QOverload<>::of(&QPushButton::clicked), this,
+                &IntField::onIncClicked) &&
+        connect(m_dec, QOverload<>::of(&QPushButton::clicked), this,
+                &IntField::onDecClicked);
+
   if (isSpinnerHide) enableSpinner(false);
-  
+
   // TODO:
   // Commonly in OpenToonz spin-buttons has been placed in that order: [+][-]
   // This seems unusual behavior.
@@ -316,17 +317,18 @@ IntField::IntField(QWidget *parent, bool isMaxRangeLimited, bool isRollerHide,
   // We need to know what is better
   layout->addWidget(m_dec);
   layout->addWidget(m_inc);
-  
-  m_slider = new QSlider(Qt::Horizontal, this);
-  ret      = ret && connect(m_slider, SIGNAL(valueChanged(int)), this,
-                       SLOT(onSliderChanged(int)));
-  ret      = ret && connect(m_slider, SIGNAL(sliderReleased()), this,
-                       SLOT(onSliderReleased()));
 
-  ret = ret && connect(m_lineEdit, SIGNAL(editingFinished()), this,
-                       SIGNAL(valueEditedByHand()));
-  ret = ret && connect(m_slider, SIGNAL(sliderReleased()), this,
-                       SIGNAL(valueEditedByHand()));
+  m_slider = new QSlider(Qt::Horizontal, this);
+  ret = ret && connect(m_slider, &QSlider::valueChanged, this,
+                       &IntField::onSliderChanged);
+  ret = ret && connect(m_slider, &QSlider::sliderReleased, this,
+                       &IntField::onSliderReleased);
+
+  ret = ret && connect(m_lineEdit, &IntLineEdit::editingFinished, this,
+                       &IntField::valueEditedByHand);
+  ret = ret && connect(m_slider, &QSlider::sliderReleased, this,
+                       &IntField::valueEditedByHand);
+
   layout->addWidget(m_slider);
 
   setValues(0, 0, 100);
