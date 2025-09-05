@@ -534,21 +534,21 @@ Histogram::Histogram(QWidget *parent) : QWidget(parent) {
 
   QIcon icon = createQIcon("histograms");
 
-  QPushButton *logScaleButton = new QPushButton(icon, "", this);
-  logScaleButton->setToolTip(tr("Logarithmic Scale"));
-  logScaleButton->setFixedSize(20, 20);
-  logScaleButton->setCheckable(true);
+  m_logScaleButton = new QPushButton(icon, "", this);
+  m_logScaleButton->setToolTip(tr("Logarithmic Scale"));
+  m_logScaleButton->setFixedSize(20, 20);
+  m_logScaleButton->setCheckable(true);
 
-  upperLayout->addWidget(logScaleButton);
+  upperLayout->addWidget(m_logScaleButton);
   upperLayout->addSpacing(HistogramGraph::drawMargin);
 
   m_histograms = new Histograms(this);
   m_histograms->setCurrentIndex(0);
   mainLayout->addWidget(m_histograms);
 
-  connect(m_channelsListBox, SIGNAL(currentIndexChanged(int)), m_histograms,
-          SLOT(setCurrentIndex(int)));
-  connect(logScaleButton, SIGNAL(toggled(bool)), this, SLOT(setLogScale(bool)));
+  connect(m_channelsListBox, &QComboBox::currentIndexChanged, m_histograms,
+          &Histograms::setCurrentIndex);
+  connect(m_logScaleButton, &QPushButton::toggled, this, &Histogram::setLogScale);
 
   updateChannelsList();
 }
