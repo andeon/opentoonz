@@ -546,8 +546,8 @@ Histogram::Histogram(QWidget *parent) : QWidget(parent) {
   m_histograms->setCurrentIndex(0);
   mainLayout->addWidget(m_histograms);
 
-  connect(m_channelsListBox, &QComboBox::currentIndexChanged, m_histograms, 
-          &Histograms::setCurrentIndex);
+  connect(m_channelsListBox, QOverload<int>::of(&QComboBox::currentIndexChanged), 
+          m_histograms, &Histograms::setCurrentIndex);
   connect(logScaleButton, &QPushButton::toggled, this, &Histogram::setLogScale);
 
 
