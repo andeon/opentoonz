@@ -131,6 +131,16 @@ DvTextEdit::DvTextEdit(QWidget *parent)
   connect(this, &QTextEdit::selectionChanged, this, &DvTextEdit::onSelectionChanged);
 }
 
+//-----------------------------------------------------------------------------
+// Changes the text font to the specified font
+void DvTextEdit::changeFont(const QFont &f) {
+  setFont(f);  // Applies the font to the QTextEdit widget
+  QTextCharFormat fmt;
+  fmt.setFont(f);  // Sets the font in the text format
+  mergeFormatOnWordOrSelection(fmt);  // Applies to the selected text or current word
+  fontChanged(f);  // Updates the toolbar (fontComboBox, sizeComboBox)
+}
+
 void DvTextEdit::createActions() {
   m_boldAction = new QAction(createQIcon("bold"), tr("Bold"), this);
   m_boldAction->setCheckable(true);
@@ -192,8 +202,6 @@ void DvTextEdit::createMiniToolBar() {
   toolBarDown->setIconSize(QSize(30, 30));
   toolBarDown->setObjectName("toolOptionBar");
   toolBarDown->setFixedHeight(30);
-
-  toolBarDown->setIconSize(QSize(30, 30));
 
   toolBarDown->addWidget(m_colorField);
   toolBarDown->addSeparator();
