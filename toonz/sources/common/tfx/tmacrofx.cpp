@@ -83,8 +83,10 @@ void collectParams(TMacroFx *macroFx) {
   for (k = 0; k < (int)macroFx->m_fxs.size(); k++) {
     TFxP fx = macroFx->m_fxs[k];
     int j;
-    for (j = 0; j < fx->getParams()->getParamCount(); j++)
-      macroFx->getParams()->add(fx->getParams()->getParamVar(j)->clone());
+    for (j = 0; j < fx->getParams()->getParamCount(); j++) {
+      std::unique_ptr<TParamVar> var(fx->getParams()->getParamVar(j)->clone());
+      macroFx->getParams()->add(std::move(var));
+    }
   }
 }
 
