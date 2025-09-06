@@ -742,17 +742,11 @@ public:
 //*****************************************************************************
 
 class MyPaintBrushStyleChooserPage final : public StyleChooserPage {
+  Q_OBJECT
   MyPaintBrushStyleManager *m_mypManager;
 
 public:
-  MyPaintBrushStyleChooserPage(StyleEditor *styleEditor, QWidget *parent = 0)
-      : StyleChooserPage(styleEditor, parent) {
-    m_chipSize = QSize(64, 64);
-    static MyPaintBrushStyleManager theManager(m_chipSize);
-    m_manager    = &theManager;
-    m_mypManager = &theManager;
-  }
-
+  MyPaintBrushStyleChooserPage(StyleEditor *styleEditor, QWidget *parent = 0);
   bool loadIfNeeded() override {
     if (!m_manager->isLoaded()) {
       m_manager->loadItems();
@@ -771,6 +765,18 @@ public:
   bool isSameStyle(const TColorStyleP style, int index) override;
 
   QString getChipDescription(int index) override;
+
+protected:
+  void loadEntries() override;
+  void showEvent(QShowEvent *) override;
+  void hideEvent(QHideEvent *) override;
+
+private:
+  int m_loadedBrushCount; // Track number of loaded brushes
+  static const int MAX_INITIAL_BRUSHES = 50; // Configurable limit
+
+protected slots:
+  void loadMoreEntries(); // New slot for loading more brushes
 };
 
 //*****************************************************************************

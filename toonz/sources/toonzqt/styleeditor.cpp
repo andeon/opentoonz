@@ -2300,49 +2300,121 @@ QString TextureStyleChooserPage::getChipDescription(int index) {
 //    MyPaintBrushStyleChooserPage  implementation
 //*****************************************************************************
 
-int MyPaintBrushStyleChooserPage::drawChip(QPainter &p, QRect rect, int index) {
-  assert(0 <= index && index < getChipCount());
-  if (index == 0) {
-    static QImage noStyleImage(":Resources/no_mypaintbrush.png");
-    p.drawImage(rect, noStyleImage);
-    return SOLIDCHIP;
-  } else {
-    auto &data = m_manager->getData(index - 1);
-    p.drawImage(rect, data.image);
-    return data.markPinToTop ? PINNEDCHIP : COMMONCHIP;
-  }
+MyPaintBrushStyleChooserPage::MyPaintBrushStyleChooserPage(StyleEditor *styleEditor, QWidget *parent)
+    : StyleChooserPage(styleEditor, parent)
+    , m_mypManager(nullptr)
+    , m_loadedBrushCount(0) {
+  m_chipSize = QSize(64, 64);
+  static MyPaintBrushStyleManager theManager(m_chipSize);
+  m_manager = &theManager;
+  m_mypManager = &theManager;
+  setLayout(m_layout);
 }
 
-//-----------------------------------------------------------------------------
+// Load initial or filtered brushes
+void MyPaintBrushStyleChooserPage::loadEntries() {
+  QString path = Preferences::instance()->getMyPaintBrushStylePath();
+  QDir dir(path);
+  QStringList files = dir.entryList(QStringList() << "*.myb", QDir::Files);
+  int startIndex = m_loadedBrushCount;
+  int maxLoad = MAX_INITIAL_BRUSHES;
+
+  // Clear existing widgets if reloading from scratch
+  if (startIndex == 0) {
+    QLayoutItem* item;
+    while ((item = m_layout->takeAt(0)) != nullptr) {
+      delete item->widget();
+      delete item;
+    }
+  }
+
+  // Load brushes
+  for (int i = startIndex; i < files.size() && m_loadedBrushCount < startIndex + maxLoad; ++i) {
+    QString fileName = files[i];
+    TMyPaintBrushStyle* style = new TMyPaintBrushStyle(path + "/" + fileName);
+    QPixmap pixmap = style->getIcon(32, 32); // Smaller preview size
+    StyleChip* chip = new StyleChip(pixmap, fileName, style);
+    m_layout->addWidget(chip, m_layout->count() / 4, m_layout->count() % 4);
+    connect(chip, SIGNAL(clicked(TStyle*)), this, SLOT(onChipClicked(TStyle*)));
+    m_loadedBrushCount++;
+  }
+
+  // Add "Load More" button if more brushes remain
+  if (m_loadedBrushCount < files.size()) {
+    QPushButton* loadMoreButton = new QPushButton("Load More");
+    m_layout->addWidget(loadMoreButton, m_layout->count() / 4, m_layout->count() % 4);
+    connect(loadMoreButton, &QPushButton::clicked, this, &MyPaintBrushStyleChooserPage::loadMoreEntries);
+  }
+
+  computeSize();
+  update();
+}
+
+// Load additional brushes
+void MyPaintBrushStyleChooserPage::loadMoreEntries() {
+  loadEntries(); // Continue loading from m_loadedBrushCount
+}
+
+// Show event to reload brushes if needed
+void MyPaintBrushStyleChooserPage::showEvent(QShowEvent* event) {
+  if (m_layout->count() == 0) {
+    m_loadedBrushCount = 0; // Reset count
+    loadEntries();
+  }
+  StyleChooserPage::showEvent(event);
+}
+
+// Hide event to clear widgets and free memory
+void MyPaintBrushStyleChooserPage::hideEvent(QHideEvent* event) {
+  QLayoutItem* item;
+  while ((item = m_layout->takeAt(0)) != nullptr) {
+    delete item->widget();
+    delete item;
+  }
+  m_loadedBrushCount = 0; // Reset count
+  StyleChooserPage::hideEvent(event);
+}
+
+int MyPaintBrushStyleChooserPage::drawChip(QPainter &p, QRect rect, int index) {
+  if (index == 0) {
+    // solid chip
+    p.fillRect(rect, m_solidChipBoxColor);
+    return SOLIDCHIP;
+  }
+  index--;
+  TMyPaintBrushStyle &style = m_mypManager->getBrush(index);
+  QPixmap pixmap = style.getIcon();
+  p.drawPixmap(rect, pixmap);
+  if (m_mypManager->isPinned(index))
+    return PINNEDCHIP;
+  else
+    return COMMONCHIP;
+}
 
 void MyPaintBrushStyleChooserPage::onSelect(int index) {
-  assert(0 <= index && index < getChipCount());
-  if (index == 0) {
-    static TSolidColorStyle noStyle(TPixel32::Black);
-    emit styleSelected(noStyle);
-  } else {
-    --index;
-    emit styleSelected(getBrush(index));
-  }
+  TColorStyle *style = (index == 0) ? new TSolidColorStyle(TPixel32::Black)
+                                    : new TMyPaintBrushStyle(getBrush(index));
+  emit styleSelected(*style);
+  delete style;
 }
-
-//-----------------------------------------------------------------------------
 
 bool MyPaintBrushStyleChooserPage::isSameStyle(const TColorStyleP style,
-                                               int index) {
-  if (index > 0)
-    return style->getBrushIdHash() == getBrush(index - 1).getBrushIdHash();
-  else
-    return style->getBrushIdHash() == TSolidColorStyle::staticBrushIdHash();
+                                              int index) {
+  if (index == 0) {
+    return style->getMainColor() == TPixel32::Black &&
+           style->isRasterStyle() == false;
+  }
+  index--;
+  return style->isRasterStyle() == false &&
+         style->getDescription() == getChipDescription(index);
 }
 
-//-----------------------------------------------------------------------------
-
 QString MyPaintBrushStyleChooserPage::getChipDescription(int index) {
-  if (index > 0)
-    return m_manager->getData(index - 1).desc;
-  else
-    return QObject::tr("Plain color", "MyPaintBrushStyleChooserPage");
+  if (index == 0) return QString("Solid");
+  index--;
+  TMyPaintBrushStyle &style = m_mypManager->getBrush(index);
+  QString desc              = QString::fromStdWString(style.getDescription());
+  return desc;
 }
 
 //*****************************************************************************
