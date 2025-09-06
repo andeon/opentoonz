@@ -3,11 +3,10 @@
 #ifndef TFXPARAM_INCLUDED
 #define TFXPARAM_INCLUDED
 
+// #include "tcommon.h"
+
 #include "tfx.h"
 #include "tparamcontainer.h"
-#include "tdoubleparam.h"
-#include "tboolparam.h"
-#include "tpixelparam.h" // Added for TPixelParamP
 
 template <class T>
 void bindParam(TFx *fx, std::string name, T &var, bool hidden = false,
