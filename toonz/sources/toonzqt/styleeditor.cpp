@@ -2299,10 +2299,11 @@ QString TextureStyleChooserPage::getChipDescription(int index) {
 //*****************************************************************************
 //    MyPaintBrushStyleChooserPage  implementation
 //*****************************************************************************
-
+// Constructor
 MyPaintBrushStyleChooserPage::MyPaintBrushStyleChooserPage(StyleEditor *styleEditor, QWidget *parent)
     : StyleChooserPage(styleEditor, parent)
     , m_mypManager(nullptr)
+    , m_layout(new QGridLayout(this))
     , m_loadedBrushCount(0) {
   m_chipSize = QSize(64, 64);
   static MyPaintBrushStyleManager theManager(m_chipSize);
@@ -2313,7 +2314,7 @@ MyPaintBrushStyleChooserPage::MyPaintBrushStyleChooserPage(StyleEditor *styleEdi
 
 // Load initial or filtered brushes
 void MyPaintBrushStyleChooserPage::loadEntries() {
-  QString path = Preferences::instance()->getMyPaintBrushStylePath();
+  QString path = QString::fromStdWString(m_mypManager->getPath().getWideString());
   QDir dir(path);
   QStringList files = dir.entryList(QStringList() << "*.myb", QDir::Files);
   int startIndex = m_loadedBrushCount;
@@ -2331,8 +2332,12 @@ void MyPaintBrushStyleChooserPage::loadEntries() {
   // Load brushes
   for (int i = startIndex; i < files.size() && m_loadedBrushCount < startIndex + maxLoad; ++i) {
     QString fileName = files[i];
-    TMyPaintBrushStyle* style = new TMyPaintBrushStyle(path + "/" + fileName);
-    QPixmap pixmap = style->getIcon(32, 32); // Smaller preview size
+    TFilePath filePath = TFilePath(path.toStdString()) + TFilePath(fileName.toStdString());
+    TMyPaintBrushStyle* style = new TMyPaintBrushStyle(filePath);
+    TRaster32P raster = style->getIcon();
+    QPixmap pixmap;
+    if (raster) pixmap = QPixmap::fromImage(raster->createQImage());
+    else pixmap = QPixmap(m_chipSize); // Fallback
     StyleChip* chip = new StyleChip(pixmap, fileName, style);
     m_layout->addWidget(chip, m_layout->count() / 4, m_layout->count() % 4);
     connect(chip, SIGNAL(clicked(TStyle*)), this, SLOT(onChipClicked(TStyle*)));
@@ -2383,9 +2388,12 @@ int MyPaintBrushStyleChooserPage::drawChip(QPainter &p, QRect rect, int index) {
   }
   index--;
   TMyPaintBrushStyle &style = m_mypManager->getBrush(index);
-  QPixmap pixmap = style.getIcon();
+  TRaster32P raster = style.getIcon();
+  QPixmap pixmap;
+  if (raster) pixmap = QPixmap::fromImage(raster->createQImage());
+  else pixmap = QPixmap(m_chipSize);
   p.drawPixmap(rect, pixmap);
-  if (m_mypManager->isPinned(index))
+  if (m_manager->isPinned(index))
     return PINNEDCHIP;
   else
     return COMMONCHIP;
@@ -2398,23 +2406,19 @@ void MyPaintBrushStyleChooserPage::onSelect(int index) {
   delete style;
 }
 
-bool MyPaintBrushStyleChooserPage::isSameStyle(const TColorStyleP style,
-                                              int index) {
+bool MyPaintBrushStyleChooserPage::isSameStyle(const TColorStyleP style, int index) {
   if (index == 0) {
-    return style->getMainColor() == TPixel32::Black &&
-           style->isRasterStyle() == false;
+    return style->getMainColor() == TPixel32::Black && !style->isRasterStyle();
   }
   index--;
-  return style->isRasterStyle() == false &&
-         style->getDescription() == getChipDescription(index);
+  return !style->isRasterStyle() && style->getDescription() == getChipDescription(index);
 }
 
 QString MyPaintBrushStyleChooserPage::getChipDescription(int index) {
   if (index == 0) return QString("Solid");
   index--;
   TMyPaintBrushStyle &style = m_mypManager->getBrush(index);
-  QString desc              = QString::fromStdWString(style.getDescription());
-  return desc;
+  return QString::fromStdWString(style.getDescription());
 }
 
 //*****************************************************************************

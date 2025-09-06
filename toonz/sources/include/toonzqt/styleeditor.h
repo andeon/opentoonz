@@ -744,6 +744,7 @@ public:
 class MyPaintBrushStyleChooserPage final : public StyleChooserPage {
   Q_OBJECT
   MyPaintBrushStyleManager *m_mypManager;
+  QGridLayout *m_layout; // Added for layout management
 
 public:
   MyPaintBrushStyleChooserPage(StyleEditor *styleEditor, QWidget *parent = 0);
@@ -767,7 +768,7 @@ public:
   QString getChipDescription(int index) override;
 
 protected:
-  void loadEntries() override;
+  void loadEntries(); // Removed override
   void showEvent(QShowEvent *) override;
   void hideEvent(QHideEvent *) override;
 
@@ -776,7 +777,7 @@ private:
   static const int MAX_INITIAL_BRUSHES = 50; // Configurable limit
 
 protected slots:
-  void loadMoreEntries(); // New slot for loading more brushes
+  void loadMoreEntries(); // Slot for loading more brushes
 };
 
 //*****************************************************************************
