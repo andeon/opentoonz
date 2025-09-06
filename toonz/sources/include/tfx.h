@@ -14,6 +14,7 @@
 
 // TnzBase includes
 #include "tparamchange.h"
+#include "tparamcontainer.h" // Added to define TParamVar
 
 #undef DVAPI
 #undef DVVAR
@@ -34,7 +35,7 @@ class TFx;
 class TParam;
 class TFxAttributes;
 class TParamContainer;
-class TParamVar;
+// class TParamVar; // Removed: Now defined via tparamcontainer.h
 class TRenderSettings;
 class TParamUIConcept;
 
@@ -45,8 +46,7 @@ class DVAPI TFxPort {
 
 protected:
   TFx *m_owner;    //!< This is an input port of m_owner
-  int m_groupIdx;  //!< Dynamic group index this belongs to in m_owner (-1 if
-                   //! none)
+  int m_groupIdx;  //!< Dynamic group index this belongs to in m_owner (-1 if none)
   bool m_isControl;
 
 public:
@@ -132,20 +132,16 @@ public:
   TFxPortDynamicGroup(const std::string &portsPrefix, int minPortsCount = 1);
   ~TFxPortDynamicGroup();
 
-  //! Returns the group's displayed ports prefix (ports added to the group \b
-  //! must
+  //! Returns the group's displayed ports prefix (ports added to the group \b must
   //! have this prefix).
   const std::string &portsPrefix() const { return m_portsPrefix; }
 
-  //! Returns the minimal number of ports to be displayed in the group. The
-  //! group
-  //! <B> must not <\B> be initialized in an fx implementation with more ports
-  //! than
+  //! Returns the minimal number of ports to be displayed in the group. The group
+  //! <B> must not <\B> be initialized in an fx implementation with more ports than
   //! this number.
   int minPortsCount() const { return m_minPortsCount; }
 
-  //! Returns the list of ports currently in the group (may contain empty
-  //! ports).
+  //! Returns the list of ports currently in the group (may contain empty ports).
   const PortsContainer &ports() const { return m_ports; }
 
   //! Equivalent to checking the portName prefix against the stored one.
@@ -168,8 +164,7 @@ private:
   TFxPortDynamicGroup &operator=(const TFxPortDynamicGroup &);
 
   void addPort(TFxPort *port);
-  void removePort(
-      TFxPort *port);  //!< Removes <I> and deletes <\I> the specified port
+  void removePort(TFxPort *port);  //!< Removes <I> and deletes <\I> the specified port
   void clear();
 };
 
@@ -377,26 +372,15 @@ public:
 
   TFx *getLinkedFx() const;
 
-  bool addInputPort(const std::string &name, TFxPort &p);  //!< Adds a port with
-                                                           //! given name,
-  //! returns false on
-  //! duplicate names.
+  bool addInputPort(const std::string &name, TFxPort &p);  //!< Adds a port with given name, returns false on duplicate names.
   //!  Ownership of the port belongs to derived implementations of TFx.
-  bool addInputPort(const std::string &name, TFxPort *p,
-                    int groupIndex);  //!< Adds a port with given name to the
-                                      //! specified dynamic group,
-  //!  returns false on duplicate names. Ownership is transferred to the group.
-  bool removeInputPort(const std::string &name);  //!< Removes the port with
-                                                  //! given name, returns false
-  //! if not found.
+  bool addInputPort(const std::string &name, TFxPort *p, int groupIndex);  //!< Adds a port with given name to the specified dynamic group, returns false on duplicate names. Ownership is transferred to the group.
+  bool removeInputPort(const std::string &name);  //!< Removes the port with given name, returns false if not found.
 
   bool renamePort(const std::string &oldName, const std::string &newName);
 
-  bool connect(
-      const std::string &name,
-      TFx *other);  //!< Equivalent to getInputPort(name)->setFx(other).
-  bool disconnect(const std::string
-                      &name);  //!< Equivalent to getInputPort(name)->setFx(0).
+  bool connect(const std::string &name, TFx *other);  //!< Equivalent to getInputPort(name)->setFx(other).
+  bool disconnect(const std::string &name);  //!< Equivalent to getInputPort(name)->setFx(0).
 
   int getInputPortCount() const;
   TFxPort *getInputPort(int index) const;
@@ -406,19 +390,12 @@ public:
   virtual int dynamicPortGroupsCount() const { return 0; }
   virtual const TFxPortDG *dynamicPortGroup(int g) const { return 0; }
   bool hasDynamicPortGroups() const { return (dynamicPortGroupsCount() > 0); }
-  void clearDynamicPortGroup(
-      int g);  //!< \warning Users must ensure that the group's minimal
-               //!  ports count is respected - this method does \b not.
+  void clearDynamicPortGroup(int g);  //!< \warning Users must ensure that the group's minimal ports count is respected - this method does \b not.
   bool addOutputConnection(TFxPort *port);
   bool removeOutputConnection(TFxPort *port);
 
   static void listFxs(std::vector<TFxInfo> &fxInfos);
-  static TFxInfo getFxInfo(const std::string &fxIdentifier);  //!< Returns info
-                                                              //! associated to
-  //! an fx
-  //! identifier, or
-  //! an
-  //!  unnamed one if none was found.
+  static TFxInfo getFxInfo(const std::string &fxIdentifier);  //!< Returns info associated to an fx identifier, or an unnamed one if none was found.
   virtual bool isZerary() const { return getInputPortCount() == 0; }
 
   // returns the column index that provides reference frame for the FX.
@@ -445,10 +422,8 @@ public:
 
   void disconnectAll();
 
-  //! Returns a list of User Interface Concepts to be displayed when editing the
-  //! fx parameters.
-  //! \note Ownership of the returned array allocated with new[] is passed to
-  //! callers.
+  //! Returns a list of User Interface Concepts to be displayed when editing the fx parameters.
+  //! \note Ownership of the returned array allocated with new[] is passed to callers.
   virtual void getParamUIs(TParamUIConcept *&params, int &length) {
     params = 0, length = 0;
   }
@@ -472,8 +447,7 @@ public:
   void loadData(TIStream &is) override;
   void saveData(TOStream &os) override;
 
-  void loadPreset(TIStream &is);  // solleva un eccezione se il preset non
-                                  // corrisponde all'effetto
+  void loadPreset(TIStream &is);  // solleva un eccezione se il preset non corrisponde all'effetto
   void savePreset(TOStream &os);
 
   TFxAttributes *getAttributes() const;
@@ -483,8 +457,7 @@ public:
     return "";
   }
 
-  //! Compatibility function - used to translate a port name from older Toonz
-  //! versions into its current form.
+  //! Compatibility function - used to translate a port name from older Toonz versions into its current form.
   virtual void compatibilityTranslatePort(int majorVersion, int minorVersion,
                                           std::string &portName) {}
 
@@ -499,8 +472,7 @@ public:
   virtual void callEndRenderFrameHandler(const TRenderSettings *rs,
                                          double frame) {}
 
-  // This function will be called in TFx::loadData whenever the obsolete
-  // parameter is loaded. Do nothing by default.
+  // This function will be called in TFx::loadData whenever the obsolete parameter is loaded. Do nothing by default.
   virtual void onObsoleteParamLoaded(const std::string &paramName) {}
 
   void setFxVersion(int);
