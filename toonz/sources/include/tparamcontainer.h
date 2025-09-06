@@ -1,5 +1,10 @@
 #pragma once
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4251)
+#endif
+
 #ifndef TPARAMCONTAINER_INCLUDED
 #define TPARAMCONTAINER_INCLUDED
 
@@ -111,4 +116,8 @@ private:
   TParamContainer& operator=(const TParamContainer&);
 };
 
+#endif  // TPARAMCONTAINER_INCLUDED
+
+#ifdef _MSC_VER
+#pragma warning(pop)
 #endif
