@@ -3,20 +3,12 @@
 #ifndef LOCATORPOPUP_H
 #define LOCATORPOPUP_H
 
-#include "tgeometry.h"
-#include "toonzqt/dvdialog.h"
-
-#undef DVAPI
-#undef DVVAR
-#ifdef TOONZQT_EXPORTS
-#define DVAPI DV_EXPORT_API
-#define DVVAR DV_EXPORT_VAR
-#else
-#define DVAPI DV_IMPORT_API
-#define DVVAR DV_IMPORT_VAR
-#endif
+#include <QFrame>
 
 class SceneViewer;
+class TPointD;
+class QShowEvent;
+class QHideEvent;
 
 //=============================================================================
 // LoactorPopup
@@ -32,12 +24,11 @@ public:
   ~LocatorPopup() {}
 
   SceneViewer* viewer() { return m_viewer; }
-
   void onChangeViewAff(const TPointD& curPos);
 
 protected:
-  void showEvent(QShowEvent*);
-  void hideEvent(QHideEvent*);
+  void showEvent(QShowEvent *event) override;
+  void hideEvent(QHideEvent *event) override;
 
 protected slots:
   void changeWindowTitle();

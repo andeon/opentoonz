@@ -14,21 +14,20 @@
 
 LocatorPopup::LocatorPopup(QWidget *parent, Qt::WindowFlags flags)
     : QFrame(parent), m_initialZoom(true) {
-  m_viewer = new SceneViewer(NULL);
-  m_viewer->setParent(parent);
+  m_viewer = new SceneViewer(this);
   m_viewer->setIsLocator();
 
   //---- layout
   QVBoxLayout *mainLayout = new QVBoxLayout();
-  mainLayout->setMargin(0);
-  mainLayout->addWidget(m_viewer, 1);
+  mainLayout->setContentsMargins(0, 0, 0, 0);
+  mainLayout->addWidget(m_viewer);
   setLayout(mainLayout);
 
   bool ret = true;
   // When zoom changed, change window title.
-  ret = connect(m_viewer, SIGNAL(onZoomChanged()), SLOT(changeWindowTitle()));
+  ret = connect(m_viewer, &SceneViewer::onZoomChanged, this, &LocatorPopup::changeWindowTitle);
   ret = ret &&
-        connect(m_viewer, SIGNAL(previewToggled()), SLOT(changeWindowTitle()));
+        connect(m_viewer, &SceneViewer::previewToggled, this, &LocatorPopup::changeWindowTitle);
   assert(ret);
 
   resize(400, 400);
@@ -59,10 +58,10 @@ void LocatorPopup::showEvent(QShowEvent *) {
   TXshLevelHandle *levelHandle = app->getCurrentLevel();
 
   bool ret = true;
-  ret      = ret && connect(frameHandle, SIGNAL(frameSwitched()), this,
-                       SLOT(changeWindowTitle()));
-  ret = ret && connect(levelHandle, SIGNAL(xshLevelSwitched(TXshLevel *)), this,
-                       SLOT(changeWindowTitle()));
+  ret      = ret && connect(frameHandle, &TFrameHandle::frameSwitched, this,
+                       &LocatorPopup::changeWindowTitle);
+  ret = ret && connect(levelHandle, &TXshLevelHandle::xshLevelSwitched, this,
+                       &LocatorPopup::changeWindowTitle);
   assert(ret);
 
   app->setActiveLocator(this);
