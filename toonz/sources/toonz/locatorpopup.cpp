@@ -14,7 +14,8 @@
 
 LocatorPopup::LocatorPopup(QWidget *parent, Qt::WindowFlags flags)
     : QFrame(parent), m_initialZoom(true) {
-  m_viewer = new SceneViewer(this);
+  m_viewer = new SceneViewer(NULL);    
+  m_viewer->setParent(this);
   m_viewer->setIsLocator();
 
   //---- layout
