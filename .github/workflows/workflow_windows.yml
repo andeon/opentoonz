@@ -24,11 +24,11 @@ jobs:
   Windows:
     runs-on: windows-2025
     env:
-      QT_PATH: ${{ github.workspace }}\thirdparty\qt\5.15.2_wintab\msvc2019_64  # Path to custom Qt.
-      VCINSTALLDIR: 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC'  # Path to MSVC.
-      MSVCVERSION: "Visual Studio 17 2022"  # Visual Studio version.
-      BOOST_ROOT: C:\local\boost_1_87_0  # Boost library root.
-      OpenCV_DIR: C:\tools\opencv\build  # Path to OpenCV.
+      QT_PATH: ${{ github.workspace }}\thirdparty\qt\5.15.2_wintab\msvc2019_64  # Path to custom Qt
+      VCINSTALLDIR: 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC'  # Path to MSVC
+      MSVCVERSION: "Visual Studio 17 2022"  # Visual Studio version
+      BOOST_ROOT: C:\local\boost_1_87_0  # Boost library root
+      OpenCV_DIR: C:\tools\opencv\build  # Path to OpenCV
 
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +39,6 @@ jobs:
         run: pip install clcache
         shell: cmd
 
-      # Setup clcache as a wrapper for cl.exe
       - name: Setup clcache as cl.exe
         run: |
           @echo on
@@ -50,16 +49,35 @@ jobs:
           echo PATH=C:\clcache-wrapper;%PATH%>> %GITHUB_PATH%
         shell: cmd
 
-      # Ensure the clcache cache directory exists
-      - name: Create clcache directory
-        run: mkdir C:\Users\runneradmin\AppData\Local\clcache
+      - name: Verify clcache is used as cl.exe
+        run: where cl.exe
         shell: cmd
 
-      # Cache clcache to speed up future builds
+      - name: Create clcache directory
+        run: |
+          mkdir C:\Users\runneradmin\clcache
+          icacls C:\Users\runneradmin\clcache /grant runneradmin:F
+        shell: cmd
+
+      - name: Configure clcache
+        run: |
+          clcache --max-size=10G
+          clcache --set-config CLCACHE_LOG=1
+          clcache --set-config CLCACHE_CLANG=1
+        shell: cmd
+
+      - name: Show clcache stats before build
+        run: clcache -s
+        shell: cmd
+
+      - name: List clcache directory contents before build
+        run: dir C:\Users\runneradmin\clcache
+        shell: cmd
+
       - name: Set Path clcache
         uses: actions/cache@v4
         with:
-          path: C:/Users/runneradmin/AppData/Local/clcache
+          path: C:/Users/runneradmin/clcache
           key: ${{ runner.os }}-clcache-${{ hashFiles('**/CMakeLists.txt') }}
           restore-keys: |
             ${{ runner.os }}-clcache-
@@ -97,12 +115,16 @@ jobs:
           copy /Y tiff-4.0.3\libtiff\tif_config.vc.h tiff-4.0.3\libtiff\tif_config.h
           copy /Y tiff-4.0.3\libtiff\tiffconf.vc.h tiff-4.0.3\libtiff\tiffconf.h
           copy /Y libpng-1.6.21\scripts\pnglibconf.h.prebuilt libpng-1.6.21\pnglibconf.h
-
           cd ../toonz
           mkdir build
           cd build
-
           cmake ..\sources -G "%MSVCVERSION%" -Ax64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y
+        shell: cmd
+
+      - name: Verify CMake compiler
+        run: |
+          cd toonz\build
+          cmake -LA
         shell: cmd
 
       - name: Build Opentoonz
@@ -113,8 +135,12 @@ jobs:
         shell: cmd
 
       # Opcional: mostrar estatísticas do clcache
-      - name: Show clcache stats
+      - name: Show clcache stats after build
         run: clcache -s
+        shell: cmd
+
+      - name: List clcache directory contents after build
+        run: dir C:\Users\runneradmin\clcache
         shell: cmd
 
       - name: Create Package
