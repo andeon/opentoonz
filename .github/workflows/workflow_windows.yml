@@ -158,9 +158,17 @@ jobs:
           cd ../toonz
           mkdir build
           cd build
-          cmake ..\sources -G "%MSVCVERSION%" -Ax64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y
+          cmake ..\sources -G "%MSVCVERSION%" -Ax64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y -DCMAKE_CXX_COMPILER="C:/ccache-wrapper/ccache.exe" -DCMAKE_C_COMPILER="C:/ccache-wrapper/ccache.exe"
         shell: cmd
 
+      - name: Show ccache stats after build
+        run: ccache -s
+        shell: cmd
+
+      - name: List ccache directory contents after build
+        run: dir %LOCALAPPDATA%\ccache
+        shell: cmd
+        
       # Build Opentoonz using MSBuild
       - name: Build Opentoonz
         run: |
