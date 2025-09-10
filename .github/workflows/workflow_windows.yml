@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           lfs: false
-          
+
       - name: Install clcache
         run: pip install clcache
         shell: cmd
@@ -50,9 +50,9 @@ jobs:
           echo C:\clcache-wrapper>> %GITHUB_PATH%
         shell: cmd
 
-      # Debug to confirm clcache directory is used
-      - name: Debug clcache folder
-        run: dir "C:\Users\runneradmin\AppData\Local\clcache"
+      # Ensure the clcache cache directory exists
+      - name: Create clcache directory
+        run: mkdir C:\Users\runneradmin\AppData\Local\clcache
         shell: cmd
 
       # Cache clcache to speed up future builds
@@ -110,6 +110,11 @@ jobs:
           @echo on
           cd toonz\build
           msbuild /p:Configuration=RelWithDebInfo /m /verbosity:minimal ALL_BUILD.vcxproj
+        shell: cmd
+
+      # Opcional: mostrar estatísticas do clcache
+      - name: Show clcache stats
+        run: clcache -s
         shell: cmd
 
       - name: Create Package
