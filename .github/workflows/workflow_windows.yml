@@ -47,7 +47,7 @@ jobs:
             mkdir C:\clcache-wrapper
             copy "%%i" C:\clcache-wrapper\cl.exe
           )
-          echo C:\clcache-wrapper>> %GITHUB_PATH%
+          echo PATH=C:\clcache-wrapper;%PATH%>> %GITHUB_PATH%
         shell: cmd
 
       # Ensure the clcache cache directory exists
