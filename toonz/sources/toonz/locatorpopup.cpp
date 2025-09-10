@@ -73,8 +73,8 @@ void LocatorPopup::showEvent(QShowEvent *) {
 
 void LocatorPopup::hideEvent(QHideEvent *) {
   TApp *app = TApp::instance();
-  disconnect(app->getCurrentLevel());
-  disconnect(app->getCurrentFrame());
+  disconnect(app->getCurrentLevel(), &TXshLevelHandle::xshLevelSwitched, this, &LocatorPopup::changeWindowTitle);
+  disconnect(app->getCurrentFrame(), &TFrameHandle::frameSwitched, this, &LocatorPopup::changeWindowTitle);
   if (app->getActiveLocator() == this) app->setActiveLocator(0);
 }
 
