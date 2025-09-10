@@ -174,7 +174,7 @@ jobs:
         run: |
           @echo on
           cd toonz\build
-          msbuild /p:Configuration=RelWithDebInfo /m /verbosity:minimal ALL_BUILD.vcxproj
+          msbuild /p:Configuration=RelWithDebInfo /m /verbosity:diagnostic ALL_BUILD.vcxproj
         shell: cmd
 
       # Create the package
