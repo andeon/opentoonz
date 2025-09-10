@@ -158,13 +158,7 @@ jobs:
           cd ../toonz
           mkdir build
           cd build
-          cmake ..\sources -G "%MSVCVERSION%" -Ax64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y -DCMAKE_CXX_COMPILER="C:/ccache-wrapper/ccache.exe" -DCMAKE_C_COMPILER="C:/ccache-wrapper/ccache.exe"
-        shell: cmd
-
-      - name: Verify CMake compiler
-        run: |
-          cd toonz\build
-          cmake -LA
+          cmake ..\sources -G "%MSVCVERSION%" -Ax64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y
         shell: cmd
 
       # Build Opentoonz using MSBuild
@@ -172,15 +166,7 @@ jobs:
         run: |
           @echo on
           cd toonz\build
-          msbuild /p:Configuration=RelWithDebInfo /m /verbosity:diagnostic ALL_BUILD.vcxproj
-        shell: cmd
-
-      - name: Show ccache stats after build
-        run: ccache -s
-        shell: cmd
-
-      - name: List ccache directory contents after build
-        run: dir %LOCALAPPDATA%\ccache
+          msbuild /p:Configuration=RelWithDebInfo /m /verbosity:minimal ALL_BUILD.vcxproj
         shell: cmd
 
       # Create the package
@@ -192,7 +178,6 @@ jobs:
           REM Create Opentoonz directory and copy files from RelWithDebInfo
           mkdir Opentoonz
           copy /Y RelWithDebInfo\*.* Opentoonz\
-          
           REM Copy required DLLs for proper functionality
           copy /Y ..\..\thirdparty\glut\3.7.6\lib\glut64.dll Opentoonz
           copy /Y ..\..\thirdparty\glew\glew-1.9.0\bin\64bit\glew32.dll Opentoonz
