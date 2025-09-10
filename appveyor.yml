@@ -3,7 +3,7 @@ init:
   - git lfs install --skip-smudge
 skip_commits:
   files:
-    - 'doc/**'        # Skip everything inside doc/ (recursive)
+    - 'doc/**/*'        # Skip everything inside doc/ (recursive)
     - '.github/**'    # Skip everything inside .github/ (recursive)
     - 'README.md'     # Skip changes only to README.md
 pull_requests:

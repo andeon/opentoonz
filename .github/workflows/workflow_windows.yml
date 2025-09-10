@@ -39,18 +39,28 @@ jobs:
         run: pip install clcache
         shell: cmd
 
-      - name: Enable clcache
+      # Setup clcache as a wrapper for cl.exe
+      - name: Setup clcache as cl.exe
         run: |
-          set CC=clcache
-          set CXX=clcache
+          where clcache
+          mkdir C:\clcache-wrapper
+          copy "$(where clcache)" C:\clcache-wrapper\cl.exe
+          echo C:\clcache-wrapper >> %GITHUB_PATH%
         shell: cmd
 
+      # Debug to confirm clcache directory is used
+      - name: Debug clcache folder
+        run: dir "C:\Users\runneradmin\AppData\Local\clcache"
+        shell: cmd
+
+      # Cache clcache to speed up future builds
       - name: Set Path clcache
         uses: actions/cache@v4
         with:
           path: C:/Users/runneradmin/AppData/Local/clcache
-          key: ${{ runner.os }}-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-
+          key: ${{ runner.os }}-clcache-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-clcache-
 
       - name: Install OpenCV and Boost
         run: |
