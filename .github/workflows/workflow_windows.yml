@@ -34,18 +34,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           lfs: false
-      - name: Install and Configure ccache
-        run: |
-          @echo on
-          choco install ccache
-          copy C:\ProgramData\chocolatey\lib\ccache\tools\ccache*\ccache.exe C:\ProgramData\chocolatey\bin\cl.exe
-          mkdir %LOCALAPPDATA%\ccache
+          
+      - name: Install clcache
+        run: pip install clcache
         shell: cmd
 
-      - name: Set Path ccache
+      - name: Enable clcache
+        run: |
+          set CC=clcache
+          set CXX=clcache
+        shell: cmd
+
+      - name: Set Path clcache
         uses: actions/cache@v4
         with:
-          path: C:/Users/runneradmin/AppData/Local/ccache
+          path: C:/Users/runneradmin/AppData/Local/clcache
           key: ${{ runner.os }}-${{ github.sha }}
           restore-keys: ${{ runner.os }}-
 
