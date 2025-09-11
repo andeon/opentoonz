@@ -530,7 +530,7 @@ elseif(BUILD_ENV_APPLE)
 
     _find_toonz_library(EXTRA_LIBS "tnzcore;tnzbase;toonzlib;colorfx;tnzext;image;sound;toonzqt;tnztools")
 
-    # 変なところにライブラリ生成するカスども
+    # TRANSLATED: Libraries are generated in unexpected places by some targets
     set(EXTRA_LIBS ${EXTRA_LIBS} "$<TARGET_FILE:tnzstdfx>" "$<TARGET_FILE:tfarm>")
     set(X64ONLY_LIBS)
     if(PLATFORM EQUAL 64)
@@ -549,10 +549,23 @@ elseif(BUILD_ENV_APPLE)
         ${COCOA_LIB} ${EXTRA_LIBS} ${X64ONLY_LIBS} mousedragfilter
     )
 
+    # ADDED/UPDATED: Expanded dependencies for all libs and utilities (ensures build order)
+    add_dependencies(OpenToonz tnzcore tnzbase toonzlib colorfx tnzext image sound toonzqt tnztools tnzstdfx tfarm tcomposer tcleanup tconverter tfarmcontroller tfarmserver)
+
+    # ADDED/UPDATED: Configure Info.plist for bundle (retina support etc.)
+    set_target_properties(OpenToonz PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/../cmake/BundleInfo.plist.in)
+
+    # ADDED/UPDATED: Merged RPATH command (single one with both paths; || true for CI; COMMENT for logs)
+    add_custom_command(TARGET OpenToonz POST_BUILD
+        COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath @executable_path/. "$<TARGET_FILE:OpenToonz>" || true
+        COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH} "$<TARGET_FILE:OpenToonz>" || true
+        COMMENT "Adding RPATHs to OpenToonz executable"
+    )
+
 elseif(BUILD_ENV_UNIXLIKE)
     _find_toonz_library(EXTRA_LIBS "tnzcore;tnzbase;toonzlib;colorfx;tnzext;image;sound;toonzqt;tnztools")
 
-    # 変なところにライブラリ生成するカスども
+    # TRANSLATED: Libraries are generated in unexpected places by some targets
     set(EXTRA_LIBS ${EXTRA_LIBS} "$<TARGET_FILE:tnzstdfx>" "$<TARGET_FILE:tfarm>")
 
     set(EXTRA_LIBS ${EXTRA_LIBS} ${Boost_LIBRARIES} ${OPENBLAS_LIB} ${EXECINFO_LIBRARY})
@@ -574,7 +587,7 @@ endif()
 
 if(BUILD_ENV_APPLE)
     # CMAKE_RUNTIME_OUTPUT_DIRECTORY should be equivalent to usage on windows despite empty
-    # OSX だと CMAKE_RUNTIME_OUTPUT_DIRECTORY が空だが Windows 版と同じ使い方ができるようにしておく.
+    # TRANSLATED/UPDATED: On OSX, CMAKE_RUNTIME_OUTPUT_DIRECTORY is empty, but set it to match Windows usage for consistency.
     # Removed: get_target_property(bin OpenToonz LOCATION)
     # Use generator expression for runtime directory
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "$<TARGET_FILE_DIR:OpenToonz>")
@@ -585,9 +598,11 @@ endif()
 if(LZODRIVER_FOUND)
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lzocompress> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+        COMMENT "Copying lzocompress to output dir"
     )
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lzodecompress> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+        COMMENT "Copying lzodecompress to output dir"
     )
     add_dependencies(OpenToonz lzocompress lzodecompress)  # Ensures order
 endif()
@@ -599,49 +614,49 @@ if(BUILD_ENV_APPLE)
     foreach(lib ${EXTRA_LIBS})
         message(" copy:" ${lib} "==>" ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
         add_custom_command(TARGET OpenToonz POST_BUILD
-            COMMAND cp ${lib} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+            COMMAND ${CMAKE_COMMAND} -E copy ${lib} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}  # UPDATED: Use CMAKE_COMMAND for portability (instead of cp)
+            COMMENT "Copying lib ${lib} to output dir"
         )
     endforeach()
-    # Added: Ensure lib targets build before OpenToonz
-    add_dependencies(OpenToonz tnzcore tnzbase toonzlib colorfx tnzext image sound toonzqt tnztools)
+    # ADDED: Already included in expanded dependencies above
 
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tcomposer> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+        COMMENT "Copying tcomposer to output dir"
     )
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tcleanup> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+        COMMENT "Copying tcleanup to output dir"
     )
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tconverter> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+        COMMENT "Copying tconverter to output dir"
     )
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tfarmcontroller> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+        COMMENT "Copying tfarmcontroller to output dir"
     )
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tfarmserver> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+        COMMENT "Copying tfarmserver to output dir"
     )
-    # Added: Ensure utility targets build before OpenToonz
-    add_dependencies(OpenToonz tcomposer tcleanup tconverter tfarmcontroller tfarmserver)
+    # ADDED: Already included in expanded dependencies above
 
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../Resources
+        COMMENT "Creating Resources directory"
     )
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/../install/SystemVar.ini ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../Resources
+        COMMENT "Copying SystemVar.ini to Resources"
     )
 
     add_custom_command(TARGET OpenToonz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../../../qss
+        COMMENT "Creating qss directory"
     )
 
-    add_custom_command(TARGET OpenToonz
-        POST_BUILD COMMAND
-        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath @executable_path/. "$<TARGET_FILE:OpenToonz>" || true
-    )
-    add_custom_command(TARGET OpenToonz
-        POST_BUILD COMMAND
-        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH} "$<TARGET_FILE:OpenToonz>" || true
-    )
+    # REMOVED: The duplicate RPATH commands were merged at the top of if(BUILD_ENV_APPLE)
 endif()
 
 if(BUILD_ENV_UNIXLIKE AND BUILD_TARGET_WIN)

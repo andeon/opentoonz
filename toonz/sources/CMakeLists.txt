@@ -8,6 +8,13 @@ if(POLICY CMP0175)
   cmake_policy(SET CMP0175 OLD)  # Allow invalid keywords like DEPENDS in add_custom_command(TARGET ...) (fixes toonz/CMakeLists.txt:585–602)
 endif()
 
+if(POLICY CMP0058)
+  cmake_policy(SET CMP0058 NEW)  # Trata byproducts explicitamente em add_custom_command (evita warnings Ninja)
+endif()
+if(POLICY CMP0112)
+  cmake_policy(SET CMP0112 NEW)  # Otimiza dependências em generator expressions como $<TARGET_FILE:...>
+endif()
+
 set(CMAKE_BUILD_TYPE_INIT Release)
 
 project(OpenToonz)
@@ -687,19 +694,6 @@ add_subdirectory(tnztools)
 add_subdirectory(${SDKROOT}/lzo/driver lzodriver)
 
 add_subdirectory(toonz)
-
-if(BUILD_ENV_APPLE AND TARGET OpenToonz)
-    add_custom_command(TARGET OpenToonz
-        POST_BUILD COMMAND
-        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH}
-        $<TARGET_FILE:OpenToonz>
-    )
-
-    set_target_properties(OpenToonz PROPERTIES
-        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/../cmake/BundleInfo.plist.in
-    )
-endif()
-
 add_subdirectory(tcleanupper)
 add_subdirectory(tcomposer)
 add_subdirectory(tconverter)
