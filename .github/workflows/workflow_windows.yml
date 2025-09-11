@@ -60,10 +60,18 @@ jobs:
           )
         shell: cmd
 
+      - name: Verify Visual Studio tools
+        run: |
+          @echo on
+          call "%VCINSTALLDIR%\Auxiliary\Build\vcvarsall.bat" x64
+          dir "%VCINSTALLDIR%\bin\Hostx64\x64\cl.exe"
+          where cl.exe
+        shell: cmd
+
       - name: Install and Configure clcache
         run: |
           @echo on
-          choco install python3 --version=3.9.13 -y
+          choco install python3 --version=3.9.13 -y --params "/InstallDir:C:\Python39"
           call "%VCINSTALLDIR%\Auxiliary\Build\vcvarsall.bat" x64
           C:\Python39\python.exe -m pip install --upgrade pip
           C:\Python39\Scripts\pip.exe install clcache
@@ -181,6 +189,7 @@ jobs:
       - name: Verify CMake compiler
         run: |
           @echo on
+          call "%VCINSTALLDIR%\Auxiliary\Build\vcvarsall.bat" x64
           cd toonz\build
           cmake -LA -S ..\sources
         shell: cmd
@@ -189,12 +198,22 @@ jobs:
       - name: Build Opentoonz
         run: |
           @echo on
+          call "%VCINSTALLDIR%\Auxiliary\Build\vcvarsall.bat" x64
           cd toonz\build
           msbuild /p:Configuration=RelWithDebInfo /m /verbosity:diagnostic ALL_BUILD.vcxproj
         shell: cmd
 
       - name: Show clcache stats after build
-        run: clcache -s
+        run: |
+          @echo on
+          call "%VCINSTALLDIR%\Auxiliary\Build\vcvarsall.bat" x64
+          clcache -s
+        shell: cmd
+
+      - name: List clcache directory contents after build
+        run: |
+          @echo on
+          dir %LOCALAPPDATA%\clcache
         shell: cmd
 
       # Create the package
