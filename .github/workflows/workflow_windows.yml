@@ -29,7 +29,7 @@ jobs:
 
       # Visual Studio related variables
       MSVCVERSION: "Visual Studio 17 2022"  # Visual Studio version
-
+      
       # Boost-related variables      
       BOOST_TOOLSET: "14.3"                 # Boost MSVC Toolset version
       BOOST_VERSION: "1.87.0"               # Boost version
@@ -42,7 +42,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          lfs: false
+          lfs: false  # Enable LFS to ensure all files are fetched
+
+      - name: List repository contents
+        run: |
+          @echo on
+          dir /s D:\a\opentoonz\opentoonz
+        shell: cmd
 
       - name: Locate Visual Studio installation
         run: |
@@ -86,6 +92,7 @@ jobs:
           @echo on
           ccache --max-size=10G
           ccache -o cache_dir="%LOCALAPPDATA%\ccache"
+          ccache -o log_file="%LOCALAPPDATA%\ccache\ccache.log"
         shell: cmd
 
       - name: Show ccache stats before build
@@ -158,7 +165,22 @@ jobs:
           cd ../toonz
           mkdir build
           cd build
+          dir ..\sources  REM Check sources directory
           cmake ..\sources -G "%MSVCVERSION%" -Ax64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y -DCMAKE_CXX_COMPILER="C:/ccache-wrapper/ccache.exe" -DCMAKE_C_COMPILER="C:/ccache-wrapper/ccache.exe"
+        shell: cmd
+
+      - name: Verify CMake compiler
+        run: |
+          cd toonz\build
+          cmake -LA
+        shell: cmd
+
+      # Build Opentoonz using MSBuild
+      - name: Build Opentoonz
+        run: |
+          @echo on
+          cd toonz\build
+          msbuild /p:Configuration=RelWithDebInfo /m /verbosity:diagnostic ALL_BUILD.vcxproj
         shell: cmd
 
       - name: Show ccache stats after build
@@ -167,14 +189,6 @@ jobs:
 
       - name: List ccache directory contents after build
         run: dir %LOCALAPPDATA%\ccache
-        shell: cmd
-        
-      # Build Opentoonz using MSBuild
-      - name: Build Opentoonz
-        run: |
-          @echo on
-          cd toonz\build
-          msbuild /p:Configuration=RelWithDebInfo /m /verbosity:diagnostic ALL_BUILD.vcxproj
         shell: cmd
 
       # Create the package
@@ -186,6 +200,7 @@ jobs:
           REM Create Opentoonz directory and copy files from RelWithDebInfo
           mkdir Opentoonz
           copy /Y RelWithDebInfo\*.* Opentoonz\
+          
           REM Copy required DLLs for proper functionality
           copy /Y ..\..\thirdparty\glut\3.7.6\lib\glut64.dll Opentoonz
           copy /Y ..\..\thirdparty\glew\glew-1.9.0\bin\64bit\glew32.dll Opentoonz
