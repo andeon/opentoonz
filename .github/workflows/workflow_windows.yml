@@ -54,6 +54,7 @@ jobs:
         run: pip install clcache
         shell: cmd
 
+      - name: where clcache
         run: |
           where clcache
         shell: cmd
