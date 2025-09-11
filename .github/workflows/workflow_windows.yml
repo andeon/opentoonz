@@ -42,129 +42,77 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          lfs: false  # Enable LFS to ensure all files are fetched
-
-      # Set up MSVC compiler environment
-      - name: Setup MSVC
+          lfs: false
+      - name: Install and Configure ccache
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          cl.exe
+          @echo on
+          choco install ccache ninja -y
+          copy C:\ProgramData\chocolatey\lib\ccache\tools\ccache*\ccache.exe C:\ProgramData\chocolatey\bin\cl.exe
+          mkdir %LOCALAPPDATA%\ccache
         shell: cmd
 
-      # Install clcache via pip
-      - name: Install clcache
-        run: pip install clcache
-        shell: cmd
-
-      # Wrap clcache as cl.exe and add it to PATH
-      - name: Wrap clcache as cl.exe
+      # Set up ccache with Visual Studio
+      - name: Set ccache with Visual Studio
         run: |
-          mkdir C:\clcache-wrapper
-          copy "C:\hostedtoolcache\windows\Python\3.9.13\x64\Scripts\clcache.exe" C:\clcache-wrapper\cl.exe
-          echo C:\clcache-wrapper>> %GITHUB_PATH%
+          @echo on
+          set CCACHE=C:\ProgramData\chocolatey\bin\ccache.exe
+          set CXXCACHE=C:\ProgramData\chocolatey\bin\ccache.exe
         shell: cmd
 
-      # Confirm clcache is the first cl in path
-      - name: Check cl.exe path
-        run: |
-          where cl
-        shell: cmd
-
-      - name: List clcache directory contents before build
-        run: |
-          echo LOCALAPPDATA=%LOCALAPPDATA%
-          IF EXIST "%LOCALAPPDATA%\clcache" (
-            dir "%LOCALAPPDATA%\clcache"
-          ) ELSE (
-            echo clcache folder does not exist yet.
-          )
-        shell: cmd
-
-      # Print clcache stats before build
-      - name: clcache stats before build
-        run: clcache -s
-        shell: cmd
-
-      - name: List clcache directory contents before build
-        run: |
-          echo LOCALAPPDATA=%LOCALAPPDATA%
-          IF EXIST "%LOCALAPPDATA%\clcache" (
-            dir "%LOCALAPPDATA%\clcache"
-          ) ELSE (
-            echo clcache folder does not exist yet.
-          )
-        shell: cmd
-
-      - name: List clcache directory contents
-        run: |
-          echo LOCALAPPDATA=%LOCALAPPDATA%
-          IF EXIST "%LOCALAPPDATA%\clcache" (
-            dir "%LOCALAPPDATA%\clcache"
-          ) ELSE (
-            echo clcache folder does not exist yet.
-          )
-        shell: cmd
-
-      - name: List clcache directory contents after build
-        run: |
-          echo LOCALAPPDATA=%LOCALAPPDATA%
-          IF EXIST "%LOCALAPPDATA%\clcache" (
-            dir "%LOCALAPPDATA%\clcache"
-          ) ELSE (
-            echo clcache folder does not exist yet.
-          )
-        shell: cmd
-
-      # Cache the clcache directory
-      - name: Cache clcache
+      # Cache the ccache path
+      - name: Set Path ccache
         uses: actions/cache@v4
         with:
-          path: C:/Users/runneradmin/clcache
-          key: windows-clcache-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}
+          path: C:/Users/runneradmin/AppData/Local/ccache
+          key: windows-ccache-${{ runner.os }}-${{ github.ref }}-${{ hashFiles('CMakeLists.txt') }}
           restore-keys: |
-            windows-clcache-
-
-      # Cache OpenCV & Boost installations
-      - name: Cache OpenCV & Boost
+            windows-ccache-${{ github.ref }}-
+            windows-ccache-
+      # Cache OpenCV and Boost libraries
+      - name: Cache OpenCV and Boost
         id: cache-deps
         uses: actions/cache@v4
         with:
           path: |
             C:\tools\opencv
             ${{ env.BOOST_ROOT }}
-          key: ${{ runner.os }}-opencv-boost-${{ env.OPENCV_VERSION }}-${{ env.BOOST_VERSION }}
+          key: ${{ runner.os }}-opencv-boost-${{ env.OPENCV_VERSION }}-boost-${{ env.BOOST_VERSION }}
           restore-keys: |
-            ${{ runner.os }}-opencv-boost-
-
-      - name: Install OpenCV & Boost (if cache miss)
+            ${{ runner.os }}-opencv-boost-${{ env.OPENCV_VERSION }}-boost-
+      # Install OpenCV and Boost if the cache is missing
+      - name: Install OpenCV and Boost if cache is missing
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: |
+          @echo on
           choco install opencv --version=${{ env.OPENCV_VERSION }} -y
           choco install boost-msvc-${{ env.BOOST_TOOLSET }} --version=${{ env.BOOST_VERSION }} -y
         shell: cmd
 
-      # Download custom Qt build with WinTab support
-      - name: Install custom Qt 5.15.2
+      # Install custom Qt 5.15.2 with WinTab support
+      - name: Install custom Qt 5.15.2 with WinTab support
         run: |
+          @echo on
           mkdir thirdparty\qt
           curl -fsSL -o Qt5.15.2_wintab.zip https://github.com/shun-iwasawa/qt5/releases/download/v5.15.2_wintab/Qt5.15.2_wintab.zip
           7z x Qt5.15.2_wintab.zip
           move Qt5.15.2_wintab\5.15.2_wintab thirdparty\qt
         shell: cmd
 
-      - name: Install thirdparty prebuilt libs
+      - name: Install third-party prebuilt libs (LFS workaround)
         run: |
+          @echo on
           curl -fsSL -o thirdparty-libs.zip https://github.com/andeon/opentoonz-thirdparty-libs/releases/download/prebuilt-libs-v1/thirdparty-libs.zip
           7z x -y thirdparty-libs.zip
-        shell: cmd
+        shell: cmd    
 
-      # Set up MSBuild in PATH
-      - name: Add MSBuild to PATH
+      # Add msbuild to PATH for build process
+      - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      # CMake configuration
-      - name: Configure CMake
+      # CMake configuration step
+      - name: CMake configuration
         run: |
+          @echo on
           cd thirdparty
           copy /Y tiff-4.0.3\libtiff\tif_config.vc.h tiff-4.0.3\libtiff\tif_config.h
           copy /Y tiff-4.0.3\libtiff\tiffconf.vc.h tiff-4.0.3\libtiff\tiffconf.h
@@ -172,28 +120,14 @@ jobs:
           cd ../toonz
           mkdir build
           cd build
-          cmake ..\sources -G "%MSVCVERSION%" -Ax64 ^
-            -DQT_PATH="%QT_PATH%" ^
-            -DBOOST_ROOT="%BOOST_ROOT%" ^
-            -DOpenCV_DIR="%OpenCV_DIR%" ^
-            -DWITH_WINTAB=Y ^
-            -DCMAKE_CXX_COMPILER_LAUNCHER=clcache ^
-            -DCMAKE_C_COMPILER_LAUNCHER=clcache
-        shell: cmd
+          cmake ..\sources -G "Ninja" -A x64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y        shell: cmd
 
-      - name: Build OpenToonz
+      # Build Opentoonz using MSBuild
+      - name: Build Opentoonz
         run: |
+          @echo on
           cd toonz\build
-          msbuild /p:Configuration=RelWithDebInfo /m /verbosity:minimal ALL_BUILD.vcxproj
-        shell: cmd
-
-      # Show clcache stats after build
-      - name: clcache stats after build
-        run: clcache -s
-        shell: cmd
-
-      - name: List clcache folder after build
-        run: dir C:\Users\runneradmin\clcache
+          cmake --build . --config RelWithDebInfo
         shell: cmd
 
       # Create the package
@@ -205,7 +139,6 @@ jobs:
           REM Create Opentoonz directory and copy files from RelWithDebInfo
           mkdir Opentoonz
           copy /Y RelWithDebInfo\*.* Opentoonz\
-          
           REM Copy required DLLs for proper functionality
           copy /Y ..\..\thirdparty\glut\3.7.6\lib\glut64.dll Opentoonz
           copy /Y ..\..\thirdparty\glew\glew-1.9.0\bin\64bit\glew32.dll Opentoonz
