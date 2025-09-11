@@ -54,6 +54,10 @@ jobs:
         run: pip install clcache
         shell: cmd
 
+        run: |
+          where clcache
+        shell: cmd
+
       # Set up clcache with Visual Studio
       - name: Set clcache with Visual Studio
         run: |
@@ -62,11 +66,23 @@ jobs:
           set CXXCACHE=C:\Python39\Scripts\clcache.exe
         shell: cmd
 
+      - name: Wrap clcache as cl.exe
+        run: |
+          mkdir C:\clcache-wrapper
+          copy C:\Python39\Scripts\clcache.exe C:\clcache-wrapper\cl.exe
+          echo PATH=C:\clcache-wrapper;%PATH%>> %GITHUB_PATH%
+        shell: cmd
+
+      - name: Check cl.exe path
+        run: where cl
+        shell: cmd
+
       - name: Configure clcache
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          clcache --maxsize=10737418240
-          clcache -o CLCACHE_DIR="%LOCALAPPDATA%\clcache"
+          for /f "delims=" %%i in ('where clcache') do set CLCACHE_EXE=%%i
+          call %CLCACHE_EXE% --maxsize=10737418240
+          call %CLCACHE_EXE% -o CLCACHE_DIR="%LOCALAPPDATA%\clcache"
         shell: cmd
 
       - name: Show clcache stats before build
