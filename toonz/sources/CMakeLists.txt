@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.5...3.30)
 
 set(CMAKE_BUILD_TYPE_INIT Release)
 
@@ -183,12 +183,28 @@ if(BUILD_ENV_MSVC)
         -D_USE_MATH_DEFINES
     )
 elseif(BUILD_ENV_APPLE)
-    set(QT_PATH "~/Qt5.9.2/5.9.2/clang_${PLATFORM}/lib" CACHE PATH "Qt installation directory")
-    set(QT_LIB_PATH "${QT_PATH}/")
-    set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};${QT_LIB_PATH}cmake/")
+    # Try to find Qt from Homebrew if not explicitly set
+    if(NOT DEFINED QT_PATH)
+        execute_process(
+            COMMAND brew --prefix qt@5
+            OUTPUT_VARIABLE HOMEBREW_QT_PREFIX
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE BREW_RESULT
+        )
+        if(NOT BREW_RESULT EQUAL 0)
+            message(FATAL_ERROR "Homebrew 'qt@5' not found. Install with 'brew install qt@5' or set QT_PATH manually.")
+        endif()
+        set(QT_PATH "${HOMEBREW_QT_PREFIX}/lib" CACHE PATH "Qt installation directory (from Homebrew)")
+        message(STATUS "Auto-detected Qt path: ${QT_PATH}")
+    endif()
+
+    set(QT_LIB_PATH "${QT_PATH}")
+    list(APPEND CMAKE_PREFIX_PATH "${HOMEBREW_QT_PREFIX}/lib/cmake/Qt5")  # More precise for find_package(Qt5)
+
     foreach(path ${CMAKE_PREFIX_PATH})
-        message("CMAKE_PREFIX_PATH: " ${path})
-    endforeach(path)
+        message(STATUS "CMAKE_PREFIX_PATH: ${path}")
+    endforeach()
+
     add_definitions(
         -DMACOSX
         -Di386
@@ -206,7 +222,7 @@ elseif(BUILD_ENV_APPLE)
     endif()
 elseif(BUILD_ENV_UNIXLIKE)
     # Needed for correct Qt detection
-    cmake_minimum_required(VERSION 3.5)
+    cmake_minimum_required(VERSION 2.8.12)
     set(PRELOAD_VARIABLE "LD_LIBRARY_PATH")
     if(CMAKE_SYSTEM_NAME MATCHES "Linux")
         add_definitions(-DLINUX)
@@ -625,10 +641,9 @@ if(WITH_TRANSLATION)
             )
         endforeach()
 
-        # Give a unique name to the translation output list to avoid conflicts
-        qt5_create_translation(${module}_ts_files ${translation} ${ARGN})
+        qt5_create_translation(message ${translation} ${ARGN})
 
-        add_custom_target("translation_${module}" DEPENDS ${${module}_ts_files})
+        add_custom_target("translation_${module}" DEPENDS ${message})
         set_target_properties("translation_${module}" PROPERTIES
             EXCLUDE_FROM_DEFAULT_BUILD TRUE
         )
