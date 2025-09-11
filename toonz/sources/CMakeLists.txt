@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5...3.30)
+cmake_minimum_required(VERSION 3.5)
 
 # Modern CMake policies for OpenToonz legacy code (suppresses subdir errors)
 if(POLICY CMP0111)
@@ -687,6 +687,19 @@ add_subdirectory(tnztools)
 add_subdirectory(${SDKROOT}/lzo/driver lzodriver)
 
 add_subdirectory(toonz)
+
+if(BUILD_ENV_APPLE AND TARGET OpenToonz)
+    add_custom_command(TARGET OpenToonz
+        POST_BUILD COMMAND
+        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH}
+        $<TARGET_FILE:OpenToonz>
+    )
+
+    set_target_properties(OpenToonz PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/../cmake/BundleInfo.plist.in
+    )
+endif()
+
 add_subdirectory(tcleanupper)
 add_subdirectory(tcomposer)
 add_subdirectory(tconverter)
@@ -698,16 +711,6 @@ endif()
 
 if((PLATFORM EQUAL 32) AND ((BUILD_TARGET_WIN AND BUILD_ENV_MSVC) OR BUILD_TARGET_APPLE))
     add_subdirectory(t32bitsrv)
-endif()
-
-if(BUILD_ENV_APPLE)
-    add_custom_command(TARGET OpenToonz  # Fixed: Changed from 'executable' to actual target name
-        POST_BUILD COMMAND
-        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH}
-        $<TARGET_FILE:OpenToonz>
-    )
-    # add capability for retina displays
-    set_target_properties(OpenToonz PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/../cmake/BundleInfo.plist.in)
 endif()
 
 if(BUILD_ENV_UNIXLIKE AND NOT BUILD_TARGET_WIN)
