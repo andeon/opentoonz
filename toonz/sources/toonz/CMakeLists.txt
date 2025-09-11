@@ -112,7 +112,7 @@ set(MOC_HEADERS
     toolbar.h
     tpanels.h
     trackerpopup.h
-	vectorguideddrawingpane.h
+    vectorguideddrawingpane.h
     vectorizerpopup.h
     vectorizerswatch.h
     versioncontrol.h
@@ -126,8 +126,8 @@ set(MOC_HEADERS
     xshnoteviewer.h
     xshrowviewer.h
     xshtoolbar.h
-	xdtsimportpopup.h
-	expressionreferencemanager.h
+    xdtsimportpopup.h
+    expressionreferencemanager.h
     tooloptionsshortcutinvoker.h
     exportxsheetpdf.h
     custompanelmanager.h
@@ -376,16 +376,16 @@ set(SOURCES
     audiorecordingpopup.cpp
     locatorpopup.cpp
     styleshortcutswitchablepanel.cpp
-	reframepopup.cpp
-	autoinputcellnumberpopup.cpp
-	colormodelbehaviorpopup.cpp
-	boardsettingspopup.cpp
-	separatecolorsswatch.cpp
-	separatecolorspopup.cpp
+    reframepopup.cpp
+    autoinputcellnumberpopup.cpp
+    colormodelbehaviorpopup.cpp
+    boardsettingspopup.cpp
+    separatecolorsswatch.cpp
+    separatecolorspopup.cpp
     xdtsio.cpp
     ocaio.cpp
-	xdtsimportpopup.cpp
-	expressionreferencemanager.cpp
+    xdtsimportpopup.cpp
+    expressionreferencemanager.cpp
     tooloptionsshortcutinvoker.cpp
     tvpjson_io.cpp
     exportxsheetpdf.cpp
@@ -539,7 +539,7 @@ elseif(BUILD_ENV_APPLE)
         endif()
     endif()
 
-    add_dependencies(OpenToonz tnzcore tnzbase toonzlib colorfx tnzext image sound toonzqt tnztools tnzstdfx tfarm)
+    # Removed redundant add_dependencies (duplicates the one after foreach below)
 
     target_link_libraries(OpenToonz
         Qt5::Core Qt5::Gui Qt5::Network Qt5::OpenGL Qt5::Svg Qt5::Xml
@@ -573,49 +573,77 @@ endif()
 
 if(BUILD_ENV_APPLE)
     # CMAKE_RUNTIME_OUTPUT_DIRECTORY should be equivalent to usage on windows despite empty
-    # OSX だと CMAKE_RUNTIME_OUTPUT_DIRECTORY が空だが Windows 版と同じ使い方ができるようにしておく
-    get_target_property(bin OpenToonz LOCATION)
-    get_filename_component(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${bin} DIRECTORY)
-    # show CMAKE_RUNTIME_OUTPUT_DIRECTORY
+    # OSX だと CMAKE_RUNTIME_OUTPUT_DIRECTORY が空だが Windows 版と同じ使い方ができるようにしておく.
+    # Removed: get_target_property(bin OpenToonz LOCATION)
+    # Use generator expression for runtime directory
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "$<TARGET_FILE_DIR:OpenToonz>")
     message("CMAKE_RUNTIME_OUTPUT_DIRECTORY:" ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 endif()
 
 # copy utility executables onto the directory after build
 if(LZODRIVER_FOUND)
-    add_custom_command(TARGET OpenToonz POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lzocompress> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS lzocompress)
-    add_custom_command(TARGET OpenToonz POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lzodecompress> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS lzodecompress)
+    add_custom_command(TARGET OpenToonz POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lzocompress> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    )
+    add_custom_command(TARGET OpenToonz POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lzodecompress> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    )
+    add_dependencies(OpenToonz lzocompress lzodecompress)  # Ensures order
 endif()
 
 if(BUILD_ENV_APPLE)
     get_target_property(loc OpenToonz MACOSX_BUNDLE_NAME)
     message(" ==> App Bundle: " ${loc})
-    message(" ==> Mach-o: " ${bin})
+    message(" ==> Mach-o: " $<TARGET_FILE:OpenToonz>)  # Fixed: Use generator expression instead of ${bin}
     foreach(lib ${EXTRA_LIBS})
         message(" copy:" ${lib} "==>" ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-        add_custom_command(TARGET OpenToonz POST_BUILD COMMAND cp ${lib} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+        add_custom_command(TARGET OpenToonz POST_BUILD
+            COMMAND cp ${lib} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+        )
     endforeach()
+    # Added: Ensure lib targets build before OpenToonz
+    add_dependencies(OpenToonz tnzcore tnzbase toonzlib colorfx tnzext image sound toonzqt tnztools)
 
-    add_custom_command(TARGET OpenToonz POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tcomposer> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS tcomposer)
-    add_custom_command(TARGET OpenToonz POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tcleanup> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS tcleanup)
-    add_custom_command(TARGET OpenToonz POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tconverter> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS tconverter)
-    add_custom_command(TARGET OpenToonz POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tfarmcontroller> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS tfarmcontroller)
-    add_custom_command(TARGET OpenToonz POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tfarmserver> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS tfarmserver)
+    add_custom_command(TARGET OpenToonz POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tcomposer> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    )
+    add_custom_command(TARGET OpenToonz POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tcleanup> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    )
+    add_custom_command(TARGET OpenToonz POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tconverter> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    )
+    add_custom_command(TARGET OpenToonz POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tfarmcontroller> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    )
+    add_custom_command(TARGET OpenToonz POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tfarmserver> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    )
+    # Added: Ensure utility targets build before OpenToonz
+    add_dependencies(OpenToonz tcomposer tcleanup tconverter tfarmcontroller tfarmserver)
 
-    add_custom_command(TARGET OpenToonz POST_BUILD COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../Resources)
-    add_custom_command(TARGET OpenToonz POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/../install/SystemVar.ini ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../Resources)
+    add_custom_command(TARGET OpenToonz POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../Resources
+    )
+    add_custom_command(TARGET OpenToonz POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/../install/SystemVar.ini ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../Resources
+    )
 
-    add_custom_command(TARGET OpenToonz POST_BUILD COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../../../qss)
+    add_custom_command(TARGET OpenToonz POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../../../qss
+    )
 
     add_custom_command(TARGET OpenToonz
         POST_BUILD COMMAND
-        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath @executable_path/. ${bin} || true
+        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath @executable_path/. "$<TARGET_FILE:OpenToonz>" || true
     )
     add_custom_command(TARGET OpenToonz
         POST_BUILD COMMAND
-        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH} ${bin} || true
+        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH} "$<TARGET_FILE:OpenToonz>" || true
     )
+endif()
 
-elseif(BUILD_ENV_UNIXLIKE AND BUILD_TARGET_WIN)
+if(BUILD_ENV_UNIXLIKE AND BUILD_TARGET_WIN)
     # Setup files on Windows platform while cross compilation.
     install(
         TARGETS
