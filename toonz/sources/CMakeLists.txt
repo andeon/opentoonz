@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.5...3.30)
 
 # Modern CMake policies for OpenToonz legacy code (suppresses subdir errors)
 if(POLICY CMP0111)
@@ -300,6 +300,11 @@ find_package(Qt5 REQUIRED
     SerialPort
     UiTools
 )
+
+if(NOT Qt5Core_FOUND)
+  message(FATAL_ERROR "Qt5Core not found—check paths")
+endif()
+message(STATUS "Qt5 Modules: ${Qt5Core_VERSION}")
 
 set(QT_MINIMUM_VERSION 5.5.0)
 if(Qt5Core_VERSION VERSION_LESS QT_MINIMUM_VERSION)
