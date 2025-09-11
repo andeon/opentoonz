@@ -120,7 +120,7 @@ jobs:
           cd ../toonz
           mkdir build
           cd build
-          cmake ..\sources -G "Ninja" -A x64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y        shell: cmd
+          cmake ..\sources -G "Ninja" -A x64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y
         shell: cmd
 
       # Build Opentoonz using MSBuild
