@@ -121,6 +121,7 @@ jobs:
           copy /Y libpng-1.6.21\scripts\pnglibconf.h.prebuilt libpng-1.6.21\pnglibconf.h
 
           cd ../toonz
+          rmdir /S /Q build
           mkdir build
           cd build
 
