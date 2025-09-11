@@ -44,29 +44,6 @@ jobs:
         with:
           lfs: false  # Enable LFS to ensure all files are fetched
 
-      - name: Install Visual Studio Build Tools
-        run: |
-          @echo on
-          choco install visualstudio2022buildtools --version=17.14.13 -y
-        shell: cmd
-
-      - name: List repository contents
-        run: |
-          @echo on
-          dir /s D:\a\opentoonz\opentoonz
-        shell: cmd
-
-      - name: Locate Visual Studio installation
-        run: |
-          @echo on
-          for /f "tokens=*" %%i in ('"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath') do (
-            set "VSINSTALLDIR=%%i"
-            echo VSINSTALLDIR=%%i>> %GITHUB_ENV%
-            echo VCINSTALLDIR=%%i\VC>> %GITHUB_ENV%
-          )
-        shell: cmd
-
-
       - name: Install clcache
         run: pip install clcache
         shell: cmd
