@@ -89,7 +89,12 @@ jobs:
       - name: List clcache directory contents before build
         run: |
           @echo on
-          dir %LOCALAPPDATA%\clcache
+          echo LOCALAPPDATA=%LOCALAPPDATA%
+          IF EXIST "%LOCALAPPDATA%\clcache" (
+            dir %LOCALAPPDATA%\clcache
+          ) ELSE (
+            echo clcache directory does not exist yet.
+          )
         shell: cmd
 
       # Cache the clcache path
