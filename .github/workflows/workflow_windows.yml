@@ -113,14 +113,18 @@ jobs:
       - name: CMake configuration
         run: |
           @echo on
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+
           cd thirdparty
           copy /Y tiff-4.0.3\libtiff\tif_config.vc.h tiff-4.0.3\libtiff\tif_config.h
           copy /Y tiff-4.0.3\libtiff\tiffconf.vc.h tiff-4.0.3\libtiff\tiffconf.h
           copy /Y libpng-1.6.21\scripts\pnglibconf.h.prebuilt libpng-1.6.21\pnglibconf.h
+
           cd ../toonz
           mkdir build
           cd build
-          cmake ..\sources -G "Ninja" -A x64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y
+
+          cmake ..\sources -G "Ninja" -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y
         shell: cmd
 
       # Build Opentoonz using MSBuild
