@@ -160,7 +160,7 @@ jobs:
           mkdir build
           cd build
           dir ..\sources  REM Check sources directory
-          cmake ..\sources -G "%MSVCVERSION%" -Ax64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y
+          cmake ..\sources -G "%MSVCVERSION%" -Ax64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y -DCMAKE_CXX_COMPILER_LAUNCHER=clcache -DCMAKE_C_COMPILER_LAUNCHER=clcache
         shell: cmd
 
       - name: Check which cl is used during CMake config
