@@ -60,57 +60,41 @@ jobs:
           )
         shell: cmd
 
-      - name: Install and Configure ccache
+      - name: Install and Configure clcache
         run: |
           @echo on
-          choco install ccache
-          mkdir C:\ccache-wrapper
-          copy C:\ProgramData\chocolatey\lib\ccache\tools\ccache*\ccache.exe C:\ccache-wrapper\cl.exe
-          mkdir %LOCALAPPDATA%\ccache
-          icacls %LOCALAPPDATA%\ccache /grant runneradmin:F
+          choco install python3
+          pip install clcache
+          mkdir %LOCALAPPDATA%\clcache
+          icacls %LOCALAPPDATA%\clcache /grant runneradmin:F
         shell: cmd
 
-      # Set up ccache with Visual Studio
-      - name: Set ccache with Visual Studio
+      - name: Set clcache with Visual Studio
         run: |
           @echo on
-          set CCACHE=C:\ccache-wrapper\ccache.exe
-          set CXXCACHE=C:\ccache-wrapper\ccache.exe
-          echo PATH=C:\ccache-wrapper;%VCINSTALLDIR%\bin\Hostx64\x64;%PATH%>> %GITHUB_PATH%
+          set CLCACHE=C:\Python39\Scripts\clcache.exe
+          set CXXCACHE=C:\Python39\Scripts\clcache.exe
+          echo PATH=C:\Python39\Scripts;%VCINSTALLDIR%\bin\Hostx64\x64;%PATH%>> %GITHUB_PATH%
         shell: cmd
 
-      - name: Verify ccache and cl.exe paths
+      - name: Configure clcache
         run: |
           @echo on
-          where ccache.exe
-          where cl.exe
-          dir C:\ccache-wrapper
+          clcache --maxsize=10737418240
+          clcache -o CLCACHE_DIR="%LOCALAPPDATA%\clcache"
         shell: cmd
 
-      - name: Configure ccache
-        run: |
-          @echo on
-          ccache --max-size=10G
-          ccache -o cache_dir="%LOCALAPPDATA%\ccache"
-          ccache -o log_file="%LOCALAPPDATA%\ccache\ccache.log"
+      - name: Show clcache stats before build
+        run: clcache -s
         shell: cmd
 
-      - name: Show ccache stats before build
-        run: ccache -s
-        shell: cmd
-
-      - name: List ccache directory contents before build
-        run: dir %LOCALAPPDATA%\ccache
-        shell: cmd
-
-      # Cache the ccache path
-      - name: Set Path ccache
+      - name: Set Path clcache
         uses: actions/cache@v4
         with:
-          path: C:/Users/runneradmin/AppData/Local/ccache
-          key: windows-ccache-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}
+          path: C:/Users/runneradmin/AppData/Local/clcache
+          key: windows-clcache-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}
           restore-keys: |
-            windows-ccache-
+            windows-clcache-
 
       # Cache OpenCV and Boost libraries
       - name: Cache OpenCV and Boost
@@ -166,13 +150,14 @@ jobs:
           mkdir build
           cd build
           dir ..\sources  REM Check sources directory
-          cmake ..\sources -G "%MSVCVERSION%" -Ax64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y -DCMAKE_CXX_COMPILER="C:/ccache-wrapper/ccache.exe" -DCMAKE_C_COMPILER="C:/ccache-wrapper/ccache.exe"
+          cmake ..\sources -G "%MSVCVERSION%" -Ax64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y -DCMAKE_CXX_COMPILER="C:/Python39/Scripts/clcache.exe" -DCMAKE_C_COMPILER="C:/Python39/Scripts/clcache.exe"
         shell: cmd
 
       - name: Verify CMake compiler
         run: |
+          @echo on
           cd toonz\build
-          cmake -LA
+          cmake -LA -S ..\sources
         shell: cmd
 
       # Build Opentoonz using MSBuild
@@ -183,12 +168,8 @@ jobs:
           msbuild /p:Configuration=RelWithDebInfo /m /verbosity:diagnostic ALL_BUILD.vcxproj
         shell: cmd
 
-      - name: Show ccache stats after build
-        run: ccache -s
-        shell: cmd
-
-      - name: List ccache directory contents after build
-        run: dir %LOCALAPPDATA%\ccache
+      - name: Show clcache stats after build
+        run: clcache -s
         shell: cmd
 
       # Create the package
