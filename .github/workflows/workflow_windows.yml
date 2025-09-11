@@ -54,35 +54,29 @@ jobs:
         run: pip install clcache
         shell: cmd
 
-      - name: where clcache
-        run: |
-          where clcache
-        shell: cmd
-
-      # Set up clcache with Visual Studio
-      - name: Set clcache environment variables
-        run: |
-          setx CLCACHE "C:\hostedtoolcache\windows\Python\3.9.13\x64\Scripts\clcache.exe"
-          setx CXXCACHE "C:\hostedtoolcache\windows\Python\3.9.13\x64\Scripts\clcache.exe"
-        shell: cmd
-
       - name: Wrap clcache as cl.exe
         run: |
           mkdir C:\clcache-wrapper
           copy "C:\hostedtoolcache\windows\Python\3.9.13\x64\Scripts\clcache.exe" C:\clcache-wrapper\cl.exe
-          echo PATH=C:\clcache-wrapper;%PATH%>> %GITHUB_PATH%
+          echo C:\clcache-wrapper>> %GITHUB_PATH%
         shell: cmd
 
       - name: Check cl.exe path
-        run: where cl
+        run: |
+          for /f "tokens=*" %%i in ('"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath') do set VS_PATH=%%i
+          call "%VS_PATH%\VC\Auxiliary\Build\vcvars64.bat"
+          echo PATH=%PATH%
+          where cl
         shell: cmd
 
       - name: Configure clcache
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          for /f "tokens=*" %%i in ('"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath') do set VS_PATH=%%i
+          call "%VS_PATH%\VC\Auxiliary\Build\vcvars64.bat"
           for /f "delims=" %%i in ('where clcache') do set CLCACHE_EXE=%%i
-          call %CLCACHE_EXE% --maxsize=10737418240
-          call %CLCACHE_EXE% -o CLCACHE_DIR="%LOCALAPPDATA%\clcache"
+          %CLCACHE_EXE% --maxsize=10737418240
+          %CLCACHE_EXE% -o CLCACHE_DIR="%LOCALAPPDATA%\clcache"
+          %CLCACHE_EXE% --test
         shell: cmd
 
       - name: Show clcache stats before build
