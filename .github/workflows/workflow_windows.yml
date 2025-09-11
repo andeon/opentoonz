@@ -160,7 +160,12 @@ jobs:
           mkdir build
           cd build
           dir ..\sources  REM Check sources directory
-          cmake ..\sources -G "%MSVCVERSION%" -Ax64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y -DCMAKE_CXX_COMPILER="C:/Python39/Scripts/clcache.exe" -DCMAKE_C_COMPILER="C:/Python39/Scripts/clcache.exe"
+          cmake ..\sources -G "%MSVCVERSION%" -Ax64 -DQT_PATH="%QT_PATH%" -DBOOST_ROOT="%BOOST_ROOT%" -DOpenCV_DIR="%OpenCV_DIR%" -DWITH_WINTAB=Y
+        shell: cmd
+
+      - name: Check which cl is used during CMake config
+        run: |
+          where cl
         shell: cmd
 
       - name: Verify CMake compiler
@@ -180,8 +185,8 @@ jobs:
 
       - name: Show clcache stats after build
         run: |
-          @echo on
           clcache -s
+          dir C:\Users\runneradmin\clcache
         shell: cmd
 
       - name: List clcache directory contents after build
