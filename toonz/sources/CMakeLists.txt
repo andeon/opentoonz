@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.5...3.30)
 
+# Modern CMake policies for OpenToonz legacy code (suppresses subdir errors)
+if(POLICY CMP0111)
+  cmake_policy(SET CMP0111 OLD)  # Allow LOCATION reads on built targets (fixes toonz/CMakeLists.txt:577)
+endif()
+if(POLICY CMP0175)
+  cmake_policy(SET CMP0175 OLD)  # Allow invalid keywords like DEPENDS in add_custom_command(TARGET ...) (fixes toonz/CMakeLists.txt:585–602)
+endif()
+
 set(CMAKE_BUILD_TYPE_INIT Release)
 
 project(OpenToonz)
@@ -211,7 +219,7 @@ elseif(BUILD_ENV_APPLE)
         -D__MACOS__
     )
     if(PLATFORM EQUAL 64)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -std=c++17 -stdlib=libc++ -fno-implicit-templates")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -stdlib=libc++ -fno-implicit-templates")  # Removed redundant -std=c++17
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m64")
     elseif(PLATFORM EQUAL 32)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32 -std=c++17 -stdlib=libc++ -fno-implicit-templates -D HAS_QUICKDRAW")
@@ -221,8 +229,8 @@ elseif(BUILD_ENV_APPLE)
         message(FATAL_ERROR "Invalid PLATFORM:" ${PLATFORM} ". 'PLATFORM' must be 32 or 64.")
     endif()
 elseif(BUILD_ENV_UNIXLIKE)
-    # Needed for correct Qt detection
-    cmake_minimum_required(VERSION 2.8.12)
+    # Needed for correct Qt detection (handled by top-level 3.5+)
+    # cmake_minimum_required(VERSION 2.8.12)  # Commented: Redundant and triggers <3.5 error
     set(PRELOAD_VARIABLE "LD_LIBRARY_PATH")
     if(CMAKE_SYSTEM_NAME MATCHES "Linux")
         add_definitions(-DLINUX)
@@ -242,7 +250,7 @@ elseif(BUILD_ENV_UNIXLIKE)
 
     find_package(Qt5Widgets)
 
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
     if (NOT (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lstdc++")
     endif()
@@ -446,7 +454,7 @@ elseif(BUILD_ENV_APPLE)
     pkg_check_modules(MYPAINT_LIB REQUIRED libmypaint)
 
     if(PLATFORM EQUAL 64)
-    	pkg_check_modules(TURBOJPEG REQUIRED libturbojpeg)
+        pkg_check_modules(TURBOJPEG REQUIRED libturbojpeg)
         find_library(TURBOJPEG_LIB turbojpeg ${TURBOJPEG_LIBRARY_DIRS})
         message("**************** turbojpeg lib:" ${TURBOJPEG_LIB})
 
@@ -576,6 +584,8 @@ if(BUILD_ENV_MSVC OR BUILD_ENV_APPLE)
             ${BOOST_ROOT}  # From -D or env
             ${THIRDPARTY_LIBS_HINTS}
         PATH_SUFFIXES
+            boost/boost_1_89_0/  # Added recent versions (e.g., Homebrew 1.89)
+            boost/boost_1_87_0/
             boost/boost_1_86_0/
             boost/boost_1_85_0/
             boost/boost_1_75_0/
@@ -686,10 +696,10 @@ if((PLATFORM EQUAL 32) AND ((BUILD_TARGET_WIN AND BUILD_ENV_MSVC) OR BUILD_TARGE
 endif()
 
 if(BUILD_ENV_APPLE)
-    add_custom_command(TARGET executable
+    add_custom_command(TARGET OpenToonz  # Fixed: Changed from 'executable' to actual target name
         POST_BUILD COMMAND
         ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH}
-        $<TARGET_FILE:executable>
+        $<TARGET_FILE:OpenToonz>
     )
     # add capability for retina displays
     set_target_properties(OpenToonz PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/../cmake/BundleInfo.plist.in)
