@@ -562,24 +562,28 @@ include_directories(
 )
 
 if(BUILD_ENV_MSVC OR BUILD_ENV_APPLE)
+    # Handle CMake 3.30+/4.x: Force legacy module for prebuilt Boost (no config files)
     if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.30)
-        set(BOOST_DIR ${BOOST_ROOT})
-        find_package(Boost 1.55 REQUIRED)
-    else() # CMake version below 3.30
-        find_path(
-            BOOST_ROOT
-                include/boost
-                boost
-            HINTS
-                ${THIRDPARTY_LIBS_HINTS}
-            PATH_SUFFIXES
-                boost/boost_1_75_0/
-                boost/boost_1_74_0/
-                boost/boost_1_73_0/
-                boost/boost_1_72_0/
-        )
-        find_package(Boost 1.55 REQUIRED)
+        cmake_policy(SET CMP0167 OLD)  # Use FindBoost module, not config
     endif()
+    # Set hints/ROOT for both branches
+    set(Boost_NO_BOOST_CMAKE ON)  # Explicitly disable config search
+    find_path(
+        BOOST_ROOT
+            include/boost
+            boost
+        HINTS
+            ${BOOST_ROOT}  # From -D or env
+            ${THIRDPARTY_LIBS_HINTS}
+        PATH_SUFFIXES
+            boost/boost_1_86_0/
+            boost/boost_1_85_0/
+            boost/boost_1_75_0/
+            boost/boost_1_74_0/
+            boost/boost_1_73_0/
+            boost/boost_1_72_0/
+    )
+    find_package(Boost 1.55 REQUIRED)
 else()
     find_package(Boost)
 endif()
