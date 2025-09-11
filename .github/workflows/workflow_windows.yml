@@ -63,31 +63,55 @@ jobs:
       - name: Install and Configure clcache
         run: |
           @echo on
-          choco install python3
-          pip install clcache
+          choco install python3 --version=3.9.13 -y
+          call "%VCINSTALLDIR%\Auxiliary\Build\vcvarsall.bat" x64
+          C:\Python39\python.exe -m pip install --upgrade pip
+          C:\Python39\Scripts\pip.exe install clcache
           mkdir %LOCALAPPDATA%\clcache
           icacls %LOCALAPPDATA%\clcache /grant runneradmin:F
         shell: cmd
 
+      # Set up clcache with Visual Studio
       - name: Set clcache with Visual Studio
         run: |
           @echo on
+          call "%VCINSTALLDIR%\Auxiliary\Build\vcvarsall.bat" x64
           set CLCACHE=C:\Python39\Scripts\clcache.exe
           set CXXCACHE=C:\Python39\Scripts\clcache.exe
           echo PATH=C:\Python39\Scripts;%VCINSTALLDIR%\bin\Hostx64\x64;%PATH%>> %GITHUB_PATH%
         shell: cmd
 
+      - name: Verify clcache and cl.exe paths
+        run: |
+          @echo on
+          call "%VCINSTALLDIR%\Auxiliary\Build\vcvarsall.bat" x64
+          where clcache.exe
+          where cl.exe
+          dir C:\Python39\Scripts
+        shell: cmd
+
       - name: Configure clcache
         run: |
           @echo on
+          call "%VCINSTALLDIR%\Auxiliary\Build\vcvarsall.bat" x64
           clcache --maxsize=10737418240
           clcache -o CLCACHE_DIR="%LOCALAPPDATA%\clcache"
         shell: cmd
 
       - name: Show clcache stats before build
-        run: clcache -s
+        run: |
+          @echo on
+          call "%VCINSTALLDIR%\Auxiliary\Build\vcvarsall.bat" x64
+          clcache -s
         shell: cmd
 
+      - name: List clcache directory contents before build
+        run: |
+          @echo on
+          dir %LOCALAPPDATA%\clcache
+        shell: cmd
+
+      # Cache the clcache path
       - name: Set Path clcache
         uses: actions/cache@v4
         with:
@@ -142,6 +166,7 @@ jobs:
       - name: CMake configuration
         run: |
           @echo on
+          call "%VCINSTALLDIR%\Auxiliary\Build\vcvarsall.bat" x64
           cd thirdparty
           copy /Y tiff-4.0.3\libtiff\tif_config.vc.h tiff-4.0.3\libtiff\tif_config.h
           copy /Y tiff-4.0.3\libtiff\tiffconf.vc.h tiff-4.0.3\libtiff\tiffconf.h
