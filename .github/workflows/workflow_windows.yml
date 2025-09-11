@@ -58,7 +58,7 @@ jobs:
         run: |
           mkdir C:\clcache-wrapper
           copy "C:\hostedtoolcache\windows\Python\3.9.13\x64\Scripts\clcache.exe" C:\clcache-wrapper\cl.exe
-          echo C:\clcache-wrapper>> %GITHUB_PATH%
+          echo C:\clcache-wrapper > %GITHUB_PATH%
         shell: cmd
 
       - name: Check cl.exe path
@@ -69,15 +69,16 @@ jobs:
           where cl
         shell: cmd
 
+      # Configure clcache (simplified: use env vars, no direct calls with options)
       - name: Configure clcache
         run: |
           for /f "tokens=*" %%i in ('"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath') do set VS_PATH=%%i
           call "%VS_PATH%\VC\Auxiliary\Build\vcvars64.bat"
-          for /f "delims=" %%i in ('where clcache') do set CLCACHE_EXE=%%i
-          %CLCACHE_EXE% --maxsize=10737418240
-          %CLCACHE_EXE% -o CLCACHE_DIR="%LOCALAPPDATA%\clcache"
-          %CLCACHE_EXE% --test
+          REM Environment variables are now set; no need for direct clcache calls here
+          REM Verify by showing stats (should show configured dir and size)
+          clcache -s
         shell: cmd
+
 
       - name: Show clcache stats before build
         run: |
