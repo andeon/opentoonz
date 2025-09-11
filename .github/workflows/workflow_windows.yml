@@ -60,17 +60,16 @@ jobs:
         shell: cmd
 
       # Set up clcache with Visual Studio
-      - name: Set clcache with Visual Studio
+      - name: Set clcache environment variables
         run: |
-          @echo on
-          set CLCACHE=C:\Python39\Scripts\clcache.exe
-          set CXXCACHE=C:\Python39\Scripts\clcache.exe
+          setx CLCACHE "C:\hostedtoolcache\windows\Python\3.9.13\x64\Scripts\clcache.exe"
+          setx CXXCACHE "C:\hostedtoolcache\windows\Python\3.9.13\x64\Scripts\clcache.exe"
         shell: cmd
 
       - name: Wrap clcache as cl.exe
         run: |
           mkdir C:\clcache-wrapper
-          copy C:\Python39\Scripts\clcache.exe C:\clcache-wrapper\cl.exe
+          copy "C:\hostedtoolcache\windows\Python\3.9.13\x64\Scripts\clcache.exe" C:\clcache-wrapper\cl.exe
           echo PATH=C:\clcache-wrapper;%PATH%>> %GITHUB_PATH%
         shell: cmd
 
