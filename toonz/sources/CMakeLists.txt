@@ -625,9 +625,10 @@ if(WITH_TRANSLATION)
             )
         endforeach()
 
-        qt5_create_translation(message ${translation} ${ARGN})
+        # Give a unique name to the translation output list to avoid conflicts
+        qt5_create_translation(${module}_ts_files ${translation} ${ARGN})
 
-        add_custom_target("translation_${module}" DEPENDS ${message})
+        add_custom_target("translation_${module}" DEPENDS ${${module}_ts_files})
         set_target_properties("translation_${module}" PROPERTIES
             EXCLUDE_FROM_DEFAULT_BUILD TRUE
         )
