@@ -44,6 +44,12 @@ jobs:
         with:
           lfs: false  # Enable LFS to ensure all files are fetched
 
+      - name: Install Visual Studio Build Tools
+        run: |
+          @echo on
+          choco install visualstudio2022buildtools --version=17.14.13 -y
+        shell: cmd
+
       - name: List repository contents
         run: |
           @echo on
@@ -64,7 +70,7 @@ jobs:
         run: |
           @echo on
           call "%VCINSTALLDIR%\Auxiliary\Build\vcvarsall.bat" x64
-          dir "%VCINSTALLDIR%\bin\Hostx64\x64\cl.exe"
+          dir "%VCINSTALLDIR%\bin\Hostx64\x64\cl.exe" || dir "%VCINSTALLDIR%\Tools\MSVC\*\bin\Hostx64\x64\cl.exe"
           where cl.exe
         shell: cmd
 
