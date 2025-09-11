@@ -112,7 +112,7 @@ set(MOC_HEADERS
     toolbar.h
     tpanels.h
     trackerpopup.h
-	vectorguideddrawingpane.h
+    vectorguideddrawingpane.h
     vectorizerpopup.h
     vectorizerswatch.h
     versioncontrol.h
@@ -126,8 +126,8 @@ set(MOC_HEADERS
     xshnoteviewer.h
     xshrowviewer.h
     xshtoolbar.h
-	xdtsimportpopup.h
-	expressionreferencemanager.h
+    xdtsimportpopup.h
+    expressionreferencemanager.h
     tooloptionsshortcutinvoker.h
     exportxsheetpdf.h
     custompanelmanager.h
@@ -376,16 +376,16 @@ set(SOURCES
     audiorecordingpopup.cpp
     locatorpopup.cpp
     styleshortcutswitchablepanel.cpp
-	reframepopup.cpp
-	autoinputcellnumberpopup.cpp
-	colormodelbehaviorpopup.cpp
-	boardsettingspopup.cpp
-	separatecolorsswatch.cpp
-	separatecolorspopup.cpp
+    reframepopup.cpp
+    autoinputcellnumberpopup.cpp
+    colormodelbehaviorpopup.cpp
+    boardsettingspopup.cpp
+    separatecolorsswatch.cpp
+    separatecolorspopup.cpp
     xdtsio.cpp
     ocaio.cpp
-	xdtsimportpopup.cpp
-	expressionreferencemanager.cpp
+    xdtsimportpopup.cpp
+    expressionreferencemanager.cpp
     tooloptionsshortcutinvoker.cpp
     tvpjson_io.cpp
     exportxsheetpdf.cpp
@@ -539,13 +539,26 @@ elseif(BUILD_ENV_APPLE)
         endif()
     endif()
 
-    add_dependencies(OpenToonz tnzcore tnzbase toonzlib colorfx tnzext image sound toonzqt tnztools tnzstdfx tfarm)
+    # Removed redundant add_dependencies (duplicates the one after foreach below)
 
     target_link_libraries(OpenToonz
         Qt5::Core Qt5::Gui Qt5::Network Qt5::OpenGL Qt5::Svg Qt5::Xml
         Qt5::Script Qt5::Widgets Qt5::PrintSupport Qt5::Multimedia Qt5::MultimediaWidgets Qt5::UiTools
         ${GL_LIB} ${GLUT_LIB}
         ${COCOA_LIB} ${EXTRA_LIBS} ${X64ONLY_LIBS} mousedragfilter
+    )
+
+    # ADDED/UPDATED: Expanded dependencies for all libs and utilities (ensures build order)
+    add_dependencies(OpenToonz tnzcore tnzbase toonzlib colorfx tnzext image sound toonzqt tnztools tnzstdfx tfarm tcomposer tcleanup tconverter tfarmcontroller tfarmserver)
+
+    # ADDED/UPDATED: Configure Info.plist for bundle (retina support etc.)
+    set_target_properties(OpenToonz PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/../cmake/BundleInfo.plist.in)
+
+    # ADDED/UPDATED: Merged RPATH command (single one with both paths; || true for CI; COMMENT for logs)
+    add_custom_command(TARGET OpenToonz POST_BUILD
+        COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath @executable_path/. "$<TARGET_FILE:OpenToonz>" || true
+        COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH} "$<TARGET_FILE:OpenToonz>" || true
+        COMMENT "Adding RPATHs to OpenToonz executable"
     )
 
 elseif(BUILD_ENV_UNIXLIKE)

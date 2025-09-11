@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.11)
+cmake_minimum_required(VERSION 3.5)
 
 set(CMAKE_BUILD_TYPE_INIT Release)
 
@@ -430,7 +430,7 @@ elseif(BUILD_ENV_APPLE)
     pkg_check_modules(MYPAINT_LIB REQUIRED libmypaint)
 
     if(PLATFORM EQUAL 64)
-    	pkg_check_modules(TURBOJPEG REQUIRED libturbojpeg)
+        pkg_check_modules(TURBOJPEG REQUIRED libturbojpeg)
         find_library(TURBOJPEG_LIB turbojpeg ${TURBOJPEG_LIBRARY_DIRS})
         message("**************** turbojpeg lib:" ${TURBOJPEG_LIB})
 
@@ -663,16 +663,6 @@ endif()
 
 if((PLATFORM EQUAL 32) AND ((BUILD_TARGET_WIN AND BUILD_ENV_MSVC) OR BUILD_TARGET_APPLE))
     add_subdirectory(t32bitsrv)
-endif()
-
-if(BUILD_ENV_APPLE)
-    add_custom_command(TARGET executable
-        POST_BUILD COMMAND
-        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH}
-        $<TARGET_FILE:executable>
-    )
-    # add capability for retina displays
-    set_target_properties(OpenToonz PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/../cmake/BundleInfo.plist.in)
 endif()
 
 if(BUILD_ENV_UNIXLIKE AND NOT BUILD_TARGET_WIN)
