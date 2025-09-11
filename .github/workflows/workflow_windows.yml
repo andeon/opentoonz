@@ -44,6 +44,12 @@ jobs:
         with:
           lfs: false  # Enable LFS to ensure all files are fetched
 
+      - name: Setup MSVC environment
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          cl.exe
+        shell: cmd
+
       - name: Install clcache
         run: pip install clcache
         shell: cmd
@@ -54,12 +60,11 @@ jobs:
           @echo on
           set CLCACHE=C:\Python39\Scripts\clcache.exe
           set CXXCACHE=C:\Python39\Scripts\clcache.exe
-          echo PATH=C:\Python39\Scripts;%VCINSTALLDIR%\bin\Hostx64\x64;%PATH%>> %GITHUB_PATH%
         shell: cmd
 
       - name: Configure clcache
         run: |
-          @echo on
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           clcache --maxsize=10737418240
           clcache -o CLCACHE_DIR="%LOCALAPPDATA%\clcache"
         shell: cmd
