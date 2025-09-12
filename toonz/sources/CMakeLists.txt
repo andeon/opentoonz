@@ -212,7 +212,7 @@ elseif(BUILD_ENV_APPLE)
         -D__MACOS__
     )
     if(PLATFORM EQUAL 64)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -stdlib=libc++ -fno-implicit-templates")  # Removed redundant -std=c++17
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -stdlib=libc++ -fno-implicit-templates")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m64")
     elseif(PLATFORM EQUAL 32)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32 -std=c++17 -stdlib=libc++ -fno-implicit-templates -D HAS_QUICKDRAW")

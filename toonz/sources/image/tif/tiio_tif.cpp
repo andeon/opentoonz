@@ -469,7 +469,7 @@ void TifReader::readLine(short *buffer, int x0, int x1, int shrink) {
 
       // Traverse the tiles row
       while (x < m_info.m_lx) {
-        int ret = TIFFReadRGBATile_64(m_tiff, static_cast<uint32_t>(x), static_cast<uint32_t>(y), reinterpret_cast<uint32_t *>(tile.get()));  // MUDANÇA: Casts para uint32_t (resolve parameter init error)
+        int ret = TIFFReadRGBATile_64(m_tiff, static_cast<uint32_t>(x), static_cast<uint32_t>(y), reinterpret_cast<uint32_t *>(tile.get()));  // change: Cast for uint32_t * (resolve parameter init error)
         assert(ret);
 
         int tileRowSize = std::min((int)tileWidth, m_info.m_lx - x) * pixelSize;
