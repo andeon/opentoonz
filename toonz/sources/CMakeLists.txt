@@ -10,11 +10,6 @@ project(OpenToonz)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")
-#Set C to 99 or sources/image/tzp/avl.c will not compile anymore for newer
-# compilers and libraries
-set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_STANDARD_REQUIRED ON)
-message(STATUS "C standard: ${CMAKE_C_STANDARD}")
 #-----------------------------------------------------------------------------
 # Platform Specific Defaults
 
