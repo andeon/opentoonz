@@ -75,6 +75,8 @@ jobs:
         run: |
           export PKG_CONFIG_PATH="/usr/local/opt/jpeg-turbo/lib/pkgconfig:$PKG_CONFIG_PATH"
           cd toonz
+          # rm -rf Clean build directory to avoid CMake cache conflicts
+          rm -rf build  
           mkdir -p build
           cd build
           cmake ../sources -G Ninja \

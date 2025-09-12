@@ -53,14 +53,16 @@ jobs:
     - name: Build libtiff
       run: |
         cd thirdparty/tiff-4.0.3
-        CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
+        CFLAGS='-fPIC -D_FILE_OFFSET_BITS=64' CXXFLAGS='-fPIC -D_FILE_OFFSET_BITS=64' ./configure --disable-jbig --enable-bigtiff # Enables BigTIFF for 64-bit offsets/tiles (maintains 16-bpc support)
         make -j $(nproc)
+        sudo make install
 
     - name: Build
       run: |
         export CCACHE_DIR=/home/runner/.ccache
         export CC="ccache ${{ matrix.cc }}"
         export CXX="ccache ${{ matrix.cxx }}"
+        rm -rf build
         cd toonz
         mkdir build
         cd build
