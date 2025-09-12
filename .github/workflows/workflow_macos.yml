@@ -53,7 +53,7 @@ jobs:
           
           brew update
           brew cleanup
-          checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv qt@5
+          checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv openjph openexr qt@5
           brew unlink qt
       - name: Set up cache
         run: |
