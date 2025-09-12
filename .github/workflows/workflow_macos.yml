@@ -68,7 +68,7 @@ jobs:
       - name: Build libtiff
         run: |
           cd thirdparty/tiff-4.0.3
-          CFLAGS='-fPIC -D_FILE_OFFSET_BITS=64' CXXFLAGS='-fPIC -D_FILE_OFFSET_BITS=64' ./configure --disable-lzma --enable-bigtiff  # Enable BigTIFF for 64-bit offsets/tiles (maintains 16-bpc support)
+          CFLAGS='-fPIC -D_FILE_OFFSET_BITS=64' CXXFLAGS='-fPIC -D_FILE_OFFSET_BITS=64' ./configure --disable-lzma --enable-bigtiff  # Enables BigTIFF for 64-bit offsets/tiles (maintains 16-bpc support)
           make -j $(sysctl -n hw.ncpu)
           make install  # Ensures CMake finds the installed lib (avoids linking issues)
       - name: Build
