@@ -1,19 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-# Modern CMake policies for OpenToonz legacy code (suppresses subdir errors)
-if(POLICY CMP0111)
-  cmake_policy(SET CMP0111 OLD)  # Allow LOCATION reads on built targets (fixes toonz/CMakeLists.txt:577)
-endif()
-if(POLICY CMP0175)
-  cmake_policy(SET CMP0175 OLD)  # Allow invalid keywords like DEPENDS in add_custom_command(TARGET ...) (fixes toonz/CMakeLists.txt:585–602)
-endif()
 
-if(POLICY CMP0058)
-  cmake_policy(SET CMP0058 NEW)  # Trata byproducts explicitamente em add_custom_command (evita warnings Ninja)
-endif()
-if(POLICY CMP0112)
-  cmake_policy(SET CMP0112 NEW)  # Otimiza dependências em generator expressions como $<TARGET_FILE:...>
-endif()
 
 set(CMAKE_BUILD_TYPE_INIT Release)
 
@@ -23,7 +10,7 @@ project(OpenToonz)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")
- Set C to 99 or sources/image/tzp/avl.c will not compile anymore for newer
+#Set C to 99 or sources/image/tzp/avl.c will not compile anymore for newer
 # compilers and libraries
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
