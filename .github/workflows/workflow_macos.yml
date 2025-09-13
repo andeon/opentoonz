@@ -33,32 +33,32 @@ jobs:
             -exec sh -c 'file -b {} | grep -q "symbolic link to .*Python.framework" && echo "Removing {}" && rm {}' \;
           # Ensure Homebrew Python is properly linked
           for py_version in python@3.11 python@3.12 python@3.13; do
-            if brew list --versions $py_version >/dev/null; then
-              brew unlink $py_version || true
+            if arch -x86_64 /usr/local/bin/brew list --versions $py_version >/dev/null 2>&1; then
+              arch -x86_64 /usr/local/bin/brew unlink $py_version || true
             fi
           done
-          brew link --overwrite --force python@3.13 || true
+          arch -x86_64 /usr/local/bin/brew link --overwrite --force python@3.13 || true
 
       - name: Install libraries (force x86_64)
         run: |
           # Update and cleanup ARM Homebrew (default in /opt/homebrew)
-          brew update
-          brew cleanup
+          arch -x86_64 /usr/local/bin/brew update
+          arch -x86_64 /usr/local/bin/brew cleanup
           
           checkPkgAndInstall() {
             for pkg in "$@"; do
-              if brew list --versions $pkg > /dev/null 2>&1; then
+              if arch -x86_64 /usr/local/bin/brew list --versions $pkg > /dev/null 2>&1; then
                 echo "$pkg already installed. Upgrading..."
-                brew upgrade $pkg || true
+                arch -x86_64 /usr/local/bin/brew upgrade $pkg || true
               else
                 echo "Installing $pkg..."
-                brew install $pkg || { echo "Failed to install $pkg"; exit 1; }
+                arch -x86_64 /usr/local/bin/brew install $pkg || { echo "Failed to install $pkg"; exit 1; }
               fi
             done
           }
           
           checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv openjph openexr qt@5
-          brew unlink qt || true
+          arch -x86_64 /usr/local/bin/brew unlink qt || true
 
 
       - name: Set up cache
@@ -95,9 +95,9 @@ jobs:
           cmake ../sources -G Ninja \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DQT_PATH=$(arch -x86_64 brew --prefix qt@5)/lib \
-            -DQt5_DIR=$(arch -x86_64 brew --prefix qt@5)/lib/cmake/Qt5 \
-            -DCMAKE_PREFIX_PATH=$(arch -x86_64 brew --prefix qt@5)/lib/cmake/Qt5 \
+            -DQT_PATH=$(arch -x86_64 /usr/local/bin/brew --prefix qt@5)/lib \
+            -DQt5_DIR=$(arch -x86_64 /usr/local/bin/brew --prefix qt@5)/lib/cmake/Qt5 \
+            -DCMAKE_PREFIX_PATH=$(arch -x86_64 /usr/local/bin/brew --prefix qt@5)/lib/cmake/Qt5 \
             -DWITH_TRANSLATION=OFF
 
           ninja -j $(sysctl -n hw.ncpu)
