@@ -26,22 +26,39 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # New step: Install Rosetta 2 and x86_64 Homebrew
+      - name: Install Rosetta 2 and x86_64 Homebrew
+        run: |
+          # Install Rosetta 2 for x86_64 emulation (ignore if already installed)
+          /usr/sbin/softwareupdate --install-rosetta --agree-to-license || true
+          
+          # Install Homebrew for x86_64 in /usr/local (non-interactive)
+          NONINTERACTIVE=1 arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          
+          # Set up environment for x86_64 Homebrew (add to PATH)
+          eval "$(arch -x86_64 /usr/local/bin/brew shellenv)"
+
       - name: Clean Python symlinks
         run: |
-          # Remove potentially conflicting Python symlinks
-          find /usr/local/bin -type l \( -name "python*" -o -name "pip*" -o -name "2to3*" -o -name "idle*" -o -name "pydoc*" \) \
-            -exec sh -c 'file -b {} | grep -q "symbolic link to .*Python.framework" && echo "Removing {}" && rm {}' \;
-          # Ensure Homebrew Python is properly linked
-          for py_version in python@3.11 python@3.12 python@3.13; do
-            if arch -x86_64 /usr/local/bin/brew list --versions $py_version >/dev/null 2>&1; then
-              arch -x86_64 /usr/local/bin/brew unlink $py_version || true
-            fi
-          done
-          arch -x86_64 /usr/local/bin/brew link --overwrite --force python@3.13 || true
+          # Remove potentially conflicting Python symlinks (run under x86_64)
+          arch -x86_64 bash -c '
+            find /usr/local/bin -type l \( -name "python*" -o -name "pip*" -o -name "2to3*" -o -name "idle*" -o -name "pydoc*" \) \
+              -exec sh -c ''file -b {} | grep -q "symbolic link to .*Python.framework" && echo "Removing {}" && rm {}'' \;
+            # Ensure Homebrew Python is properly linked
+            for py_version in python@3.11 python@3.12 python@3.13; do
+              if /usr/local/bin/brew list --versions $py_version >/dev/null 2>&1; then
+                /usr/local/bin/brew unlink $py_version || true
+              fi
+            done
+            /usr/local/bin/brew link --overwrite --force python@3.13 || true
+          '
 
       - name: Install libraries (force x86_64)
         run: |
-          # Update and cleanup ARM Homebrew (default in /opt/homebrew)
+          # Set up environment for x86_64 Homebrew
+          eval "$(arch -x86_64 /usr/local/bin/brew shellenv)"
+          
+          # Now update and clean the x86_64 Homebrew
           arch -x86_64 /usr/local/bin/brew update
           arch -x86_64 /usr/local/bin/brew cleanup
           
@@ -59,7 +76,6 @@ jobs:
           
           checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv openjph openexr qt@5
           arch -x86_64 /usr/local/bin/brew unlink qt || true
-
 
       - name: Set up cache
         run: |
