@@ -42,14 +42,23 @@ jobs:
         run: |
           # Remove potentially conflicting Python symlinks (run under x86_64)
           arch -x86_64 bash -c '
-            find /usr/local/bin -type l \( -name "python*" -o -name "pip*" -o -name "2to3*" -o -name "idle*" -o -name "pydoc*" \) \
-              -exec sh -c ''file -b {} | grep -q "symbolic link to .*Python.framework" && echo "Removing {}" && rm {}'' \;
+            find /usr/local/bin -type l \( -name "python*" -o -name "pip*" -o -name "2to3*" -o -name "idle*" -o -name "pydoc*" \) -print0 | while IFS= read -r -d "" link; do
+              if file -b "$link" | grep -q "symbolic link to .*Python.framework"; then
+                echo "Removing $link"
+                rm "$link"
+              fi
+            done
             # Ensure Homebrew Python is properly linked
             for py_version in python@3.11 python@3.12 python@3.13; do
               if /usr/local/bin/brew list --versions $py_version >/dev/null 2>&1; then
                 /usr/local/bin/brew unlink $py_version || true
               fi
             done
+            # Install python@3.13 if not present, then link it
+            if ! /usr/local/bin/brew list --versions python@3.13 >/dev/null 2>&1; then
+              echo "Installing python@3.13..."
+              /usr/local/bin/brew install python@3.13 || { echo "Failed to install python@3.13"; exit 1; }
+            fi
             /usr/local/bin/brew link --overwrite --force python@3.13 || true
           '
 
@@ -67,10 +76,14 @@ jobs:
               if arch -x86_64 /usr/local/bin/brew list --versions $pkg > /dev/null 2>&1; then
                 echo "$pkg already installed. Upgrading..."
                 arch -x86_64 /usr/local/bin/brew upgrade $pkg || true
-              else
-                echo "Installing $pkg..."
-                arch -x86_64 /usr/local/bin/brew install $pkg || { echo "Failed to install $pkg"; exit 1; }
-              fi
+          else
+            echo "Installing $pkg..."
+            arch -x86_64 /usr/local/bin/brew install $pkg
+            if ! arch -x86_64 /usr/local/bin/brew list --versions $pkg > /dev/null; then
+              echo "ERROR: $pkg failed to install properly"
+              exit 1
+            fi
+          fi
             done
           }
           
