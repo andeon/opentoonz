@@ -76,14 +76,10 @@ jobs:
               if arch -x86_64 /usr/local/bin/brew list --versions $pkg > /dev/null 2>&1; then
                 echo "$pkg already installed. Upgrading..."
                 arch -x86_64 /usr/local/bin/brew upgrade $pkg || true
-          else
-            echo "Installing $pkg..."
-            arch -x86_64 /usr/local/bin/brew install $pkg
-            if ! arch -x86_64 /usr/local/bin/brew list --versions $pkg > /dev/null; then
-              echo "ERROR: $pkg failed to install properly"
-              exit 1
-            fi
-          fi
+              else
+                echo "Installing $pkg..."
+                arch -x86_64 /usr/local/bin/brew install $pkg || { echo "Failed to install $pkg"; exit 1; }
+              fi
             done
           }
           
