@@ -8,7 +8,7 @@ on:
       - '!README.md'             # Exclude README
       - '!doc/**'                # Exclude documentation
       - '!**/.github/**'         # Exclude everything in .github folder
-      - '.github/workflows/workflow_macos.yml'  # Include MacOs workflow file
+      - '.github/workflows/workflow_macos.yml'  # Include MacOS workflow file
   pull_request:
     paths:
       - '**/*'
@@ -21,7 +21,7 @@ on:
 jobs:
   macOS:
     timeout-minutes: 90 # Stop job if it exceeds expected build time
-    # Stick with macOS 13 to avoid arm64 headaches on macOS 15
+    # try force -x86_64 to avoid arm64 headaches
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v5
@@ -38,27 +38,34 @@ jobs:
             fi
           done
           brew link --overwrite --force python@3.13 || true
-          
-      - name: Install libraries
+
+      - name: Install libraries (force x86_64)
         run: |
+          INTEL_BREW="/usr/local/bin/brew"
+
+          arch -x86_64 $INTEL_BREW update
+          arch -x86_64 $INTEL_BREW cleanup
+
           checkPkgAndInstall() {
             for pkg in "$@"; do
-              if brew ls --versions $pkg; then
-                brew upgrade $pkg
+              if arch -x86_64 $INTEL_BREW list --versions $pkg > /dev/null 2>&1; then
+                echo "$pkg already installed. Upgrading..."
+                arch -x86_64 $INTEL_BREW upgrade $pkg || true
               else
-                brew install $pkg
+                echo "Installing $pkg..."
+                arch -x86_64 $INTEL_BREW install $pkg || { echo "Failed to install $pkg"; exit 1; }
               fi
             done
           }
-          
-          brew update
-          brew cleanup
+
           checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv openjph openexr qt@5
-          brew unlink qt
+          arch -x86_64 $INTEL_BREW unlink qt || true
+
       - name: Set up cache
         run: |
           export PATH="/usr/local/opt/ccache/libexec:$PATH"
           mkdir -p /Users/runner/.ccache
+
       - uses: actions/cache@v4
         with:
           path: /Users/runner/.ccache
@@ -71,25 +78,35 @@ jobs:
           CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-lzma
           make -j $(sysctl -n hw.ncpu)
           sudo make install  # Use sudo here to get permission
+
       - name: Build
         run: |
           export PKG_CONFIG_PATH="/usr/local/opt/jpeg-turbo/lib/pkgconfig:$PKG_CONFIG_PATH"
           cd toonz
-          rm -rf build  
+          rm -rf build
           mkdir -p build
           cd build
+
+          # Force build Intel arch on ARM64 runners
+          export CFLAGS="-arch x86_64 $CFLAGS"
+          export CXXFLAGS="-arch x86_64 $CXXFLAGS"
+          export LDFLAGS="-arch x86_64 $LDFLAGS"
+
           cmake ../sources -G Ninja \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DQT_PATH=$(brew --prefix qt@5)/lib \
-            -DQt5_DIR=$(brew --prefix qt@5)/lib/cmake/Qt5 \
-            -DCMAKE_PREFIX_PATH=$(brew --prefix qt@5)/lib/cmake/Qt5 \
+            -DQT_PATH=$(arch -x86_64 brew --prefix qt@5)/lib \
+            -DQt5_DIR=$(arch -x86_64 brew --prefix qt@5)/lib/cmake/Qt5 \
+            -DCMAKE_PREFIX_PATH=$(arch -x86_64 brew --prefix qt@5)/lib/cmake/Qt5 \
             -DWITH_TRANSLATION=OFF
+
           ninja -j $(sysctl -n hw.ncpu)
+
       - name: Introduce Libraries and Stuff
         run: |
           cd toonz/build/toonz
           cp -pr ../../../stuff OpenToonz.app/portablestuff
-          /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -verbose=0 -always-overwrite \
+          arch -x86_64 /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -verbose=0 -always-overwrite \
             -executable=OpenToonz.app/Contents/MacOS/lzocompress \
             -executable=OpenToonz.app/Contents/MacOS/lzodecompress \
             -executable=OpenToonz.app/Contents/MacOS/tcleanup \
@@ -97,6 +114,7 @@ jobs:
             -executable=OpenToonz.app/Contents/MacOS/tconverter \
             -executable=OpenToonz.app/Contents/MacOS/tfarmcontroller \
             -executable=OpenToonz.app/Contents/MacOS/tfarmserver
+
       - name: Modify Library Paths
         run: |
           cd toonz/build/toonz/OpenToonz.app/Contents/Frameworks
@@ -108,12 +126,13 @@ jobs:
               fi
             done
           done
+
       - name: Create Artifact
         run: |
           cd toonz/build/toonz
           echo "Creating DMG..."
           ATTEMPT=1
-          until /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=0 && [ -f OpenToonz.dmg ]; do
+          until arch -x86_64 /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=0 && [ -f OpenToonz.dmg ]; do
             echo "Attempt $ATTEMPT failed to build DMG."
             if [ $ATTEMPT -eq 10 ]; then
               echo ">>> DMG file creation failed after 10 attempts. Aborting!"
@@ -124,6 +143,7 @@ jobs:
             sleep 5
           done
           echo "DMG created successfully."
+
       - uses: actions/upload-artifact@v4
         with:
           name: Opentoonz-${{ runner.os }}-${{ github.sha }}
