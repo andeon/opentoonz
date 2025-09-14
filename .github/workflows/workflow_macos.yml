@@ -24,7 +24,7 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
-      
+
       - name: Ensure only arm64 Homebrew is used
         run: |
           export PATH="/opt/homebrew/bin:$PATH"
@@ -66,8 +66,43 @@ jobs:
           }
           brew update
           brew cleanup
-          checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv qt@5
+          checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv openblas qt@5
           brew unlink qt
+
+      - name: Verify Brew installed libs architecture
+        run: |
+          echo "Checking architectures of some brew-installed libs and binaries..."
+
+          for pkg in pkg-config qt@5 opencv; do
+            prefix=$(brew --prefix $pkg)
+            echo "Package: $pkg, prefix: $prefix"
+
+            echo "Binaries in $prefix/bin:"
+            if [ -d "$prefix/bin" ]; then
+              for bin in "$prefix/bin"/*; do
+                if [ -f "$bin" ]; then
+                  echo -n "  $(basename $bin): "
+                  file "$bin" | grep -E 'arm64|x86_64|universal'
+                fi
+              done
+            else
+              echo "  No bin directory"
+            fi
+
+            echo "Libraries in $prefix/lib:"
+            if [ -d "$prefix/lib" ]; then
+              for lib in "$prefix/lib"/*.{dylib,a,so} 2>/dev/null; do
+                if [ -f "$lib" ]; then
+                  echo -n "  $(basename $lib): "
+                  file "$lib" | grep -E 'arm64|x86_64|universal'
+                fi
+              done
+            else
+              echo "  No lib directory"
+            fi
+
+            echo "-----"
+          done
 
       - name: Set up cache
         run: |
@@ -87,6 +122,9 @@ jobs:
           make -j $(sysctl -n hw.ncpu)
       - name: Build SuperLU
         run: |
+          export OPENBLAS_ROOT=$(brew --prefix openblas)
+          export CFLAGS="-I${OPENBLAS_ROOT}/include"
+          export LDFLAGS="-L${OPENBLAS_ROOT}/lib -lopenblas"
           cd thirdparty/superlu/SuperLU_4.1
           make clean
           make -j $(sysctl -n hw.ncpu)
