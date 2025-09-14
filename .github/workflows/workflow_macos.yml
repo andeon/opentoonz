@@ -38,7 +38,35 @@ jobs:
           fi  
           # Set up environment for x86_64 Homebrew (add to PATH)
           eval "$(arch -x86_64 /usr/local/bin/brew shellenv)"
-
+      - name: Clean Python symlinks
+        run: |
+          # Remove potentially conflicting Python symlinks (run under x86_64)
+          arch -x86_64 bash -c '
+            # Remove symlinks pointing to /Library/Frameworks/Python.framework
+            find /usr/local/bin -type l \( -name "python*" -o -name "pip*" -o -name "2to3*" -o -name "idle*" -o -name "pydoc*" \) -print0 | while IFS= read -r -d "" link; do
+              if file -b "$link" | grep -q "symbolic link to .*Python.framework"; then
+                echo "Removing $link"
+                rm "$link"
+              fi
+            done
+            # Remove the entire conflicting Python framework directory (safe in CI)
+            if [ -d /Library/Frameworks/Python.framework/Versions/3.13 ]; then
+              echo "Removing /Library/Frameworks/Python.framework/Versions/3.13"
+              sudo rm -rf /Library/Frameworks/Python.framework/Versions/3.13
+            fi
+            # Ensure Homebrew Python is properly linked
+            for py_version in python@3.11 python@3.12 python@3.13; do
+              if /usr/local/bin/brew list --versions $py_version >/dev/null 2>&1; then
+                /usr/local/bin/brew unlink $py_version || true
+              fi
+            done
+            # Install python@3.13 if not present, then link it
+            if ! /usr/local/bin/brew list --versions python@3.13 >/dev/null 2>&1; then
+              echo "Installing python@3.13..."
+              /usr/local/bin/brew install python@3.13 || { echo "Failed to install python@3.13"; exit 1; }
+            fi
+            /usr/local/bin/brew link --overwrite --force python@3.13 || true
+          '
       - name: Install libraries (force x86_64)
         run: |
           # Set up environment for x86_64 Homebrew
