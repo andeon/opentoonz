@@ -88,7 +88,7 @@ jobs:
           # Verify and fix line endings
           sed -i '' 's/\r$//' config/config.sub
           # Check if config.sub is valid
-          [ -s config/config.sub ] && head -n 1 config/config.sub | grep -q '^#!/bin/sh' || { echo "Error: Invalid config.sub"; cat config/config.sub | head -n 10; exit 1; }
+          [ -s config/config.sub ] && head -n 1 config/config.sub | grep -q '^#! */bin/sh' || { echo "Error: Invalid config.sub"; cat config/config.sub | head -n 10; exit 1; }
           CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-lzma
           make -j $(sysctl -n hw.ncpu)
 
