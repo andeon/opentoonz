@@ -83,12 +83,12 @@ jobs:
         run: |
           cd thirdparty/tiff-4.0.3
           # Update config.sub to support arm64-apple-darwin
-          curl -L -o config/config.sub https://raw.githubusercontent.com/autotools-mirror/autoconf/refs/heads/master/build-aux/config.sub
+          curl -L -o config/config.sub https://raw.githubusercontent.com/autotools-mirror/autoconf/master/build-aux/config.sub
           chmod +x config/config.sub
           # Verify and fix line endings
           sed -i '' 's/\r$//' config/config.sub
           # Check if config.sub is valid
-          [ -s config/config.sub ] && head -n 1 config/config.sub | grep -q '^#!/bin/sh' || { echo "Error: Invalid config.sub"; exit 1; }
+          [ -s config/config.sub ] && head -n 1 config/config.sub | grep -q '^#!/bin/sh' || { echo "Error: Invalid config.sub"; cat config/config.sub | head -n 10; exit 1; }
           CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-lzma
           make -j $(sysctl -n hw.ncpu)
 
