@@ -3,11 +3,11 @@ name: MacOS Build
 on:
   push:
     paths:
-      - '**/*'                   # Include all files in the repository
-      - '!appveyor.yml'          # Ignore changes in AppVeyor
-      - '!README.md'             # Exclude README
-      - '!doc/**'                # Exclude documentation
-      - '!**/.github/**'         # Exclude everything in .github folder
+      - '**/*'                                  # Include all files in the repository
+      - '!appveyor.yml'                         # Ignore changes in AppVeyor
+      - '!README.md'                            # Exclude README
+      - '!doc/**'                               # Exclude documentation
+      - '!**/.github/**'                        # Exclude everything in .github folder
       - '.github/workflows/workflow_macos.yml'  # Include MacOS workflow file
   pull_request:
     paths:
@@ -20,9 +20,9 @@ on:
 
 jobs:
   macOS:
-    timeout-minutes: 90 # Stop job if it exceeds expected build time
-    # Force x86_64 on macOS 15 (ARM64 runner) via Rosetta to avoid arm64 headaches
-    runs-on: macos-15
+    timeout-minutes: 120 # Stop job if it exceeds expected build time
+    # Force x86_64 on macOS 14 (ARM64 runner) via Rosetta
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v5
 
@@ -32,48 +32,19 @@ jobs:
           # Install Rosetta 2 for x86_64 emulation (ignore if already installed)
           /usr/sbin/softwareupdate --install-rosetta --agree-to-license || true
           
-          # Install Homebrew for x86_64 in /usr/local (non-interactive)
-          NONINTERACTIVE=1 arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          
+          # Install Homebrew for x86_64 in /usr/local (non-interactive) if not present
+          if ! [ -x /usr/local/bin/brew ]; then
+            NONINTERACTIVE=1 arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          fi  
           # Set up environment for x86_64 Homebrew (add to PATH)
           eval "$(arch -x86_64 /usr/local/bin/brew shellenv)"
-
-      - name: Clean Python symlinks
-        run: |
-          # Remove potentially conflicting Python symlinks (run under x86_64)
-          arch -x86_64 bash -c '
-            # Remove symlinks pointing to /Library/Frameworks/Python.framework
-            find /usr/local/bin -type l \( -name "python*" -o -name "pip*" -o -name "2to3*" -o -name "idle*" -o -name "pydoc*" \) -print0 | while IFS= read -r -d "" link; do
-              if file -b "$link" | grep -q "symbolic link to .*Python.framework"; then
-                echo "Removing $link"
-                rm "$link"
-              fi
-            done
-            # Remove the entire conflicting Python framework directory (safe in CI)
-            if [ -d /Library/Frameworks/Python.framework/Versions/3.13 ]; then
-              echo "Removing /Library/Frameworks/Python.framework/Versions/3.13"
-              sudo rm -rf /Library/Frameworks/Python.framework/Versions/3.13
-            fi
-            # Ensure Homebrew Python is properly linked
-            for py_version in python@3.11 python@3.12 python@3.13; do
-              if /usr/local/bin/brew list --versions $py_version >/dev/null 2>&1; then
-                /usr/local/bin/brew unlink $py_version || true
-              fi
-            done
-            # Install python@3.13 if not present, then link it
-            if ! /usr/local/bin/brew list --versions python@3.13 >/dev/null 2>&1; then
-              echo "Installing python@3.13..."
-              /usr/local/bin/brew install python@3.13 || { echo "Failed to install python@3.13"; exit 1; }
-            fi
-            /usr/local/bin/brew link --overwrite --force python@3.13 || true
-          '
 
       - name: Install libraries (force x86_64)
         run: |
           # Set up environment for x86_64 Homebrew
           eval "$(arch -x86_64 /usr/local/bin/brew shellenv)"
           
-          # Now update and clean the x86_64 Homebrew
+          # Update and clean the x86_64 Homebrew
           arch -x86_64 /usr/local/bin/brew update
           arch -x86_64 /usr/local/bin/brew cleanup
           
@@ -94,7 +65,7 @@ jobs:
             done
           }
           
-          checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv openjph openexr qt@5
+          checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv qt@5
           arch -x86_64 /usr/local/bin/brew unlink qt || true
 
       - name: Set up cache
@@ -111,9 +82,16 @@ jobs:
       - name: Build libtiff
         run: |
           cd thirdparty/tiff-4.0.3
-          CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-lzma
-          make -j $(sysctl -n hw.ncpu)
-          sudo make install  # Use sudo here to get permission
+          # Force x86_64 architecture for configure and make under Rosetta
+          arch -x86_64 bash -c '
+            export CFLAGS="-arch x86_64 -fPIC $CFLAGS"
+            export CXXFLAGS="-arch x86_64 -fPIC $CXXFLAGS"
+            ./configure --build=x86_64-apple-darwin$(uname -r) --disable-lzma
+            make clean  # Clean to avoid stale ARM64 artifacts
+            make -j $(sysctl -n hw.ncpu)
+          '
+          # Debug: Verify libtiff architecture
+          file .libs/libtiff.a || echo "libtiff.a not found"
 
       - name: Build
         run: |
@@ -122,7 +100,6 @@ jobs:
           export HOMEBREW_PREFIX=/usr/local
           export PKG_CONFIG_PATH="/usr/local/opt/jpeg-turbo/lib/pkgconfig:$PKG_CONFIG_PATH"
           cd toonz
-          rm -rf build
           mkdir -p build
           cd build
 
