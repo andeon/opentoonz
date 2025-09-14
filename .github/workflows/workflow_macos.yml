@@ -97,8 +97,9 @@ jobs:
           cd thirdparty/openblas/xianyi-OpenBLAS-e6e87a2
           export FC=$(brew --prefix gcc)/bin/gfortran
           export CC=clang
-          rm -rf *.a *.o
-          make USE_THREAD=1 BINARY=64 CC=$CC FC=$FC TARGET=GENERIC NO_SHARED=1 CFLAGS="-arch arm64" LDFLAGS="-arch arm64" -j $(sysctl -n hw.ncpu)
+          rm -rf *.a *.o param.h
+          make getarch CC=$CC CFLAGS="-arch arm64"
+          make USE_THREAD=1 BINARY=64 CC=$CC FC=$FC TARGET=ARMV8 NO_SHARED=1 CFLAGS="-arch arm64" LDFLAGS="-arch arm64" -j $(sysctl -n hw.ncpu)
           make PREFIX=$PWD/../../install install
           nm -g ../../install/lib/libopenblas.a | grep -E 'strsv_|sgemv_' || echo "Warning: Expected BLAS symbols not found"
           lipo -info ../../install/lib/libopenblas.a
