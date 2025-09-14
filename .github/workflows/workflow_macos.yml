@@ -84,6 +84,7 @@ jobs:
           cd thirdparty/tiff-4.0.3
           # Update config.sub to support arm64-apple-darwin
           curl -L -o config/config.sub https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD
+          chmod +x config/config.sub
           CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-lzma
           make -j $(sysctl -n hw.ncpu)
 
