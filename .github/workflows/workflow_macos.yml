@@ -85,6 +85,10 @@ jobs:
           # Update config.sub to support arm64-apple-darwin
           curl -L -o config/config.sub https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD
           chmod +x config/config.sub
+          # Verify and fix line endings
+          sed -i '' 's/\r$//' config/config.sub
+          # Check if config.sub is valid
+          [ -s config/config.sub ] && head -n 1 config/config.sub | grep -q '^#!/bin/sh' || { echo "Error: Invalid config.sub"; exit 1; }
           CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-lzma
           make -j $(sysctl -n hw.ncpu)
 
