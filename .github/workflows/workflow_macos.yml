@@ -69,7 +69,7 @@ jobs:
           checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv openblas qt@5
           brew unlink qt
 
-      - name: Verify Brew installed libs architecture
+      - name: Check architectures of brew-installed libs and binaries
         run: |
           echo "Checking architectures of some brew-installed libs and binaries..."
 
@@ -79,9 +79,9 @@ jobs:
 
             echo "Binaries in $prefix/bin:"
             if [ -d "$prefix/bin" ]; then
-              for bin in "$prefix/bin"/*; do
+              for bin in $prefix/bin/*; do
                 if [ -f "$bin" ]; then
-                  echo -n "  $(basename $bin): "
+                  echo -n "  $(basename "$bin"): "
                   file "$bin" | grep -E 'arm64|x86_64|universal'
                 fi
               done
@@ -91,11 +91,9 @@ jobs:
 
             echo "Libraries in $prefix/lib:"
             if [ -d "$prefix/lib" ]; then
-              for lib in "$prefix/lib"/*.{dylib,a,so} 2>/dev/null; do
-                if [ -f "$lib" ]; then
-                  echo -n "  $(basename $lib): "
-                  file "$lib" | grep -E 'arm64|x86_64|universal'
-                fi
+              find "$prefix/lib" -type f \( -name "*.dylib" -o -name "*.a" -o -name "*.so" \) | while read -r lib; do
+                echo -n "  $(basename "$lib"): "
+                file "$lib" | grep -E 'arm64|x86_64|universal'
               done
             else
               echo "  No lib directory"
@@ -103,6 +101,7 @@ jobs:
 
             echo "-----"
           done
+
 
       - name: Set up cache
         run: |
