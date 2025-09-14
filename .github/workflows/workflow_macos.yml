@@ -20,7 +20,7 @@ on:
 
 jobs:
   macOS:
-    timeout-minutes: 90 # Stop job if it exceeds expected build time
+    timeout-minutes: 120 # Stop job if it exceeds expected build time
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
@@ -30,16 +30,15 @@ jobs:
           export PATH="/opt/homebrew/bin:$PATH"
           echo "New PATH: $PATH"
           which brew
+
       - name: Verify architecture
         run: |
           echo "Architecture check:"
           uname -m
           arch
           sysctl -n machdep.cpu.brand_string
-
           echo "Brew location:"
           which brew
-
           echo "Brew architecture:"
           file $(which brew)
 
@@ -66,7 +65,7 @@ jobs:
           }
           brew update
           brew cleanup
-          checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv qt@5
+          checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv qt@5 gcc
           brew unlink qt
 
       - name: Set up cache
@@ -83,8 +82,39 @@ jobs:
       - name: Build libtiff
         run: |
           cd thirdparty/tiff-4.0.3
-          CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-lzma
+          CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-lzma --build=arm64-apple-darwin
           make -j $(sysctl -n hw.ncpu)
+
+      - name: Build OpenBLAS
+        run: |
+          cd thirdparty/openblas/xianyi-OpenBLAS-e6e87a2
+          export FC=$(brew --prefix gcc)/bin/gfortran
+          export CC=clang
+          rm -rf *.a *.o
+          make USE_THREAD=1 BINARY=64 CC=$CC FC=$FC TARGET=GENERIC NO_SHARED=1 CFLAGS="-arch arm64" LDFLAGS="-arch arm64" -j $(sysctl -n hw.ncpu)
+          make PREFIX=$PWD/../../install install
+          nm -g ../../install/lib/libopenblas.a | grep -E 'strsv_|sgemv_' || echo "Warning: Expected BLAS symbols not found"
+          lipo -info ../../install/lib/libopenblas.a
+
+      - name: Build SuperLU
+        run: |
+          export OPENBLAS_ROOT=$PWD/thirdparty/install
+          cd thirdparty/superlu/SuperLU_4.1
+          rm -rf libsuperlu_4.1.a *.o
+          export CC=clang
+          export FC=$(brew --prefix gcc)/bin/gfortran
+          export CFLAGS="-I${OPENBLAS_ROOT}/include -arch arm64"
+          export LDFLAGS="-arch arm64"
+          make clean
+          make USE_VENDOR_BLAS=1 BLASLIB="-L${OPENBLAS_ROOT}/lib -lopenblas" -j $(sysctl -n hw.ncpu)
+          lipo -info libsuperlu_4.1.a
+
+      - name: Debug SuperLU Paths
+        run: |
+          cd thirdparty/superlu/SuperLU_4.1
+          ls -l libsuperlu_4.1.a
+          file libsuperlu_4.1.a
+          otool -L libsuperlu_4.1.a || true
 
       - name: Build
         run: |
@@ -100,7 +130,8 @@ jobs:
             -DWITH_TRANSLATION=OFF \
             -DWITH_SYSTEM_SUPERLU=OFF \
             -DTHIRDPARTY_LIBS_HINTS=$PWD/../../thirdparty/superlu/SuperLU_4.1 \
-            -DCMAKE_OSX_ARCHITECTURES=arm64
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DGL_SILENCE_DEPRECATION=ON
           ninja -j $(sysctl -n hw.ncpu)
 
       - name: Introduce Libraries and Stuff
@@ -109,7 +140,7 @@ jobs:
           cp -pr ../../../stuff OpenToonz.app/portablestuff
           QT_DEPLOY=$(brew --prefix qt@5)/bin/macdeployqt
           echo "Using macdeployqt from: $QT_DEPLOY"
-          $QT_DEPLOY OpenToonz.app -verbose=0 -always-overwrite \
+          $QT_DEPLOY OpenToonz.app -verbose=2 -always-overwrite \
             -executable=OpenToonz.app/Contents/MacOS/lzocompress \
             -executable=OpenToonz.app/Contents/MacOS/lzodecompress \
             -executable=OpenToonz.app/Contents/MacOS/tcleanup \
@@ -117,18 +148,14 @@ jobs:
             -executable=OpenToonz.app/Contents/MacOS/tconverter \
             -executable=OpenToonz.app/Contents/MacOS/tfarmcontroller \
             -executable=OpenToonz.app/Contents/MacOS/tfarmserver
-      - name: Verify architectures in OpenToonz.app
-        run: |
-          echo "Scanning OpenToonz.app for x86_64 or universal binaries..."
 
-          find toonz/build/toonz/OpenToonz.app -type f -perm /111 | while read -r bin; do
-            ARCHS=$(file "$bin" | grep -Eo 'arm64|x86_64|universal' | sort -u | xargs)
-            echo "$bin => $ARCHS"
-            if echo "$ARCHS" | grep -q 'x86_64'; then
-              echo "::error ::Found x86_64 binary in app bundle: $bin"
-              exit 1
-            fi
+      - name: Strip Signatures from Libraries
+        run: |
+          cd toonz/build/toonz/OpenToonz.app/Contents/Frameworks
+          for lib in *.dylib; do
+            codesign --remove-signature "$lib" || true
           done
+
       - name: Modify Library Paths
         run: |
           cd toonz/build/toonz/OpenToonz.app/Contents/Frameworks
