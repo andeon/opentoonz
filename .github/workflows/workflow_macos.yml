@@ -85,24 +85,6 @@ jobs:
           cd thirdparty/tiff-4.0.3
           CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-lzma
           make -j $(sysctl -n hw.ncpu)
-      - name: Build OpenBLAS
-        run: |
-          cd thirdparty/openblas/xianyi-OpenBLAS-e6e87a2
-          # Ensure gfortran is available for Fortran support
-          export FC=$(brew --prefix gcc)/bin/gfortran
-          export CC=clang
-          # Build for ARM64 with threading (adjust BINARY=32 if needed for testing, but 64 is standard)
-          make USE_THREAD=1 BINARY=64 CC=$CC FC=$FC TARGET=ARMV8 NO_SHARED=1 -j $(sysctl -n hw.ncpu)
-          # Install to a local prefix for easy linking
-          make PREFIX=$PWD/../../install install
-          # Verify key BLAS symbols (for debugging)
-          nm -g ../../install/lib/libopenblas.a | grep -E 'strsv_|sgemv_' || echo "Warning: Expected BLAS symbols not found"
-      - name: Build SuperLU
-        run: |
-          export OPENBLAS_ROOT=$(brew --prefix openblas)
-          cd thirdparty/superlu/SuperLU_4.1
-          make clean
-          make USE_VENDOR_BLAS=1 BLASLIB="-L${OPENBLAS_ROOT}/lib -lopenblas" CFLAGS="-I${OPENBLAS_ROOT}/include" -j $(sysctl -n hw.ncpu)
 
       - name: Build
         run: |
