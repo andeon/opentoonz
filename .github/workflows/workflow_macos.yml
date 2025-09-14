@@ -94,11 +94,15 @@ jobs:
 
       - name: Build OpenBLAS
         run: |
-          cd thirdparty/openblas/xianyi-OpenBLAS-e6e87a2
+          cd thirdparty
+          rm -rf openblas/xianyi-OpenBLAS-e6e87a2
+          curl -L -O https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.28/OpenBLAS-0.3.28.tar.gz
+          tar -xzf OpenBLAS-0.3.28.tar.gz
+          mv OpenBLAS-0.3.28 openblas/xianyi-OpenBLAS-e6e87a2
+          cd openblas/xianyi-OpenBLAS-e6e87a2
           export FC=$(brew --prefix gcc)/bin/gfortran
           export CC=clang
-          rm -rf *.a *.o param.h
-          make getarch CC=$CC CFLAGS="-arch arm64"
+          rm -rf *.a *.o
           make USE_THREAD=1 BINARY=64 CC=$CC FC=$FC TARGET=ARMV8 NO_SHARED=1 CFLAGS="-arch arm64" LDFLAGS="-arch arm64" -j $(sysctl -n hw.ncpu)
           make PREFIX=$PWD/../../install install
           nm -g ../../install/lib/libopenblas.a | grep -E 'strsv_|sgemv_' || echo "Warning: Expected BLAS symbols not found"
