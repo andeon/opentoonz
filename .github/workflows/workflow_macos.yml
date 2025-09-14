@@ -21,12 +21,12 @@ on:
 jobs:
   macOS:
     timeout-minutes: 90 # Stop job if it exceeds expected build time
-    # try force -x86_64 to avoid arm64 headaches
-    runs-on: macos-14
+    # Force x86_64 on macOS 15 (ARM64 runner) via Rosetta to avoid arm64 headaches
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
 
-      # New step: Install Rosetta 2 and x86_64 Homebrew
+      # Install Rosetta 2 and x86_64 Homebrew
       - name: Install Rosetta 2 and x86_64 Homebrew
         run: |
           # Install Rosetta 2 for x86_64 emulation (ignore if already installed)
@@ -84,7 +84,12 @@ jobs:
                 arch -x86_64 /usr/local/bin/brew upgrade $pkg || true
               else
                 echo "Installing $pkg..."
-                arch -x86_64 /usr/local/bin/brew install $pkg || { echo "Failed to install $pkg"; exit 1; }
+                # Force build-from-source for lzo to ensure x86_64 (if no bottle)
+                if [ "$pkg" = "lzo" ]; then
+                  arch -x86_64 /usr/local/bin/brew install --build-from-source $pkg || { echo "Failed to install $pkg"; exit 1; }
+                else
+                  arch -x86_64 /usr/local/bin/brew install $pkg || { echo "Failed to install $pkg"; exit 1; }
+                fi
               fi
             done
           }
@@ -112,16 +117,22 @@ jobs:
 
       - name: Build
         run: |
+          # Set up environment for x86_64 Homebrew (ensure library paths prioritize /usr/local)
+          eval "$(arch -x86_64 /usr/local/bin/brew shellenv)"
+          export HOMEBREW_PREFIX=/usr/local
           export PKG_CONFIG_PATH="/usr/local/opt/jpeg-turbo/lib/pkgconfig:$PKG_CONFIG_PATH"
           cd toonz
           rm -rf build
           mkdir -p build
           cd build
 
-          # Force build Intel arch on ARM64 runners
+          # Force build Intel arch on ARM64 runners, with explicit x86_64 lib path
           export CFLAGS="-arch x86_64 $CFLAGS"
           export CXXFLAGS="-arch x86_64 $CXXFLAGS"
-          export LDFLAGS="-arch x86_64 $LDFLAGS"
+          export LDFLAGS="-arch x86_64 -L/usr/local/lib $LDFLAGS"
+
+          # Debug: Verify liblzo is x86_64
+          file /usr/local/lib/liblzo2.a || echo "liblzo2.a not found or wrong arch"
 
           cmake ../sources -G Ninja \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
