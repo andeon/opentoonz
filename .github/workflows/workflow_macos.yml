@@ -88,11 +88,10 @@ jobs:
       - name: Build SuperLU
         run: |
           export OPENBLAS_ROOT=$(brew --prefix openblas)
-          export CFLAGS="-I${OPENBLAS_ROOT}/include"
-          export LDFLAGS="-L${OPENBLAS_ROOT}/lib -lopenblas"
           cd thirdparty/superlu/SuperLU_4.1
           make clean
-          make -j $(sysctl -n hw.ncpu)
+          make USE_VENDOR_BLAS=1 BLASLIB="-L${OPENBLAS_ROOT}/lib -lopenblas" CFLAGS="-I${OPENBLAS_ROOT}/include" -j $(sysctl -n hw.ncpu)
+
       - name: Build
         run: |
           export PKG_CONFIG_PATH="$(brew --prefix jpeg-turbo)/lib/pkgconfig:$PKG_CONFIG_PATH"
