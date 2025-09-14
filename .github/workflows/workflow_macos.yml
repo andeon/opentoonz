@@ -24,6 +24,24 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
+      
+      - name: Ensure only arm64 Homebrew is used
+        run: |
+          export PATH="/opt/homebrew/bin:$PATH"
+          echo "New PATH: $PATH"
+          which brew
+      - name: Verify architecture
+        run: |
+          echo "Architecture check:"
+          uname -m
+          arch
+          sysctl -n machdep.cpu.brand_string
+
+          echo "Brew location:"
+          which brew
+
+          echo "Brew architecture:"
+          file $(which brew)
 
       - name: Remove symlinks
         run: |
@@ -32,7 +50,7 @@ jobs:
                          2to3-3.11 idle3.11 pydoc3.11 python3.11 python3.11-config \
                          2to3-3.12 idle3.12 pydoc3.12 python3.12 python3.12-config \
                          idle3.13 pydoc3.13 python3.13 python3.13-config; do
-            rm -f /usr/local/bin/$symlink
+            rm -f /opt/homebrew/bin/$symlink
           done
 
       - name: Install libraries
@@ -48,7 +66,7 @@ jobs:
           }
           brew update
           brew cleanup
-          checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv superlu qt@5
+          checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv qt@5
           brew unlink qt
 
       - name: Set up cache
@@ -67,7 +85,11 @@ jobs:
           cd thirdparty/tiff-4.0.3
           CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-lzma
           make -j $(sysctl -n hw.ncpu)
-
+      - name: Build SuperLU
+        run: |
+          cd thirdparty/superlu/SuperLU_4.1
+          make clean
+          make -j $(sysctl -n hw.ncpu)
       - name: Build
         run: |
           export PKG_CONFIG_PATH="$(brew --prefix jpeg-turbo)/lib/pkgconfig:$PKG_CONFIG_PATH"
@@ -79,8 +101,10 @@ jobs:
             -DQT_PATH=$(brew --prefix qt@5)/lib \
             -DQt5_DIR=$(brew --prefix qt@5)/lib/cmake/Qt5 \
             -DCMAKE_PREFIX_PATH=$(brew --prefix qt@5)/lib/cmake/Qt5 \
-            -DWITH_SYSTEM_SUPERLU=ON \
-            -DWITH_TRANSLATION=OFF
+            -DWITH_TRANSLATION=OFF \
+            -DWITH_SYSTEM_SUPERLU=OFF \
+            -DTHIRDPARTY_LIBS_HINTS=$PWD/../../thirdparty/superlu/SuperLU_4.1 \
+            -DCMAKE_OSX_ARCHITECTURES=arm64
           ninja -j $(sysctl -n hw.ncpu)
 
       - name: Introduce Libraries and Stuff
