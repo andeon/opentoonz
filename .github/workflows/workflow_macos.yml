@@ -115,12 +115,14 @@ jobs:
           sed -i '' '1i\
           #include <cblas.h>
           ' ssp_blas2.c
-          # Replace strsv_ calls
-          sed -i '' 's/strsv_(\\"L\\", \\"N\\", \\"U\\",/cblas_strsv(CblasRowMajor, CblasLower, CblasNoTrans, CblasUnit,/g' ssp_blas2.c
-          sed -i '' 's/strsv_(\\"U\\", \\"N\\", \\"N\\",/cblas_strsv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit,/g' ssp_blas2.c
-          # Replace sgemv_ call (adjust for partial match and add beta=0.0)
-          sed -i '' 's/sgemv_(\\"N\\",/cblas_sgemv(CblasRowMajor, CblasNoTrans,/g' ssp_blas2.c
-          sed -i '' 's/), 1L, 1L, 1L/), 0.0, \&x[j+nsupc], incx)/g' ssp_blas2.c
+          # Replace strsv_ calls (handle whitespace and Fortran string lengths)
+          sed -i '' 's/strsv_ *(\\"L\\", \\"N\\", \\"U\\",/cblas_strsv(CblasRowMajor, CblasLower, CblasNoTrans, CblasUnit,/g' ssp_blas2.c
+          sed -i '' 's/strsv_ *(\\"U\\", \\"N\\", \\"N\\",/cblas_strsv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit,/g' ssp_blas2.c
+          # Remove Fortran string length arguments for strsv_
+          sed -i '' 's/, *1L, *1L, *1L *)/)/g' ssp_blas2.c
+          # Replace sgemv_ call (handle partial match and add beta=0.0)
+          sed -i '' 's/sgemv_ *(\\"N\\",/cblas_sgemv(CblasRowMajor, CblasNoTrans,/g' ssp_blas2.c
+          sed -i '' 's/, *&alpha, *&Lval\[luptr\+nsupc\], *, *&nsupr, *&x\[j\], *&incx *, *1L, *1L, *1L *)/, alpha, \&Lval[luptr+nsupc], nsupr, \&x[j], incx, 0.0, \&x[j+nsupc], incx)/g' ssp_blas2.c
           # Verify patch
           grep cblas.h ssp_blas2.c || { echo "Error: cblas.h not included in ssp_blas2.c"; exit 1; }
           grep cblas_strsv ssp_blas2.c || { echo "Error: cblas_strsv not found in ssp_blas2.c"; exit 1; }
