@@ -107,6 +107,16 @@ jobs:
           make PREFIX=$PWD/../../install install
           nm -g ../../install/lib/libopenblas.a | grep -E 'strsv_|sgemv_' || echo "Warning: Expected BLAS symbols not found"
           lipo -info ../../install/lib/libopenblas.a
+          
+      - name: Patch SuperLU for CBLAS
+        run: |
+          cd thirdparty/superlu/SuperLU_4.1/SRC
+          # Apply patch for CBLAS
+          curl -L -o ssp_blas2.patch https://raw.githubusercontent.com/<your-repo>/<your-branch>/thirdparty/ssp_blas2.patch
+          patch < ssp_blas2.patch
+          # Verify patch
+          grep cblas.h ssp_blas2.c || { echo "Error: cblas.h not included in ssp_blas2.c"; exit 1; }
+          cd ../../
 
       - name: Build SuperLU
         run: |
