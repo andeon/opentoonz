@@ -159,17 +159,22 @@ jobs:
       - name: Build SuperLU
         run: |
           export OPENBLAS_ROOT=$PWD/thirdparty/install
-          cd thirdparty/superlu/SuperLU_4.1
-          # Debug: Verify cblas.h exists
-          ls -l ${OPENBLAS_ROOT}/include/cblas.h || { echo "Error: cblas.h not found in ${OPENBLAS_ROOT}/include"; exit 1; }
-          rm -rf libsuperlu_4.1.a *.o
-          export CC=clang
-          export FC=$(brew --prefix gcc)/bin/gfortran
-          export CFLAGS="-I${OPENBLAS_ROOT}/include -arch arm64"
-          export LDFLAGS="-arch arm64"
-          make clean
-          make USE_VENDOR_BLAS=1 BLASLIB="-L${OPENBLAS_ROOT}/lib -lopenblas" CFLAGS="${CFLAGS}" RANLIB="ranlib -c" -j $(sysctl -n hw.ncpu)
-          lipo -info libsuperlu_4.1.a
+          cd thirdparty
+          rm -rf superlu/SuperLU_4.1
+          curl -L -O https://github.com/xiaoyeli/superlu/archive/refs/tags/v5.4.0.tar.gz
+          tar -xzf v5.4.0.tar.gz
+          mv superlu-5.4.0 superlu/SuperLU_4.1
+          cd superlu/SuperLU_4.1
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DTPL_BLAS_LIBRARIES="-L${OPENBLAS_ROOT}/lib -lopenblas" \
+            -DTPL_CBLAS_LIBRARIES="-L${OPENBLAS_ROOT}/lib -lopenblas" \
+            -DCMAKE_C_FLAGS="-I${OPENBLAS_ROOT}/include -arch arm64" \
+            -DCMAKE_OSX_ARCHITECTURES=arm64
+          make -j $(sysctl -n hw.ncpu)
+          lipo -info lib/libsuperlu.a
 
       - name: Debug SuperLU Paths
         run: |
