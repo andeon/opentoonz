@@ -111,18 +111,34 @@ jobs:
       - name: Patch SuperLU for CBLAS
         run: |
           cd thirdparty/superlu/SuperLU_4.1/SRC
+          # Debug: Print original strsv_ and sgemv_ lines
+          echo "Debug: Original strsv_ lines"
+          grep strsv_ ssp_blas2.c -A 2 || echo "No strsv_ found"
+          echo "Debug: Original sgemv_ lines"
+          grep sgemv_ ssp_blas2.c -A 2 || echo "No sgemv_ found"
           # Add cblas.h include
           sed -i '' '1i\
           #include <cblas.h>
           ' ssp_blas2.c
-          # Replace strsv_ calls (more flexible pattern for whitespace and arguments)
+          # Replace strsv_ calls (handle no-transpose and transpose cases)
           sed -i '' 's/strsv_ *(\ *"L", *"N", *"U",/cblas_strsv(CblasRowMajor, CblasLower, CblasNoTrans, CblasUnit,/g' ssp_blas2.c
           sed -i '' 's/strsv_ *(\ *"U", *"N", *"N",/cblas_strsv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit,/g' ssp_blas2.c
+          sed -i '' 's/strsv_ *(\ *"L", *"T", *"U",/cblas_strsv(CblasRowMajor, CblasLower, CblasTrans, CblasUnit,/g' ssp_blas2.c
+          sed -i '' 's/strsv_ *(\ *"U", *"T", *"N",/cblas_strsv(CblasRowMajor, CblasUpper, CblasTrans, CblasNonUnit,/g' ssp_blas2.c
           # Remove Fortran string length arguments for strsv_
           sed -i '' 's/, *1L, *1L, *1L *)/)/g' ssp_blas2.c
-          # Replace sgemv_ call (handle full argument list)
+          # Replace sgemv_ call (handle full argument list, remove & for alpha)
           sed -i '' 's/sgemv_ *(\ *"N",/cblas_sgemv(CblasRowMajor, CblasNoTrans,/g' ssp_blas2.c
           sed -i '' 's/, *&alpha, *&Lval\[luptr\+nsupc\], *&nsupr, *&x\[j\], *&incx *, *1L, *1L, *1L *)/, alpha, \&Lval[luptr+nsupc], nsupr, \&x[j], incx, 0.0, \&x[j+nsupc], incx)/g' ssp_blas2.c
+          # Fix cblas_strsv arguments (remove & from nsupc, nsupr, incx)
+          sed -i '' 's/cblas_strsv(CblasRowMajor, CblasLower, CblasNoTrans, CblasUnit, *&nsupc,/cblas_strsv(CblasRowMajor, CblasLower, CblasNoTrans, CblasUnit, nsupc,/g' ssp_blas2.c
+          sed -i '' 's/cblas_strsv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit, *&nsupc,/cblas_strsv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit, nsupc,/g' ssp_blas2.c
+          sed -i '' 's/cblas_strsv(CblasRowMajor, CblasLower, CblasTrans, CblasUnit, *&nsupc,/cblas_strsv(CblasRowMajor, CblasLower, CblasTrans, CblasUnit, nsupc,/g' ssp_blas2.c
+          sed -i '' 's/cblas_strsv(CblasRowMajor, CblasUpper, CblasTrans, CblasNonUnit, *&nsupc,/cblas_strsv(CblasRowMajor, CblasUpper, CblasTrans, CblasNonUnit, nsupc,/g' ssp_blas2.c
+          sed -i '' 's/, *&nsupr,/, nsupr,/g' ssp_blas2.c
+          sed -i '' 's/, *&incx)/, incx)/g' ssp_blas2.c
+          # Fix cblas_sgemv arguments (remove & from nrow, nsupc, alpha)
+          sed -i '' 's/cblas_sgemv(CblasRowMajor, CblasNoTrans, *&nrow, *&nsupc, *&alpha,/cblas_sgemv(CblasRowMajor, CblasNoTrans, nrow, nsupc, alpha,/g' ssp_blas2.c
           # Verify patch
           grep cblas.h ssp_blas2.c || { echo "Error: cblas.h not included in ssp_blas2.c"; exit 1; }
           grep cblas_strsv ssp_blas2.c || { echo "Error: cblas_strsv not found in ssp_blas2.c"; exit 1; }
@@ -132,6 +148,8 @@ jobs:
           grep cblas_strsv ssp_blas2.c -A 2 || echo "No cblas_strsv found"
           echo "Debug: sgemv_ replacement"
           grep cblas_sgemv ssp_blas2.c -A 2 || echo "No cblas_sgemv found"
+          # Debug: Check for remaining strsv_ calls
+          grep strsv_ ssp_blas2.c && { echo "Error: Unpatched strsv_ calls remain in ssp_blas2.c"; exit 1; } || echo "No unpatched strsv_ calls found"
           cd ../../
 
       - name: Build SuperLU
