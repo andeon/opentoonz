@@ -127,12 +127,14 @@ jobs:
           sed -i '' 's/strsv_ *(\ *"U", *"T", *"N",/cblas_strsv(CblasRowMajor, CblasUpper, CblasTrans, CblasNonUnit,/g' ssp_blas2.c
           # Remove Fortran string length arguments for strsv_
           sed -i '' 's/, *1L, *1L, *1L *)/)/g' ssp_blas2.c
-          # Replace sgemv_ call (handle full argument list, remove & for all scalar parameters)
+          # Replace sgemv_ calls (handle both x[j] and x[fsupc] cases)
           sed -i '' 's/sgemv_ *(\ *"N",/cblas_sgemv(CblasRowMajor, CblasNoTrans,/g' ssp_blas2.c
           sed -i '' 's/, *&alpha, *&Lval\[luptr\+nsupc\], *&nsupr, *&x\[j\], *&incx *, *1L, *1L, *1L *)/, alpha, \&Lval[luptr+nsupc], nsupr, \&x[j], incx, 0.0, \&x[j+nsupc], incy)/g' ssp_blas2.c
+          sed -i '' 's/, *&alpha, *&Lval\[luptr\+nsupc\], *&nsupr, *&x\[fsupc\], *&incx *, *1L, *1L, *1L *)/, alpha, \&Lval[luptr+nsupc], nsupr, \&x[fsupc], incx, 0.0, \&x[j+nsupc], incy)/g' ssp_blas2.c
           # Fix cblas_sgemv arguments (remove & from nrow, nsupc, alpha, nsupr, incx, beta, incy)
           sed -i '' 's/cblas_sgemv(CblasRowMajor, CblasNoTrans, *&nrow, *&nsupc, *&alpha,/cblas_sgemv(CblasRowMajor, CblasNoTrans, nrow, nsupc, alpha,/g' ssp_blas2.c
-          sed -i '' 's/, *&nsupr, *&x\[j\], *&incx, *&beta, *&work\[0\], *&incy)/, nsupr, \&x[j], incx, beta, \&work[0], incy)/g' ssp_blas2.c
+          sed -i '' 's/, *&nsupr, *&x\[j\], *&incx, *&beta, *&x\[j\+nsupc\], *&incy)/, nsupr, \&x[j], incx, 0.0, \&x[j+nsupc], incy)/g' ssp_blas2.c
+          sed -i '' 's/, *&nsupr, *&x\[fsupc\], *&incx, *&beta, *&x\[j\+nsupc\], *&incy)/, nsupr, \&x[fsupc], incx, 0.0, \&x[j+nsupc], incy)/g' ssp_blas2.c
           # Fix cblas_strsv arguments (remove & from nsupc, nsupr, incx)
           sed -i '' 's/cblas_strsv(CblasRowMajor, CblasLower, CblasNoTrans, CblasUnit, *&nsupc,/cblas_strsv(CblasRowMajor, CblasLower, CblasNoTrans, CblasUnit, nsupc,/g' ssp_blas2.c
           sed -i '' 's/cblas_strsv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit, *&nsupc,/cblas_strsv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit, nsupc,/g' ssp_blas2.c
