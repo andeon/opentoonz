@@ -138,13 +138,15 @@ jobs:
         run: |
           export OPENBLAS_ROOT=$PWD/thirdparty/install
           cd thirdparty/superlu/SuperLU_4.1
+          # Debug: Verify cblas.h exists
+          ls -l ${OPENBLAS_ROOT}/include/cblas.h || { echo "Error: cblas.h not found in ${OPENBLAS_ROOT}/include"; exit 1; }
           rm -rf libsuperlu_4.1.a *.o
           export CC=clang
           export FC=$(brew --prefix gcc)/bin/gfortran
           export CFLAGS="-I${OPENBLAS_ROOT}/include -arch arm64"
           export LDFLAGS="-arch arm64"
           make clean
-          make USE_VENDOR_BLAS=1 BLASLIB="-L${OPENBLAS_ROOT}/lib -lopenblas" RANLIB="ranlib -c" -j $(sysctl -n hw.ncpu)
+          make USE_VENDOR_BLAS=1 BLASLIB="-L${OPENBLAS_ROOT}/lib -lopenblas" CFLAGS="${CFLAGS}" RANLIB="ranlib -c" -j $(sysctl -n hw.ncpu)
           lipo -info libsuperlu_4.1.a
 
       - name: Debug SuperLU Paths
