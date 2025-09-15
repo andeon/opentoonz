@@ -111,11 +111,20 @@ jobs:
       - name: Patch SuperLU for CBLAS
         run: |
           cd thirdparty/superlu/SuperLU_4.1/SRC
-          # Apply patch for CBLAS
-          curl -L -o ssp_blas2.patch https://raw.githubusercontent.com/<your-repo>/<your-branch>/thirdparty/ssp_blas2.patch
-          patch < ssp_blas2.patch
+          # Add cblas.h include
+          sed -i '' '1i\
+          #include <cblas.h>
+          ' ssp_blas2.c
+          # Replace strsv_ calls
+          sed -i '' 's/strsv_(\\"L\\", \\"N\\", \\"U\\",/cblas_strsv(CblasRowMajor, CblasLower, CblasNoTrans, CblasUnit,/g' ssp_blas2.c
+          sed -i '' 's/strsv_(\\"U\\", \\"N\\", \\"N\\",/cblas_strsv(CblasRowMajor, CblasUpper, CblasNoTrans, CblasNonUnit,/g' ssp_blas2.c
+          # Replace sgemv_ call (adjust for partial match and add beta=0.0)
+          sed -i '' 's/sgemv_(\\"N\\",/cblas_sgemv(CblasRowMajor, CblasNoTrans,/g' ssp_blas2.c
+          sed -i '' 's/), 1L, 1L, 1L/), 0.0, \&x[j+nsupc], incx)/g' ssp_blas2.c
           # Verify patch
           grep cblas.h ssp_blas2.c || { echo "Error: cblas.h not included in ssp_blas2.c"; exit 1; }
+          grep cblas_strsv ssp_blas2.c || { echo "Error: cblas_strsv not found in ssp_blas2.c"; exit 1; }
+          grep cblas_sgemv ssp_blas2.c || { echo "Error: cblas_sgemv not found in ssp_blas2.c"; exit 1; }
           cd ../../
 
       - name: Build SuperLU
@@ -128,7 +137,7 @@ jobs:
           export CFLAGS="-I${OPENBLAS_ROOT}/include -arch arm64"
           export LDFLAGS="-arch arm64"
           make clean
-          make USE_VENDOR_BLAS=1 BLASLIB="-L${OPENBLAS_ROOT}/lib -lopenblas" -j $(sysctl -n hw.ncpu)
+          make USE_VENDOR_BLAS=1 BLASLIB="-L${OPENBLAS_ROOT}/lib -lopenblas" RANLIB="ranlib -c" -j $(sysctl -n hw.ncpu)
           lipo -info libsuperlu_4.1.a
 
       - name: Debug SuperLU Paths
