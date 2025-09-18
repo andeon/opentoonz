@@ -57,7 +57,7 @@ jobs:
           brew unlink qt
       - name: Set up cache
         run: |
-          export PATH="/usr/local/opt/ccache/libexec:$PATH"
+          export PATH="$(brew --prefix ccache)/libexec:$PATH"
           mkdir -p /Users/runner/.ccache
       - uses: actions/cache@v4
         with:
@@ -67,10 +67,15 @@ jobs:
 
       - name: Build libtiff
         run: |
+          set -x
           cd thirdparty/tiff-4.0.3
-          CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-lzma
+          export PKG_CONFIG_PATH="/Users/runner/local/lib/pkgconfig:$(brew --prefix jpeg-turbo)/lib/pkgconfig:$PKG_CONFIG_PATH"
+          echo "PKG_CONFIG_PATH before configure: $PKG_CONFIG_PATH"
+          CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-lzma --prefix=/Users/runner/local --with-jpeg-lib-dir=$(brew --prefix jpeg-turbo)/lib --with-jpeg-include-dir=$(brew --prefix jpeg-turbo)/include
           make -j $(sysctl -n hw.ncpu)
-          
+          make install
+          echo "PKG_CONFIG_PATH after install: $PKG_CONFIG_PATH"
+
       - name: Build
         run: |
           export PKG_CONFIG_PATH="/Users/runner/local/lib/pkgconfig:$(brew --prefix jpeg-turbo)/lib/pkgconfig:$PKG_CONFIG_PATH"
@@ -86,6 +91,7 @@ jobs:
             -DCMAKE_PREFIX_PATH="/Users/runner/local;$QT_PREFIX/lib/cmake/Qt5" \
             -DWITH_TRANSLATION=OFF
           ninja -j $(sysctl -n hw.ncpu)
+
       - name: Introduce Libraries and Stuff
         run: |
           cd toonz/build/toonz
@@ -105,6 +111,7 @@ jobs:
             -executable=OpenToonz.app/Contents/MacOS/tconverter \
             -executable=OpenToonz.app/Contents/MacOS/tfarmcontroller \
             -executable=OpenToonz.app/Contents/MacOS/tfarmserver
+
       - name: Modify Library Paths
         run: |
           cd toonz/build/toonz/OpenToonz.app/Contents/Frameworks
@@ -115,7 +122,7 @@ jobs:
               LIBNAME=$(basename "$FROMPATH")
               if [[ -e ./$LIBNAME ]]; then
                 echo "Changing $FROMPATH to @executable_path/../Frameworks/$LIBNAME in $TARGETLIB"
-                install_name_tool -change "$FROMPATH" "@executable_path/../Frameworks/$LIBNAME" "$TARGETLIB"
+                install_name_tool -change "$FROMPATH" "@executable_path/../Frameworks/$LIBNAME" "$TARGETLIB" || { echo "Failed to update $TARGETLIB"; exit 1; }
               else
                 echo "Warning: $LIBNAME not found in Frameworks for $TARGETLIB"
               fi
@@ -123,6 +130,7 @@ jobs:
             echo "Updated dependencies for $TARGETLIB:"
             otool -L "$TARGETLIB"
           done
+
       - name: Create Artifact
         run: |
           cd toonz/build/toonz
@@ -140,6 +148,7 @@ jobs:
             sleep 5
           done
           echo "DMG created successfully."
+
       - uses: actions/upload-artifact@v4
         with:
           name: Opentoonz-${{ runner.os }}-${{ github.sha }}
