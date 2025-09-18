@@ -121,7 +121,8 @@ jobs:
           cd toonz/build/toonz
           echo "Creating DMG..."
           ATTEMPT=1
-          until /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=0 && [ -f OpenToonz.dmg ]; do
+          QT_PREFIX=$(brew --prefix qt@5)
+          until "$QT_PREFIX/bin/macdeployqt" OpenToonz.app -dmg -verbose=2 && [ -f OpenToonz.dmg ]; do
             echo "Attempt $ATTEMPT failed to build DMG."
             if [ $ATTEMPT -eq 10 ]; then
               echo ">>> DMG file creation failed after 10 attempts. Aborting!"
