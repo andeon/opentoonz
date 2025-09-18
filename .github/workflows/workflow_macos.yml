@@ -109,12 +109,19 @@ jobs:
         run: |
           cd toonz/build/toonz/OpenToonz.app/Contents/Frameworks
           for TARGETLIB in *.dylib; do
+            echo "Processing $TARGETLIB"
+            otool -L "$TARGETLIB"
             otool -L "$TARGETLIB" | grep ".dylib" | grep -v "$TARGETLIB" | grep -v "@executable_path/../Frameworks" | awk '{print $1}' | while read -r FROMPATH; do
               LIBNAME=$(basename "$FROMPATH")
               if [[ -e ./$LIBNAME ]]; then
+                echo "Changing $FROMPATH to @executable_path/../Frameworks/$LIBNAME in $TARGETLIB"
                 install_name_tool -change "$FROMPATH" "@executable_path/../Frameworks/$LIBNAME" "$TARGETLIB"
+              else
+                echo "Warning: $LIBNAME not found in Frameworks for $TARGETLIB"
               fi
             done
+            echo "Updated dependencies for $TARGETLIB:"
+            otool -L "$TARGETLIB"
           done
       - name: Create Artifact
         run: |
