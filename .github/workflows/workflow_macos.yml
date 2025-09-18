@@ -31,13 +31,13 @@ jobs:
           # Remove potentially conflicting Python symlinks
           find /usr/local/bin -type l \( -name "python*" -o -name "pip*" -o -name "2to3*" -o -name "idle*" -o -name "pydoc*" \) \
             -exec sh -c 'file -b {} | grep -q "symbolic link to .*Python.framework" && echo "Removing {}" && rm {}' \;
-          # Ensure Homebrew Python is properly linked
           for py_version in python@3.11 python@3.12 python@3.13; do
             if brew list --versions $py_version >/dev/null; then
-              brew unlink $py_version || true
+              brew unlink $py_version && echo "Unlinked $py_version" || echo "Failed to unlink $py_version"
             fi
           done
-          brew link --overwrite --force python@3.13 || true
+          brew link --overwrite --force python@3.13 && echo "Linked python@3.13" || echo "Failed to link python@3.13"
+
           
       - name: Install libraries
         run: |
@@ -50,9 +50,7 @@ jobs:
               fi
             done
           }
-          
           brew update
-          brew cleanup
           checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv openjph openexr superlu qt@5
           brew unlink qt
       - name: Set up cache
@@ -89,13 +87,13 @@ jobs:
             -DQT_PATH=$QT_PREFIX/lib \
             -DQt5_DIR=$QT_PREFIX/lib/cmake/Qt5 \
             -DCMAKE_PREFIX_PATH="/Users/runner/local;$QT_PREFIX/lib/cmake/Qt5" \
-            -DWITH_TRANSLATION=OFF
-          ninja -j $(sysctl -n hw.ncpu)
+            -DWITH_TRANSLATION=OFF || { echo "CMake configuration failed"; exit 1; }
+          ninja -j $(sysctl -n hw.ncpu) || { echo "Ninja build failed"; exit 1; }
 
       - name: Introduce Libraries and Stuff
         run: |
           cd toonz/build/toonz
-          cp -pr ../../../stuff OpenToonz.app/portablestuff
+          cp -pr ../../../stuff OpenToonz.app/portablestuff || { echo "Failed to copy stuff directory"; exit 1; }
           QT_PREFIX=$(brew --prefix qt@5)
           echo "Qt@5 prefix: $QT_PREFIX"
           ls -l "$QT_PREFIX/bin"
@@ -118,11 +116,17 @@ jobs:
           echo "[Paths]" > qt.conf
           echo "Plugins = PlugIns" >> qt.conf
           cat qt.conf
+          ls -l ../PlugIns || { echo "PlugIns directory not found"; exit 1; }
 
       - name: Modify Library Paths
         run: |
           cd toonz/build/toonz/OpenToonz.app/Contents/Frameworks
+          echo "Starting library path modification at $(date)"
           for TARGETLIB in *.dylib; do
+            if otool -L "$TARGETLIB" | grep -q "@executable_path/../Frameworks"; then
+              echo "Skipping $TARGETLIB, already processed"
+              continue
+            fi
             echo "Processing $TARGETLIB"
             otool -L "$TARGETLIB"
             otool -L "$TARGETLIB" | grep ".dylib" | grep -v "$TARGETLIB" | grep -v "@executable_path/../Frameworks" | awk '{print $1}' | while read -r FROMPATH; do
@@ -138,23 +142,19 @@ jobs:
             otool -L "$TARGETLIB"
           done
 
+      - name: Re-sign Application
+        run: |
+          cd toonz/build/toonz
+          codesign -f -s "-" OpenToonz.app/Contents/Frameworks/*.dylib
+          codesign -f -s "-" OpenToonz.app
+
       - name: Create Artifact
         run: |
           cd toonz/build/toonz
           echo "Creating DMG..."
-          ATTEMPT=1
           QT_PREFIX=$(brew --prefix qt@5)
-          until "$QT_PREFIX/bin/macdeployqt" OpenToonz.app -dmg -verbose=2 && [ -f OpenToonz.dmg ]; do
-            echo "Attempt $ATTEMPT failed to build DMG."
-            if [ $ATTEMPT -eq 10 ]; then
-              echo ">>> DMG file creation failed after 10 attempts. Aborting!"
-              exit 1
-            fi
-            ATTEMPT=$((ATTEMPT + 1))
-            echo "Retrying in 5 seconds..."
-            sleep 5
-          done
-          echo "DMG created successfully."
+          "$QT_PREFIX/bin/macdeployqt" OpenToonz.app -dmg -verbose=2 || { echo "DMG creation failed"; exit 1; }
+          ls -l OpenToonz.dmg || { echo "DMG file not found"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:
