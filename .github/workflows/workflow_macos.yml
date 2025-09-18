@@ -112,6 +112,13 @@ jobs:
             -executable=OpenToonz.app/Contents/MacOS/tfarmcontroller \
             -executable=OpenToonz.app/Contents/MacOS/tfarmserver
 
+      - name: Ensure qt.conf
+        run: |
+          cd toonz/build/toonz/OpenToonz.app/Contents/Resources
+          echo "[Paths]" > qt.conf
+          echo "Plugins = PlugIns" >> qt.conf
+          cat qt.conf
+
       - name: Modify Library Paths
         run: |
           cd toonz/build/toonz/OpenToonz.app/Contents/Frameworks
