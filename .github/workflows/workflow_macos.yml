@@ -8,7 +8,7 @@ on:
       - '!README.md'                            # Exclude README
       - '!doc/**'                               # Exclude documentation
       - '!**/.github/**'                        # Exclude everything in .github folder
-      - '.github/workflows/workflow_macos.yml'  # Include MacOS workflow file
+      - '.github/workflows/workflow_macos.yml'  # Include MacOs workflow file
   pull_request:
     paths:
       - '**/*'
@@ -20,87 +20,45 @@ on:
 
 jobs:
   macOS:
-    timeout-minutes: 120 # Stop job if it exceeds expected build time
-    # Force x86_64 on macOS 14 (ARM64 runner) via Rosetta
+    timeout-minutes: 90 # Stop job if it exceeds expected build time
+    # Stick with macOS 13 to avoid arm64 headaches on macOS 15
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v5
 
-      # Install Rosetta 2 and x86_64 Homebrew
-      - name: Install Rosetta 2 and x86_64 Homebrew
-        run: |
-          # Install Rosetta 2 for x86_64 emulation (ignore if already installed)
-          /usr/sbin/softwareupdate --install-rosetta --agree-to-license || true
-          
-          # Install Homebrew for x86_64 in /usr/local (non-interactive) if not present
-          if ! [ -x /usr/local/bin/brew ]; then
-            NONINTERACTIVE=1 arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          fi  
-          # Set up environment for x86_64 Homebrew (add to PATH)
-          eval "$(arch -x86_64 /usr/local/bin/brew shellenv)"
       - name: Clean Python symlinks
         run: |
-          # Remove potentially conflicting Python symlinks (run under x86_64)
-          arch -x86_64 bash -c '
-            # Remove symlinks pointing to /Library/Frameworks/Python.framework
-            find /usr/local/bin -type l \( -name "python*" -o -name "pip*" -o -name "2to3*" -o -name "idle*" -o -name "pydoc*" \) -print0 | while IFS= read -r -d "" link; do
-              if file -b "$link" | grep -q "symbolic link to .*Python.framework"; then
-                echo "Removing $link"
-                rm "$link"
-              fi
-            done
-            # Remove the entire conflicting Python framework directory (safe in CI)
-            if [ -d /Library/Frameworks/Python.framework/Versions/3.13 ]; then
-              echo "Removing /Library/Frameworks/Python.framework/Versions/3.13"
-              sudo rm -rf /Library/Frameworks/Python.framework/Versions/3.13
+          # Remove potentially conflicting Python symlinks
+          find /usr/local/bin -type l \( -name "python*" -o -name "pip*" -o -name "2to3*" -o -name "idle*" -o -name "pydoc*" \) \
+            -exec sh -c 'file -b {} | grep -q "symbolic link to .*Python.framework" && echo "Removing {}" && rm {}' \;
+          # Ensure Homebrew Python is properly linked
+          for py_version in python@3.11 python@3.12 python@3.13; do
+            if brew list --versions $py_version >/dev/null; then
+              brew unlink $py_version || true
             fi
-            # Ensure Homebrew Python is properly linked
-            for py_version in python@3.11 python@3.12 python@3.13; do
-              if /usr/local/bin/brew list --versions $py_version >/dev/null 2>&1; then
-                /usr/local/bin/brew unlink $py_version || true
-              fi
-            done
-            # Install python@3.13 if not present, then link it
-            if ! /usr/local/bin/brew list --versions python@3.13 >/dev/null 2>&1; then
-              echo "Installing python@3.13..."
-              /usr/local/bin/brew install python@3.13 || { echo "Failed to install python@3.13"; exit 1; }
-            fi
-            /usr/local/bin/brew link --overwrite --force python@3.13 || true
-          '
-      - name: Install libraries (force x86_64)
+          done
+          brew link --overwrite --force python@3.13 || true
+          
+      - name: Install libraries
         run: |
-          # Set up environment for x86_64 Homebrew
-          eval "$(arch -x86_64 /usr/local/bin/brew shellenv)"
-          
-          # Update and clean the x86_64 Homebrew
-          arch -x86_64 /usr/local/bin/brew update
-          arch -x86_64 /usr/local/bin/brew cleanup
-          
           checkPkgAndInstall() {
             for pkg in "$@"; do
-              if arch -x86_64 /usr/local/bin/brew list --versions $pkg > /dev/null 2>&1; then
-                echo "$pkg already installed. Upgrading..."
-                arch -x86_64 /usr/local/bin/brew upgrade $pkg || true
+              if brew ls --versions $pkg; then
+                brew upgrade $pkg
               else
-                echo "Installing $pkg..."
-                # Force build-from-source for lzo to ensure x86_64 (if no bottle)
-                if [ "$pkg" = "lzo" ]; then
-                  arch -x86_64 /usr/local/bin/brew install --build-from-source $pkg || { echo "Failed to install $pkg"; exit 1; }
-                else
-                  arch -x86_64 /usr/local/bin/brew install $pkg || { echo "Failed to install $pkg"; exit 1; }
-                fi
+                brew install $pkg
               fi
             done
           }
           
-          checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv qt@5
-          arch -x86_64 /usr/local/bin/brew unlink qt || true
-
+          brew update
+          brew cleanup
+          checkPkgAndInstall pkg-config glew lz4 libjpeg libpng lzo boost libusb libmypaint ccache jpeg-turbo ninja opencv openjph openexr superlu qt@5
+          brew unlink qt
       - name: Set up cache
         run: |
           export PATH="/usr/local/opt/ccache/libexec:$PATH"
           mkdir -p /Users/runner/.ccache
-
       - uses: actions/cache@v4
         with:
           path: /Users/runner/.ccache
@@ -110,50 +68,28 @@ jobs:
       - name: Build libtiff
         run: |
           cd thirdparty/tiff-4.0.3
-          # Force x86_64 architecture for configure and make under Rosetta
-          arch -x86_64 bash -c '
-            export CFLAGS="-arch x86_64 -fPIC $CFLAGS"
-            export CXXFLAGS="-arch x86_64 -fPIC $CXXFLAGS"
-            ./configure --build=x86_64-apple-darwin$(uname -r) --disable-lzma
-            make clean  # Clean to avoid stale ARM64 artifacts
-            make -j $(sysctl -n hw.ncpu)
-          '
-          # Debug: Verify libtiff architecture
-          file .libs/libtiff.a || echo "libtiff.a not found"
-
+          CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-lzma
+          make -j $(sysctl -n hw.ncpu)
+          make install  # Ensures CMake finds the installed lib (avoid linking issues)
       - name: Build
         run: |
-          # Set up environment for x86_64 Homebrew (ensure library paths prioritize /usr/local)
-          eval "$(arch -x86_64 /usr/local/bin/brew shellenv)"
-          export HOMEBREW_PREFIX=/usr/local
           export PKG_CONFIG_PATH="/usr/local/opt/jpeg-turbo/lib/pkgconfig:$PKG_CONFIG_PATH"
           cd toonz
+          rm -rf build  
           mkdir -p build
           cd build
-
-          # Force build Intel arch on ARM64 runners, with explicit x86_64 lib path
-          export CFLAGS="-arch x86_64 $CFLAGS"
-          export CXXFLAGS="-arch x86_64 $CXXFLAGS"
-          export LDFLAGS="-arch x86_64 -L/usr/local/lib $LDFLAGS"
-
-          # Debug: Verify liblzo is x86_64
-          file /usr/local/lib/liblzo2.a || echo "liblzo2.a not found or wrong arch"
-
           cmake ../sources -G Ninja \
-            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DQT_PATH=$(arch -x86_64 /usr/local/bin/brew --prefix qt@5)/lib \
-            -DQt5_DIR=$(arch -x86_64 /usr/local/bin/brew --prefix qt@5)/lib/cmake/Qt5 \
-            -DCMAKE_PREFIX_PATH=$(arch -x86_64 /usr/local/bin/brew --prefix qt@5)/lib/cmake/Qt5 \
+            -DQT_PATH=$(brew --prefix qt@5)/lib \
+            -DQt5_DIR=$(brew --prefix qt@5)/lib/cmake/Qt5 \
+            -DCMAKE_PREFIX_PATH=$(brew --prefix qt@5)/lib/cmake/Qt5 \
             -DWITH_TRANSLATION=OFF
-
           ninja -j $(sysctl -n hw.ncpu)
-
       - name: Introduce Libraries and Stuff
         run: |
           cd toonz/build/toonz
           cp -pr ../../../stuff OpenToonz.app/portablestuff
-          arch -x86_64 /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -verbose=0 -always-overwrite \
+          /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -verbose=0 -always-overwrite \
             -executable=OpenToonz.app/Contents/MacOS/lzocompress \
             -executable=OpenToonz.app/Contents/MacOS/lzodecompress \
             -executable=OpenToonz.app/Contents/MacOS/tcleanup \
@@ -161,7 +97,6 @@ jobs:
             -executable=OpenToonz.app/Contents/MacOS/tconverter \
             -executable=OpenToonz.app/Contents/MacOS/tfarmcontroller \
             -executable=OpenToonz.app/Contents/MacOS/tfarmserver
-
       - name: Modify Library Paths
         run: |
           cd toonz/build/toonz/OpenToonz.app/Contents/Frameworks
@@ -173,13 +108,12 @@ jobs:
               fi
             done
           done
-
       - name: Create Artifact
         run: |
           cd toonz/build/toonz
           echo "Creating DMG..."
           ATTEMPT=1
-          until arch -x86_64 /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=0 && [ -f OpenToonz.dmg ]; do
+          until /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -dmg -verbose=0 && [ -f OpenToonz.dmg ]; do
             echo "Attempt $ATTEMPT failed to build DMG."
             if [ $ATTEMPT -eq 10 ]; then
               echo ">>> DMG file creation failed after 10 attempts. Aborting!"
@@ -190,7 +124,6 @@ jobs:
             sleep 5
           done
           echo "DMG created successfully."
-
       - uses: actions/upload-artifact@v4
         with:
           name: Opentoonz-${{ runner.os }}-${{ github.sha }}
