@@ -71,32 +71,40 @@ jobs:
           CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-lzma
           make -j $(sysctl -n hw.ncpu)
           
-      - name: Build
-        run: |
-          export PKG_CONFIG_PATH="/usr/local/opt/jpeg-turbo/lib/pkgconfig:$PKG_CONFIG_PATH"
-          cd toonz
-          rm -rf build  
-          mkdir -p build
-          cd build
-          cmake ../sources -G Ninja \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DQT_PATH=$(brew --prefix qt@5)/lib \
-            -DQt5_DIR=$(brew --prefix qt@5)/lib/cmake/Qt5 \
-            -DCMAKE_PREFIX_PATH=$(brew --prefix qt@5)/lib/cmake/Qt5 \
-            -DWITH_TRANSLATION=OFF
-          ninja -j $(sysctl -n hw.ncpu)
-      - name: Introduce Libraries and Stuff
-        run: |
-          cd toonz/build/toonz
-          cp -pr ../../../stuff OpenToonz.app/portablestuff
-          /usr/local/opt/qt@5/bin/macdeployqt OpenToonz.app -verbose=0 -always-overwrite \
-            -executable=OpenToonz.app/Contents/MacOS/lzocompress \
-            -executable=OpenToonz.app/Contents/MacOS/lzodecompress \
-            -executable=OpenToonz.app/Contents/MacOS/tcleanup \
-            -executable=OpenToonz.app/Contents/MacOS/tcomposer \
-            -executable=OpenToonz.app/Contents/MacOS/tconverter \
-            -executable=OpenToonz.app/Contents/MacOS/tfarmcontroller \
-            -executable=OpenToonz.app/Contents/MacOS/tfarmserver
+          - name: Build
+            run: |
+              export PKG_CONFIG_PATH="/Users/runner/local/lib/pkgconfig:$(brew --prefix jpeg-turbo)/lib/pkgconfig:$PKG_CONFIG_PATH"
+              cd toonz
+              rm -rf build
+              mkdir -p build
+              cd build
+              QT_PREFIX=$(brew --prefix qt@5)
+              cmake ../sources -G Ninja \
+                -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+                -DQT_PATH=$QT_PREFIX/lib \
+                -DQt5_DIR=$QT_PREFIX/lib/cmake/Qt5 \
+                -DCMAKE_PREFIX_PATH="/Users/runner/local;$QT_PREFIX/lib/cmake/Qt5" \
+                -DWITH_TRANSLATION=OFF
+              ninja -j $(sysctl -n hw.ncpu)
+          - name: Introduce Libraries and Stuff
+            run: |
+              cd toonz/build/toonz
+              cp -pr ../../../stuff OpenToonz.app/portablestuff
+              QT_PREFIX=$(brew --prefix qt@5)
+              echo "Qt@5 prefix: $QT_PREFIX"
+              ls -l "$QT_PREFIX/bin"
+              if [ ! -f "$QT_PREFIX/bin/macdeployqt" ]; then
+                echo "Error: macdeployqt not found at $QT_PREFIX/bin/macdeployqt"
+                exit 1
+              fi
+              "$QT_PREFIX/bin/macdeployqt" OpenToonz.app -verbose=2 -always-overwrite \
+                -executable=OpenToonz.app/Contents/MacOS/lzocompress \
+                -executable=OpenToonz.app/Contents/MacOS/lzodecompress \
+                -executable=OpenToonz.app/Contents/MacOS/tcleanup \
+                -executable=OpenToonz.app/Contents/MacOS/tcomposer \
+                -executable=OpenToonz.app/Contents/MacOS/tconverter \
+                -executable=OpenToonz.app/Contents/MacOS/tfarmcontroller \
+                -executable=OpenToonz.app/Contents/MacOS/tfarmserver
       - name: Modify Library Paths
         run: |
           cd toonz/build/toonz/OpenToonz.app/Contents/Frameworks
