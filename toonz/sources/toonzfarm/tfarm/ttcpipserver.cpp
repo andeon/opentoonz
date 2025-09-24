@@ -2,6 +2,7 @@
 
 #include "ttcpip.h"
 #include "tconvert.h"
+#include <iostream>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -20,15 +21,15 @@
 #include <signal.h>
 #include "tthreadmessage.h"
 #include "tthread.h"
-#include <atomic> // For thread-safe atomic operations
-#include <memory> // For smart pointers
+#include <atomic>     // For thread-safe atomic operations
+#include <memory>     // For smart pointers
+#include <stdexcept>  // For exception handling
 
 #ifndef _WIN32
 #define SOCKET_ERROR -1
 #endif
 
 #include <string>
-#include <stdexcept> // For exception handling
 using namespace std;
 
 #define MAXHOSTNAME 1024
@@ -43,7 +44,6 @@ constexpr size_t HEADER_END_LEN = 5;    // strlen("#$#THE")
 int establish(unsigned short portnum, int &sock);
 int get_connection(int s);
 void fireman(int);
-void do_something(int);
 
 //------------------ Platform-Independent Shutdown Flag ------------------
 
@@ -289,10 +289,8 @@ void TTcpIpServer::run() {
     try {
         int socket = -1;
         int err = establish(m_imp->m_port, socket);
-        m_imp->m_s = socket; // Assign only after successful establishment
-        
-        if (err < 0 || socket == -1) {
-            m_exitCode = (err < 0) ? abs(err) : err;
+        if (err != 0 || socket == -1) { 
+            m_exitCode = err;
             return;
         }
 
@@ -329,11 +327,15 @@ void TTcpIpServer::run() {
             executor.addTask(task.release()); // Transfer ownership to executor
         }
 
+        // Releases the guard after the loop to avoid double-close in the destructor
+        serverSocketGuard.release();
+
     } catch (const std::exception& e) {
+        std::cerr << "Exception in TTcpIpServer::run(): " << e.what() << std::endl;
         m_exitCode = 2000;
-        // Log the exception here if logging is available
         return;
     } catch (...) {
+        std::cerr << "Unknown exception in TTcpIpServer::run()" << std::endl;
         m_exitCode = 2001;
         return;
     }
@@ -388,21 +390,21 @@ int establish(unsigned short portnum, int &sock) {
     struct sockaddr_in sa;
     struct hostent *hp;
 
-    memset(&sa, 0, sizeof(sa));                        /* clear our address       */
+    memset(&sa, 0, sizeof(sa));                        /* Clear the 'sa' structure */
     if (gethostname(myname, MAXHOSTNAME) != 0) {
-        return -1;                                     /* failed to get host name */
+        return 1;                                      /* Failed to retrieve the host name */
     }
-    hp = gethostbyname(myname);                        /* get our address info    */
-    if (!hp) return -1;                                /* get our address info    */
+    hp = gethostbyname(myname);                        /* Get address information for this host*/
+    if (!hp) return 2;                                 /* Host does not exist! */
 
     sa.sin_family = hp->h_addrtype;
     sa.sin_port = htons(portnum);
 
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 #ifdef _WIN32
-        return -WSAGetLastError(); // Negative for consistency
+        return WSAGetLastError();
 #else
-        return -errno;
+        return errno;
 #endif
     }
 
@@ -422,11 +424,11 @@ int establish(unsigned short portnum, int &sock) {
 #ifdef _WIN32
         int err = WSAGetLastError();
         closesocket(sock);
-        return -err;
+        return err;
 #else
         int err = errno;
         close(sock);
-        return -err;
+        return err;
 #endif
     }
 
@@ -435,11 +437,11 @@ int establish(unsigned short portnum, int &sock) {
 #ifdef _WIN32
         int err = WSAGetLastError();
         closesocket(sock);
-        return -err;
+        return err;
 #else
         int err = errno;
         close(sock);
-        return -err;
+        return err;
 #endif
     }
 
