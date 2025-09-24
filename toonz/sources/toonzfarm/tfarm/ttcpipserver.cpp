@@ -21,9 +21,9 @@
 #include <signal.h>
 #include "tthreadmessage.h"
 #include "tthread.h"
-#include <atomic>     // For thread-safe atomic operations
-#include <memory>     // For smart pointers
-#include <stdexcept>  // For exception handling
+#include <atomic> // For thread-safe atomic operations
+#include <memory> // For smart pointers
+#include <stdexcept> // For exception handling
 
 #ifndef _WIN32
 #define SOCKET_ERROR -1
@@ -200,7 +200,7 @@ void TTcpIpServerImp::onReceive(int sock, const QString &data) {
 //---------------------------------------------------------------------
 
 TTcpIpServer::TTcpIpServer(int port)
-    : m_imp(new TTcpIpServerImp(port)) {
+    : m_imp(std::make_shared<TTcpIpServerImp>(port)) {  
     m_imp->m_server = this;
 
 #ifdef _WIN32
@@ -223,7 +223,6 @@ TTcpIpServer::~TTcpIpServer() {
         close(m_imp->m_s);
 #endif
     }
-    delete m_imp;
 }
 
 //---------------------------------------------------------------------
@@ -289,7 +288,7 @@ void TTcpIpServer::run() {
     try {
         int socket = -1;
         int err = establish(m_imp->m_port, socket);
-        if (err != 0 || socket == -1) { 
+        if (err != 0 || socket == -1) {
             m_exitCode = err;
             return;
         }
@@ -304,7 +303,7 @@ void TTcpIpServer::run() {
         sact.sa_handler = shutdown_cb;
         sigaction(SIGUSR1, &sact, 0);
 #else
-        signal(SIGUSR1, shutdown_cb); // Fixed: use signal() instead of deprecated sigset()
+        signal(SIGUSR1, shutdown_cb);
 #endif
 #endif
 
@@ -323,12 +322,11 @@ void TTcpIpServer::run() {
 
             TThread::Executor executor;
             // Use smart pointer to prevent memory leaks
-            auto task = std::make_unique<DataReader>(clientSocket, m_imp);
+            auto task = std::make_unique<DataReader>(clientSocket, m_imp);  
             executor.addTask(task.release()); // Transfer ownership to executor
         }
 
-        // Releases the guard after the loop to avoid double-close in the destructor
-        serverSocketGuard.release();
+        serverSocketGuard.release();  // Avoid double-close in the destructor
 
     } catch (const std::exception& e) {
         std::cerr << "Exception in TTcpIpServer::run(): " << e.what() << std::endl;
@@ -392,9 +390,9 @@ int establish(unsigned short portnum, int &sock) {
 
     memset(&sa, 0, sizeof(sa));                        /* Clear the 'sa' structure */
     if (gethostname(myname, MAXHOSTNAME) != 0) {
-        return 1;                                      /* Failed to retrieve the host name */
+        return 1;                                      /* Clear the 'sa' structure */
     }
-    hp = gethostbyname(myname);                        /* Get address information for this host*/
+    hp = gethostbyname(myname);                        /* Get address information for this host */
     if (!hp) return 2;                                 /* Host does not exist! */
 
     sa.sin_family = hp->h_addrtype;
