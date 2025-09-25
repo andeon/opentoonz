@@ -224,6 +224,14 @@ int TTcpIpServer::getPort() const { return m_imp->m_port; }
 
 //---------------------------------------------------------------------
 
+int TTcpIpServer::shutdown() {
+    shutdownRequested.store(true, std::memory_order_release);
+    wait();
+    return 0;
+}
+
+//---------------------------------------------------------------------
+
 static void shutdown_cb(int) { 
     shutdownRequested.store(true, std::memory_order_release); 
 }
