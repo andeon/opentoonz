@@ -18,7 +18,6 @@
 #include <netdb.h>
 #endif
 
-#include <signal.h>
 #include "tthreadmessage.h"
 #include "tthread.h"
 #include <atomic> // For thread-safe atomic operations
@@ -30,7 +29,6 @@
 #endif
 
 #include <string>
-using namespace std;
 
 #define MAXHOSTNAME 1024
 #define MAX_ALLOWED_SIZE (10 * 1024 * 1024) // 10MB maximum data size
@@ -48,9 +46,7 @@ void fireman(int);
 //------------------ Platform-Independent Shutdown Flag ------------------
 
 // Use atomic for thread-safe operations across all platforms
-std::atomic<bool> Sthutdown{false};
-#define SET_SHUTDOWN() (Sthutdown.store(true))
-#define IS_SHUTDOWN() (Sthutdown.load())
+std::atomic<bool> shutdownRequested{false};
 
 //---------------------------------------------------------------------
 
@@ -75,7 +71,7 @@ public:
     SocketGuard& operator=(const SocketGuard&) = delete;
     
     int get() const { return m_socket; }
-    void release() { m_socket = -1; }
+    void release() { m_socket = -1; }  // Optional: transfer ownership if needed elsewhere
 };
 
 //---------------------------------------------------------------------
@@ -115,18 +111,18 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
 
     if (cnt == 0) return 0; // Connection closed
 
-    string header(buff, cnt); // Use actual bytes read
+    std::string header(buff, cnt); // Use actual bytes read
     
     // Find protocol markers with proper error checking
     size_t x1 = header.find(PROTOCOL_HEADER_START);
-    if (x1 == string::npos) {
+    if (x1 == std::string::npos) {
         // Protocol error: start marker not found
         return -1;
     }
     
     x1 += HEADER_START_LEN;
     size_t x2 = header.find(PROTOCOL_HEADER_END, x1); // Search from x1 position
-    if (x2 == string::npos) {
+    if (x2 == std::string::npos) {
         // Protocol error: end marker not found
         return -1;
     }
@@ -137,7 +133,7 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
         return -1;
     }
     
-    string ssize = header.substr(x1, x2 - x1);
+    std::string ssize = header.substr(x1, x2 - x1);
     int dataSize;
     try {
         dataSize = std::stoi(ssize);
@@ -215,14 +211,11 @@ TTcpIpServer::TTcpIpServer(int port)
 //---------------------------------------------------------------------
 
 TTcpIpServer::~TTcpIpServer() {
-    if (m_imp->m_s != -1) {
 #ifdef _WIN32
-        closesocket(m_imp->m_s);
-        WSACleanup();
+    WSACleanup();  // Only cleanup WSA, server socket handled by SocketGuard in run()
 #else
-        close(m_imp->m_s);
+    // Server socket handled by SocketGuard in run() - no explicit close needed
 #endif
-    }
 }
 
 //---------------------------------------------------------------------
@@ -231,7 +224,9 @@ int TTcpIpServer::getPort() const { return m_imp->m_port; }
 
 //---------------------------------------------------------------------
 
-static void shutdown_cb(int) { SET_SHUTDOWN(); }
+static void shutdown_cb(int) { 
+    shutdownRequested.store(true, std::memory_order_release); 
+}
 
 //---------------------------------------------------------------------
 
@@ -251,10 +246,9 @@ void DataReader::run() {
     SocketGuard socketGuard(m_clientSocket);
     
     QString data;
-    bool success = (m_serverImp->readData(socketGuard.get(), data) != -1);
-    if (success) {
+    if (m_serverImp->readData(socketGuard.get(), data) == 0) {  // Success if return 0
         if (data == "shutdown") {
-            SET_SHUTDOWN();
+            shutdownRequested.store(true, std::memory_order_release);
         } else {
             m_serverImp->onReceive(socketGuard.get(), data);
         }
@@ -293,9 +287,9 @@ void TTcpIpServer::run() {
             return;
         }
 
-        // Use RAII for main server socket
+        // Use RAII for main server socket (keep outside loop; destructor will auto-close on exit)
         SocketGuard serverSocketGuard(socket);
-        m_imp->m_s = socket; // Track the socket
+        m_imp->m_s = socket; // Track the socket for other uses if needed
 
 #ifndef _WIN32
 #ifdef MACOSX
@@ -307,8 +301,11 @@ void TTcpIpServer::run() {
 #endif
 #endif
 
+        // Create executor once outside the loop for efficient thread reuse
+        TThread::Executor executor;
+
         int clientSocket;
-        while (!IS_SHUTDOWN()) {
+        while (!shutdownRequested.load(std::memory_order_acquire)) {
             if ((clientSocket = get_connection(serverSocketGuard.get())) < 0) {
 #ifndef _WIN32
                 if (errno == EINTR) continue;
@@ -320,13 +317,12 @@ void TTcpIpServer::run() {
                 return;
             }
 
-            TThread::Executor executor;
             // Use smart pointer to prevent memory leaks
             auto task = std::make_unique<DataReader>(clientSocket, m_imp);  
             executor.addTask(task.release()); // Transfer ownership to executor
         }
 
-        serverSocketGuard.release();  // Avoid double-close in the destructor
+        // SocketGuard destructor will auto-close the server socket on scope exit
 
     } catch (const std::exception& e) {
         std::cerr << "Exception in TTcpIpServer::run(): " << e.what() << std::endl;
@@ -350,7 +346,7 @@ int TTcpIpServer::getExitCode() const { return m_exitCode; }
 void TTcpIpServer::sendReply(int socket, const QString &reply) {
     SocketGuard socketGuard(socket); // Ensure socket cleanup on exception
     
-    string replyUtf8 = reply.toStdString();
+    std::string replyUtf8 = reply.toStdString();
 
     // Validate data size before sending
     if (replyUtf8.size() > MAX_ALLOWED_SIZE) {
@@ -361,7 +357,7 @@ void TTcpIpServer::sendReply(int socket, const QString &reply) {
                      QString::number(static_cast<int>(replyUtf8.size())) + 
                      QString(PROTOCOL_HEADER_END);
     
-    string packet = header.toStdString() + replyUtf8;
+    std::string packet = header.toStdString() + replyUtf8;
 
     int nLeft = static_cast<int>(packet.size());
     int idx = 0;
@@ -377,7 +373,7 @@ void TTcpIpServer::sendReply(int socket, const QString &reply) {
         idx += ret;
     }
 
-    // Shutdown is still called but socket cleanup is handled by SocketGuard
+    // Shutdown is still called but socket cleanup is handled by SocketGuard: signals EOF to client without abrupt close
     ::shutdown(socketGuard.get(), 1);
 }
 
@@ -390,7 +386,7 @@ int establish(unsigned short portnum, int &sock) {
 
     memset(&sa, 0, sizeof(sa));                        /* Clear the 'sa' structure */
     if (gethostname(myname, MAXHOSTNAME) != 0) {
-        return 1;                                      /* Clear the 'sa' structure */
+        return 1;                                      /* Hostname resolution failed */
     }
     hp = gethostbyname(myname);                        /* Get address information for this host */
     if (!hp) return 2;                                 /* Host does not exist! */
