@@ -67,9 +67,14 @@ void mergeCmapped(const std::vector<MergeCmappedPair> &matchingLevels) {
 
   int i = 0;
   for (i = 0; i < (int)matchingLevels.size(); i++) {
-    TToonzImageP img = (TToonzImageP)matchingLevels[i].m_cell->getImage(true);
-    TToonzImageP match =
-        (TToonzImageP)matchingLevels[i].m_mcell->getImage(false);
+    TImageP iimg = matchingLevels[i].m_cell->getImage(true);
+    TImageP imatch = matchingLevels[i].m_mcell->getImage(false);
+    if (!iimg || !imatch) {
+      throw TRopException("Can merge only non-empty images!");
+    }
+
+    TToonzImageP img = dynamic_cast<TToonzImageP>(iimg);
+    TToonzImageP match = dynamic_cast<TToonzImageP>(imatch);
     if (!img || !match)
       throw TRopException("Can merge only cmapped raster images!");
 
@@ -537,7 +542,12 @@ void mergeCmapped(int column, int mColumn, const QString &fullpath,
           TToonzImageP(TRasterCM32P(dim), TRect(0, 0, dim.lx - 1, dim.ly - 1));
       newImage->setDpi(dpix, dpiy);
     } else
-      newImage = (TToonzImageP)(cell[i].getImage(false)->cloneImage());
+      newImage = dynamic_cast<TToonzImageP>(cell[i].getImage(false)->cloneImage());
+
+    if (!newImage) {
+      // Handle case where cloneImage() or cast fails - skip or throw
+      continue;
+    }
 
     newImage->setPalette(level->getPalette());
 
@@ -555,8 +565,9 @@ void mergeCmapped(int column, int mColumn, const QString &fullpath,
 
     if (!img || !match) continue;
 
-    TToonzImageP timg   = (TToonzImageP)img;
-    TToonzImageP tmatch = (TToonzImageP)match;
+    TToonzImageP timg   = dynamic_cast<TToonzImageP>(img);
+    TToonzImageP tmatch = dynamic_cast<TToonzImageP>(match);
+    if (!timg || !tmatch) continue;
 
     QString id = "MergeCmappedUndo" + QString::number(MergeCmappedSessionId) +
                  "-" + QString::number(fid.getNumber());
@@ -682,5 +693,3 @@ std::vector<int> string2Indexes(const QString &values) {
 }
 
 }  // namespace
-
-//-----------------------------------------------------------------------------
