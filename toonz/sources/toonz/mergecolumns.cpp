@@ -59,11 +59,17 @@ void mergeRasterColumns(const std::vector<MatchlinePair> &matchingLevels) {
 
   int i = 0;
   for (i = 0; i < (int)matchingLevels.size(); i++) {
-    TRasterImageP img = (TRasterImageP)matchingLevels[i].m_cell->getImage(true);
-    TRasterImageP match =
-        (TRasterImageP)matchingLevels[i].m_mcell->getImage(false);
+    TImageP iimg = matchingLevels[i].m_cell->getImage(true);
+    TImageP imatch = matchingLevels[i].m_mcell->getImage(false);
+    if (!iimg || !imatch) {
+      throw TRopException("Can merge columns only on non-empty raster images!");
+    }
+
+    TRasterImageP img = TRasterImageP(dynamic_cast<TRasterImage*>(iimg.getPointer()));
+    TRasterImageP match = TRasterImageP(dynamic_cast<TRasterImage*>(imatch.getPointer()));
     if (!img || !match)
       throw TRopException("Can merge columns only on raster images!");
+
     // img->lock();
     TRaster32P ras      = img->getRaster();    // img->getCMapped(false);
     TRaster32P matchRas = match->getRaster();  // match->getCMapped(true);
@@ -150,12 +156,17 @@ void mergeVectorColumns(const std::vector<MatchlinePair> &matchingLevels,
 
   int i = 0;
   for (i = 0; i < (int)matchingLevels.size(); i++) {
-    TVectorImageP vimg =
-        (TVectorImageP)matchingLevels[i].m_cell->getImage(true);
-    TVectorImageP vmatch =
-        (TVectorImageP)matchingLevels[i].m_mcell->getImage(false);
+    TImageP iimg = matchingLevels[i].m_cell->getImage(true);
+    TImageP imatch = matchingLevels[i].m_mcell->getImage(false);
+    if (!iimg || !imatch) {
+      throw TRopException("Can merge columns only on non-empty vector images!");
+    }
+
+    TVectorImageP vimg = TVectorImageP(dynamic_cast<TVectorImage*>(iimg.getPointer()));
+    TVectorImageP vmatch = TVectorImageP(dynamic_cast<TVectorImage*>(imatch.getPointer()));
     if (!vimg || !vmatch)
       throw TRopException("Cannot merge columns of different image types!");
+
     // img->lock();
 
     if (needTobeGrouped(vimg) && groupLevels)
@@ -336,10 +347,10 @@ void mergeColumns(int column, int mColumn, bool isRedo, bool groupLevels) {
     if (!img || !match) continue;
 
     if (alreadyDoneSet.find(fid) == alreadyDoneSet.end()) {
-      TRasterImageP timg   = (TRasterImageP)img;
-      TRasterImageP tmatch = (TRasterImageP)match;
-      TVectorImageP vimg   = (TVectorImageP)img;
-      TVectorImageP vmatch = (TVectorImageP)match;
+      TRasterImageP timg   = TRasterImageP(dynamic_cast<TRasterImage*>(img.getPointer()));
+      TRasterImageP tmatch = TRasterImageP(dynamic_cast<TRasterImage*>(match.getPointer()));
+      TVectorImageP vimg   = TVectorImageP(dynamic_cast<TVectorImage*>(img.getPointer()));
+      TVectorImageP vmatch = TVectorImageP(dynamic_cast<TVectorImage*>(match.getPointer()));
 
       if (timg) {
         if (!tmatch) {
@@ -365,9 +376,11 @@ void mergeColumns(int column, int mColumn, bool isRedo, bool groupLevels) {
         QString id = "MergeColumnsUndo" +
                      QString::number(MergeColumnsSessionId) + "-" +
                      QString::number(fid.getNumber());
-        TImageCache::instance()->add(
-            id, (timg) ? timg->cloneImage() : vimg->cloneImage());
-        images[fid] = id;
+        TImageP toCache = (timg) ? timg->cloneImage() : vimg->cloneImage();
+        if (toCache) {
+          TImageCache::instance()->add(id, toCache);
+          images[fid] = id;
+        }
       }
       TAffine imgAff, matchAff;
       getColumnPlacement(imgAff, xsh, start + i, column, false);
