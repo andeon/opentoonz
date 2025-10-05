@@ -58,9 +58,26 @@ public:
 void mergeCmapped(const std::vector<MergeCmappedPair> &matchingLevels) {
   if (matchingLevels.empty()) return;
 
-  TPalette *palette = matchingLevels[0].m_cell->getImage(false)->getPalette();
-  TPalette *matchPalette =
-      matchingLevels[0].m_mcell->getImage(false)->getPalette();
+  // Safe cast for first image to get palette
+  TImageP firstIimg = matchingLevels[0].m_cell->getImage(false);
+  if (!firstIimg) {
+    throw TRopException("Cannot access palette from empty image!");
+  }
+  TToonzImageP firstImg = TToonzImageP(dynamic_cast<TToonzImage*>(firstIimg.get()));
+  if (!firstImg) {
+    throw TRopException("First image must be a ToonzImage for palette access!");
+  }
+  TPalette *palette = firstImg->getPalette();
+
+  TImageP firstImatch = matchingLevels[0].m_mcell->getImage(false);
+  if (!firstImatch) {
+    throw TRopException("Cannot access palette from empty match image!");
+  }
+  TToonzImageP firstMatch = TToonzImageP(dynamic_cast<TToonzImage*>(firstImatch.get()));
+  if (!firstMatch) {
+    throw TRopException("First match image must be a ToonzImage for palette access!");
+  }
+  TPalette *matchPalette = firstMatch->getPalette();
 
   // upInkId -> downInkId
   std::map<int, int> usedColors;
@@ -73,8 +90,8 @@ void mergeCmapped(const std::vector<MergeCmappedPair> &matchingLevels) {
       throw TRopException("Can merge only non-empty images!");
     }
 
-    TToonzImageP img = dynamic_cast<TToonzImageP>(iimg);
-    TToonzImageP match = dynamic_cast<TToonzImageP>(imatch);
+    TToonzImageP img = TToonzImageP(dynamic_cast<TToonzImage*>(iimg.get()));
+    TToonzImageP match = TToonzImageP(dynamic_cast<TToonzImage*>(imatch.get()));
     if (!img || !match)
       throw TRopException("Can merge only cmapped raster images!");
 
@@ -188,7 +205,11 @@ void applyDeleteMatchline(TXshSimpleLevel *sl,
   TPalette *palette = 0;
 
   if (inkIndexes.empty()) {
-    palette = sl->getFrame(fids[0], true)->getPalette();
+    TImageP firstImageP = sl->getFrame(fids[0], true);
+    if (!firstImageP) return;
+    TToonzImageP firstImage = TToonzImageP(dynamic_cast<TToonzImage*>(firstImageP.get()));
+    if (!firstImage) return;
+    palette = firstImage->getPalette();
 
     for (i = 0; i < palette->getPageCount(); i++)
       if (palette->getPage(i)->getName() == L"match lines") {
@@ -202,9 +223,12 @@ void applyDeleteMatchline(TXshSimpleLevel *sl,
 
   for (i = 0; i < (int)fids.size(); i++) {
     // level[i]->lock();
-    TToonzImageP image = sl->getFrame(fids[i], true);
-    assert(image);
+    TImageP imageP = sl->getFrame(fids[i], true);
+    if (!imageP) continue;
+    TToonzImageP image = TToonzImageP(dynamic_cast<TToonzImage*>(imageP.get()));
+    if (!image) continue;
     TRasterCM32P ras = image->getRaster();  // level[i]->getCMapped(false);
+    if (!ras) continue;
     ras->lock();
     if (inkIndexes.empty())
       for (j = 0; j < page->getStyleCount(); j++)
@@ -254,8 +278,10 @@ public:
     for (i = 0; i < fids.size(); i++) {
       QString id = "DeleteMatchlineUndo" + QString::number((uintptr_t)this) +
                    "-" + QString::number(i);
-      TToonzImageP image = sl->getFrame(fids[i], false);
-      assert(image);
+      TImageP imageP = sl->getFrame(fids[i], false);
+      if (!imageP) continue;
+      TToonzImageP image = TToonzImageP(dynamic_cast<TToonzImage*>(imageP.get()));
+      if (!image) continue;
       TImageCache::instance()->add(id, image->clone());
     }
   }
@@ -483,8 +509,15 @@ void mergeCmapped(int column, int mColumn, const QString &fullpath,
   std::map<TFrameId, QString> images;
   double dpix = 0, dpiy = 0;
   for (int i = 0; i < (int)cell.size(); i++) {
-    if (!cell[i].isEmpty() && dpix == 0)
-      ((TToonzImageP)(cell[i].getImage(false)))->getDpi(dpix, dpiy);
+    if (!cell[i].isEmpty() && dpix == 0) {
+      TImageP tempImg = cell[i].getImage(false);
+      if (tempImg) {
+        TToonzImageP timgTemp = TToonzImageP(dynamic_cast<TToonzImage*>(tempImg.get()));
+        if (timgTemp) {
+          timgTemp->getDpi(dpix, dpiy);
+        }
+      }
+    }
 
     if (!level) {
       level = cell[i].getSimpleLevel();
@@ -541,8 +574,16 @@ void mergeCmapped(int column, int mColumn, const QString &fullpath,
       newImage =
           TToonzImageP(TRasterCM32P(dim), TRect(0, 0, dim.lx - 1, dim.ly - 1));
       newImage->setDpi(dpix, dpiy);
-    } else
-      newImage = dynamic_cast<TToonzImageP>(cell[i].getImage(false)->cloneImage());
+    } else {
+      TImage* clonedRaw = cell[i].getImage(false)->cloneImage();
+      if (!clonedRaw) continue;
+      TToonzImage* clonedToonz = dynamic_cast<TToonzImage*>(clonedRaw);
+      if (!clonedToonz) {
+        delete clonedRaw;  // Clean up the cloned raw pointer
+        continue;
+      }
+      newImage = TToonzImageP(clonedToonz);
+    }
 
     if (!newImage) {
       // Handle case where cloneImage() or cast fails - skip or throw
@@ -565,8 +606,8 @@ void mergeCmapped(int column, int mColumn, const QString &fullpath,
 
     if (!img || !match) continue;
 
-    TToonzImageP timg   = dynamic_cast<TToonzImageP>(img);
-    TToonzImageP tmatch = dynamic_cast<TToonzImageP>(match);
+    TToonzImageP timg   = TToonzImageP(dynamic_cast<TToonzImage*>(img.get()));
+    TToonzImageP tmatch = TToonzImageP(dynamic_cast<TToonzImage*>(match.get()));
     if (!timg || !tmatch) continue;
 
     QString id = "MergeCmappedUndo" + QString::number(MergeCmappedSessionId) +
