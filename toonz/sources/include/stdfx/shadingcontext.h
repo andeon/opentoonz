@@ -58,8 +58,6 @@ public:
   void makeCurrent();
   void doneCurrent();
 
-  bool beginGL();  //!< Declaração adicionada
-
   /*!
 Resizes the output buffer to the specified size. Requires that
 the context is made current before invocation. In case lx or ly are 0,
@@ -98,6 +96,8 @@ the context's output buffer is destroyed.
 private:
   struct Imp;
   std::unique_ptr<Imp> m_imp;
+
+  bool beginGL();  //!< set to private
 
   // Not copyable
   ShadingContext(const ShadingContext &);
