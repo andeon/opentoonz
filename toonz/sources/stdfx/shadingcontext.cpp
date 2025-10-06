@@ -51,8 +51,11 @@ void initializeSharedContext() {
 
   g_sharedSurface = new QOffscreenSurface();
   g_sharedSurface->setFormat(sharedFormat());
-  if (!g_sharedSurface->create()) {
+  g_sharedSurface->create();  // FIXED: create() is void; check isValid() after
+  if (!g_sharedSurface->isValid()) {
     qWarning() << "Failed to create shared offscreen surface";
+    delete g_sharedSurface;
+    g_sharedSurface = nullptr;
     return;
   }
 
