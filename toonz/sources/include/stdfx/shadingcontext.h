@@ -27,8 +27,7 @@
 #endif
 
 //=========================================================
-
-//    Forward declarations
+// Forward declarations
 
 class QObject;
 class QOpenGLShaderProgram;
@@ -39,7 +38,13 @@ class QOffscreenSurface;
 
 class DVAPI ShadingContext {
 public:
-  enum Support { OK, NO_PIXEL_BUFFER, NO_SHADERS };
+  enum Support {
+    OK,
+    NO_PIXEL_BUFFER,
+    NO_SHADERS,
+    NO_OPENGL,
+    NO_GLEW
+  };
 
 public:
   ShadingContext(QOffscreenSurface *);
@@ -53,6 +58,8 @@ public:
   void makeCurrent();
   void doneCurrent();
 
+  bool beginGL();  //!< Declaração adicionada
+
   /*!
 Resizes the output buffer to the specified size. Requires that
 the context is made current before invocation. In case lx or ly are 0,
@@ -64,8 +71,7 @@ the context's output buffer is destroyed.
   QOpenGLFramebufferObjectFormat format() const;
   TDimension size() const;
 
-  //! Surrenders ownership of the supplied shader program to the shading
-  //! context.
+  //! Surrenders ownership of the supplied shader program to the shading context.
   void addShaderProgram(const QString &shaderName,
                         QOpenGLShaderProgram *program);
   void addShaderProgram(const QString &shaderName,
@@ -79,13 +85,8 @@ the context's output buffer is destroyed.
   std::pair<QOpenGLShaderProgram *, QDateTime> shaderData(
       const QString &shaderName) const;
 
-  GLuint loadTexture(const TRasterP &src, GLuint texUnit);  //!< Loads a texture
-                                                            //! and binds it to
-  //! the specified
-  //! texture unit.
-  //!  \return  The OpenGL texture id of the loaded texture.      \param src
-  //!  Loaded texture.  \param texUnit  Unit the texture will be bound to.
-  void unloadTexture(GLuint texId);  //!< Releases the specified texture id.
+  GLuint loadTexture(const TRasterP &src, GLuint texUnit);
+  void unloadTexture(GLuint texId);
 
   //! Renders the active shader program to the specified raster.
   void draw(const TRasterP &dst);
@@ -102,6 +103,8 @@ private:
   ShadingContext(const ShadingContext &);
   ShadingContext &operator=(const ShadingContext &);
 };
+
+//=========================================================
 
 class TQOpenGLWidget : public QOpenGLWidget {
 public:
