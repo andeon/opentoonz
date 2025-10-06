@@ -90,8 +90,8 @@ QSurfaceFormat ShadingContext::Imp::format() {
   fmt.setVersion(3, 2);
   fmt.setProfile(QSurfaceFormat::CompatibilityProfile);
 #else
-  fmt.setVersion(3, 3);  // FIX: Add core profile for other platforms
-  fmt.setProfile(QSurfaceFormat::CoreProfile);
+  fmt.setVersion(2, 1);
+  fmt.setProfile(QSurfaceFormat::CompatibilityProfile); 
 #endif
 
   // FIX: Add basic buffers for compatibility
@@ -100,6 +100,8 @@ QSurfaceFormat ShadingContext::Imp::format() {
   fmt.setBlueBufferSize(8);
   fmt.setAlphaBufferSize(8);
   fmt.setDepthBufferSize(24);
+
+  fmt.setSwapBehavior(QSurfaceFormat::SingleBuffer);
 
   return fmt;
 }
@@ -128,10 +130,14 @@ ShadingContext::ShadingContext(QOffscreenSurface *surface) : m_imp(new Imp) {
 
   makeCurrent();
   glewExperimental = GL_TRUE;  // Always enable
-  glewInit();
+  
+  GLenum err = glewInit();
+  if (err != GLEW_OK) {
+    qWarning() << "GLEW init failed:" << (const char *)glewGetErrorString(err);
+  }
+
   doneCurrent();
 }
-
 //--------------------------------------------------------
 
 ShadingContext::~ShadingContext() {
