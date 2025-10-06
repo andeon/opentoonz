@@ -249,7 +249,6 @@ Suggestions are welcome as this is a tad beyond ridiculous...
     m_surface.reset(new QOffscreenSurface());
     m_surface->create();
     m_shadingContext.reset(new ShadingContext(m_surface.get()));
-    m_shadingContext->initialize(m_surface.get());  // NEW: Garanta init shared
   }
 
   static ShadingContextManager *instance() {
