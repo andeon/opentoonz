@@ -42,8 +42,12 @@ public:
   enum Support { OK, NO_PIXEL_BUFFER, NO_SHADERS };
 
 public:
-  ShadingContext(QOffscreenSurface *);
+  // UPDATED: Optional surface param (nullptr = use shared)
+  ShadingContext(QOffscreenSurface *surface = nullptr);
   ~ShadingContext();
+
+  // NEW: Check if shared context is ready
+  static bool isInitialized();
 
   //! Returns the status of OpenGL shading support.
   static Support support();
