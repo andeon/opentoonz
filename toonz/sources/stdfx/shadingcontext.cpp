@@ -18,7 +18,7 @@
 // STD includes
 #include <map>
 #include <memory>
-#include <vector>  // FIX: For transformFeedback
+#include <vector>  // For transformFeedback
 
 #include "stdfx/shadingcontext.h"
 
@@ -79,7 +79,7 @@ private:
 
 //--------------------------------------------------------
 
-ShadingContext::Imp::Imp() : m_context(new QOpenGLContext()), m_surface(nullptr) {}  // FIX: Initialize surface as nullptr
+ShadingContext::Imp::Imp() : m_context(new QOpenGLContext()), m_surface(nullptr), m_fbo(nullptr) {}
 
 //--------------------------------------------------------
 
@@ -94,7 +94,7 @@ QSurfaceFormat ShadingContext::Imp::format() {
   fmt.setProfile(QSurfaceFormat::CompatibilityProfile); 
 #endif
 
-  // FIX: Add basic buffers for compatibility
+  // Add basic buffers for compatibility
   fmt.setRedBufferSize(8);
   fmt.setGreenBufferSize(8);
   fmt.setBlueBufferSize(8);
@@ -123,13 +123,22 @@ void ShadingContext::Imp::initMatrix(int lx, int ly) {
 
 ShadingContext::ShadingContext(QOffscreenSurface *surface) : m_imp(new Imp) {
   m_imp->m_surface = surface;
-  m_imp->m_surface->create();
-  m_imp->m_context->setFormat(Imp::format());  // FIX: Use improved format
-  m_imp->m_context->create();
-  m_imp->m_context->makeCurrent(m_imp->m_surface);
+  if (m_imp->m_surface && !m_imp->m_surface->isValid()) {
+    m_imp->m_surface->create();
+  }
+  m_imp->m_context->setFormat(Imp::format());
+  if (!m_imp->m_context->create()) {
+    qWarning() << "Failed to create OpenGL context - no GL support?";
+    return;
+  }
+  if (!m_imp->m_context->isValid()) {
+    qWarning() << "OpenGL context invalid after creation";
+    return;
+  }
 
   makeCurrent();
-  glewExperimental = GL_TRUE;  // Always enable
+
+  glewExperimental = GL_TRUE;
   
   GLenum err = glewInit();
   if (err != GLEW_OK) {
@@ -138,61 +147,45 @@ ShadingContext::ShadingContext(QOffscreenSurface *surface) : m_imp(new Imp) {
 
   doneCurrent();
 }
+
 //--------------------------------------------------------
 
 ShadingContext::~ShadingContext() {
-  // Destructor of QGLPixelBuffer calls QOpenGLContext::makeCurrent()
-  // internally,
-  // so the current thread must be the owner of QGLPixelBuffer context,
-  // when the destructor of m_imp->m_context is called.
-  // FIX: Adapt for modern and clean up
-  m_imp->m_context->moveToThread(QThread::currentThread());
-  m_imp->m_context->doneCurrent();
+  if (m_imp->m_context && m_imp->m_context->isValid()) {
+    m_imp->m_context->moveToThread(QThread::currentThread());
+    m_imp->m_context->doneCurrent();
+  }
 }
 
 //--------------------------------------------------------
 
 ShadingContext::Support ShadingContext::support() {
-  // return !QGLPixelBuffer::hasOpenGLPbuffers()
-  //           ? NO_PIXEL_BUFFER
-  //           : !QOpenGLShaderProgram::hasOpenGLShaderPrograms() ? NO_SHADERS :
-  //           OK;
-  return !QOpenGLShaderProgram::hasOpenGLShaderPrograms() ? NO_SHADERS : OK;
+  if (!QOpenGLShaderProgram::hasOpenGLShaderPrograms()) return NO_SHADERS;
+  
+  // Quick touch test: try minimal init (static, no full ctor)
+  QOffscreenSurface testSurface;
+  if (!testSurface.create()) return NO_OPENGL;
+  
+  QOpenGLContext testCtx;
+  testCtx.setFormat(Imp::format());
+  if (!testCtx.create() || !testCtx.isValid()) return NO_OPENGL;
+  
+  if (!testCtx.makeCurrent(&testSurface)) return NO_OPENGL;
+  
+  // Minimal GLEW check
+  glewExperimental = GL_TRUE;
+  GLenum err = glewInit();
+  testCtx.doneCurrent();
+  
+  return (err == GLEW_OK) ? OK : NO_GLEW;
 }
 
 //--------------------------------------------------------
 
-bool ShadingContext::isValid() const { return m_imp->m_context->isValid(); }
-
-//--------------------------------------------------------
-/*
-QGLFormat ShadingContext::defaultFormat(int channelsSize)
-{
-  QGL::FormatOptions opts =
-    QGL::SingleBuffer     |
-    QGL::NoAccumBuffer    |
-    QGL::NoDepthBuffer    |                           // I guess it could be
-necessary to let at least
-    QGL::NoOverlay        |                           // the depth buffer
-enabled... Fragment shaders could
-    QGL::NoSampleBuffers  |                           // use it...
-    QGL::NoStencilBuffer  |
-    QGL::NoStereoBuffers;
-
-  QGLFormat fmt(opts);
-  fmt.setDirectRendering(true);                       // Just to be explicit -
-USE HARDWARE ACCELERATION
-
-  fmt.setRedBufferSize(channelsSize);
-  fmt.setGreenBufferSize(channelsSize);
-  fmt.setBlueBufferSize(channelsSize);
-  fmt.setAlphaBufferSize(channelsSize);
-
-  // TODO: 64-bit mode should be settable here
-
-  return fmt;
+bool ShadingContext::isValid() const { 
+  return m_imp->m_context && m_imp->m_context->isValid(); 
 }
-*/
+
 //--------------------------------------------------------
 
 void ShadingContext::makeCurrent() {
@@ -200,15 +193,30 @@ void ShadingContext::makeCurrent() {
     qWarning() << "OpenGL context or surface is null!";
     return;
   }
+  if (!m_imp->m_context->isValid()) {
+    qWarning() << "Cannot make invalid OpenGL context current";
+    return;
+  }
 
   m_imp->m_context->moveToThread(QThread::currentThread());
-  m_imp->m_context->makeCurrent(m_imp->m_surface);
+  bool success = m_imp->m_context->makeCurrent(m_imp->m_surface);
+  if (!success) {
+    qWarning() << "Failed to make OpenGL context current (thread/display issue?)";
+  }
 }
 
 //--------------------------------------------------------
 
 void ShadingContext::doneCurrent() {
-  m_imp->m_context->doneCurrent();
+  if (m_imp->m_context && m_imp->m_context->isValid()) {
+    m_imp->m_context->doneCurrent();
+  }
+}
+
+// Helper for GL ops
+bool ShadingContext::beginGL() {
+  makeCurrent();
+  return m_imp->m_context && m_imp->m_context->isValid() && glGetError() == GL_NO_ERROR;
 }
 
 //--------------------------------------------------------
@@ -219,23 +227,30 @@ void ShadingContext::resize(int lx, int ly,
       m_imp->m_fbo->height() == ly && m_imp->m_fbo->format() == fmt)
     return;
 
-  makeCurrent();  // FIX: Ensure context before FBO
+  if (lx == 0 || ly == 0) {
+    m_imp->m_fbo.reset(nullptr);
+    return;
+  }
+
+  if (!beginGL()) {
+    qWarning() << "Cannot resize FBO - invalid context";
+    return;
+  }
 
   if (m_imp->m_fbo.get()) {
-    m_imp->m_fbo->release();  // FIX: Release the old one
+    m_imp->m_fbo->release();
   }
 
-  if (lx == 0 || ly == 0) {
-    m_imp->m_fbo.reset(0);
-  } else {
-    // FIX: Remove infinite loop and unused vars
-    m_imp->m_fbo.reset(new QOpenGLFramebufferObject(lx, ly, fmt));
-    assert(m_imp->m_fbo->isValid());
-
-    m_imp->m_fbo->bind();
+  m_imp->m_fbo.reset(new QOpenGLFramebufferObject(lx, ly, fmt));
+  if (!m_imp->m_fbo->isValid()) {
+    qWarning() << "Invalid FBO after resize";
+    m_imp->m_fbo.reset(nullptr);
+    doneCurrent();
+    return;
   }
 
-  doneCurrent();  // FIX: Balance the current
+  m_imp->m_fbo->bind();
+  doneCurrent();
 }
 
 //--------------------------------------------------------
@@ -291,7 +306,7 @@ QOpenGLShaderProgram *ShadingContext::shaderProgram(
   std::map<QString, CompiledShader>::iterator st =
       m_imp->m_shaderPrograms.find(shaderName);
 
-  return (st != m_imp->m_shaderPrograms.end()) ? st->second.m_program.get() : 0;
+  return (st != m_imp->m_shaderPrograms.end()) ? st->second.m_program.get() : nullptr;
 }
 
 //--------------------------------------------------------
@@ -314,13 +329,16 @@ std::pair<QOpenGLShaderProgram *, QDateTime> ShadingContext::shaderData(
   return (st != m_imp->m_shaderPrograms.end())
              ? std::make_pair(st->second.m_program.get(),
                               st->second.m_lastModified)
-             : std::make_pair((QOpenGLShaderProgram *)0, QDateTime());
+             : std::make_pair((QOpenGLShaderProgram *)nullptr, QDateTime());
 }
 
 //--------------------------------------------------------
 
 GLuint ShadingContext::loadTexture(const TRasterP &src, GLuint texUnit) {
-  makeCurrent();  // FIX: Ensure context for GL calls
+  if (!beginGL()) {
+    qWarning() << "Cannot load texture - invalid GL context";
+    return 0;
+  }
 
   glActiveTexture(GL_TEXTURE0 + texUnit);
 
@@ -328,14 +346,10 @@ GLuint ShadingContext::loadTexture(const TRasterP &src, GLuint texUnit) {
   glGenTextures(1, &texId);
   glBindTexture(GL_TEXTURE_2D, texId);
 
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
-                  GL_CLAMP);  // These must be used on a bound texture,
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
-                  GL_CLAMP);  // and are remembered in the OpenGL context.
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
-                  GL_NEAREST);  // They can be set here, no need for
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-                  GL_NEAREST);  // the user to do it.
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
   glPixelStorei(GL_UNPACK_ROW_LENGTH, src->getWrap());
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -352,16 +366,21 @@ GLuint ShadingContext::loadTexture(const TRasterP &src, GLuint texUnit) {
                chanType,      // channel data type
                (GLvoid *)src->getRawData());
 
-  assert(glGetError() == GL_NO_ERROR);
-
-  doneCurrent();  // FIX: Balance the current
+  GLenum err = glGetError();
+  doneCurrent();
+  if (err != GL_NO_ERROR) {
+    qWarning() << "Texture load error: " << err;
+    unloadTexture(texId);
+    return 0;
+  }
   return texId;
 }
 
 //----------------------------------------------------------------------
 
 void ShadingContext::unloadTexture(GLuint texId) {
-  makeCurrent();  // FIX: Ensure context
+  if (texId == 0) return;
+  if (!beginGL()) return;
   glDeleteTextures(1, &texId);
   doneCurrent();
 }
@@ -372,25 +391,25 @@ void ShadingContext::draw(const TRasterP &dst) {
   assert("ShadingContext::resize() must be invoked at least once before this" &&
          m_imp->m_fbo.get());
 
-  makeCurrent();  // FIX: Ensure context
+  if (!beginGL()) {
+    qWarning() << "Cannot draw - invalid GL context";
+    return;
+  }
 
   int lx = dst->getLx(),
-      ly = dst->getLy();  // NOTE: We're not using m_imp->m_fbo's size, since
-                          // it could be possibly greater than the required
-                          // destination surface.
+      ly = dst->getLy();
 
-  m_imp->m_fbo->bind();  // FIX: Bind FBO for offscreen render
-  m_imp->initMatrix(lx, ly);  // This call sets the OpenGL viewport to this
-                              // size - and matches (1, 1) to dst's (lx, ly)
+  m_imp->m_fbo->bind();
+  m_imp->initMatrix(lx, ly);
 
-  // FIX: Clear the buffer to avoid garbage
+  // Clear the buffer to avoid garbage
   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT);
 
+  glColor3f(1.0f, 1.0f, 1.0f);
   {
     glBegin(GL_QUADS);
 
-    glColor3f(1.0f, 1.0f, 1.0f);  // FIX: Add color so the quad doesn't come out transparent/black
     glVertex2f(0.0, 0.0);
     glVertex2f(lx, 0.0);
     glVertex2f(lx, ly);
@@ -403,18 +422,22 @@ void ShadingContext::draw(const TRasterP &dst) {
 
   // Read the fbo to dst
   if (TRaster32P ras32 = dst)
-    glReadPixels(0, 0, lx, ly, GL_BGRA_EXT, GL_UNSIGNED_BYTE,
+    glReadPixels(0, 0, lx, ly, GL_BGRA, GL_UNSIGNED_BYTE,
                  dst->getRawData());
   else {
     assert(TRaster64P(dst));
-    glReadPixels(0, 0, lx, ly, GL_BGRA_EXT, GL_UNSIGNED_SHORT,
+    glReadPixels(0, 0, lx, ly, GL_BGRA, GL_UNSIGNED_SHORT,
                  dst->getRawData());
   }
 
-  assert(glGetError() == GL_NO_ERROR);
+  GLenum err = glGetError();
 
-  m_imp->m_fbo->release();  // FIX: Release FBO
+  m_imp->m_fbo->release();
   doneCurrent();
+
+  if (err != GL_NO_ERROR) {
+    qWarning() << "Draw error: " << err;
+  }
 }
 
 //--------------------------------------------------------
@@ -422,12 +445,15 @@ void ShadingContext::draw(const TRasterP &dst) {
 void ShadingContext::transformFeedback(int varyingsCount,
                                        const GLsizeiptr *varyingSizes,
                                        GLvoid **bufs) {
-  makeCurrent();  // FIX: Ensure context
+  if (!beginGL() || varyingsCount <= 0) {
+    qWarning() << "Cannot transform feedback - invalid context or count";
+    return;
+  }
 
   // Generate buffer objects
   std::vector<GLuint> bufferObjectNames(varyingsCount, 0);
 
-  glGenBuffers(varyingsCount, &bufferObjectNames[0]);
+  glGenBuffers(varyingsCount, bufferObjectNames.data());
 
   for (int v = 0; v != varyingsCount; ++v) {
     glBindBuffer(GL_ARRAY_BUFFER, bufferObjectNames[v]);
@@ -470,9 +496,11 @@ void ShadingContext::transformFeedback(int varyingsCount,
   glBindBuffer(GL_ARRAY_BUFFER, 0);
 
   // Delete buffer objects
-  glDeleteBuffers(varyingsCount, &bufferObjectNames[0]);
+  glDeleteBuffers(varyingsCount, bufferObjectNames.data());
 
-  assert(glGetError() == GL_NO_ERROR);  // FIX: Add assert at the end
-
+  GLenum err = glGetError();
   doneCurrent();
+  if (err != GL_NO_ERROR) {
+    qWarning() << "Transform feedback error: " << err;
+  }
 }
