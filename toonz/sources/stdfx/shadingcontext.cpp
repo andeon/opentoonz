@@ -17,7 +17,6 @@
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
 #include <QSurfaceFormat>
-#include <QDebug>
 
 // STD includes
 #include <map>
@@ -50,8 +49,6 @@ QSurfaceFormat sharedFormat() {
 void initializeSharedContext() {
   if (g_initialized) return;
 
-  qDebug() << "Initializing shared ShadingContext once";
-
   g_sharedSurface = new QOffscreenSurface();
   g_sharedSurface->setFormat(sharedFormat());
   if (!g_sharedSurface->create()) {
@@ -73,13 +70,10 @@ void initializeSharedContext() {
   GLenum err = glewInit();
   if (err != GLEW_OK) {
     qWarning() << "GLEW init failed:" << glewGetErrorString(err);
-  } else {
-    qDebug() << "GLEW initialized (version:" << glewGetString(GLEW_VERSION) << ")";
   }
   g_sharedContext->doneCurrent();
 
   g_initialized = true;
-  qDebug() << "Shared ShadingContext ready (GL:" << glGetString(GL_VERSION) << ")";
 }
 
 // OPTIONAL: Static cleanup on app exit (add to a module dtor if needed)

@@ -34,12 +34,6 @@
 #include <boost/iterator/transform_iterator.hpp>
 #include <boost/ptr_container/ptr_vector.hpp>
 
-// Diagnostics include
-// #define DIAGNOSTICS
-#ifdef DIAGNOSTICS
-#include "diagnostics.h"
-#endif
-
 //===================================================
 
 //    Forward Declarations
@@ -255,6 +249,7 @@ Suggestions are welcome as this is a tad beyond ridiculous...
     m_surface.reset(new QOffscreenSurface());
     m_surface->create();
     m_shadingContext.reset(new ShadingContext(m_surface.get()));
+    m_shadingContext->initialize(m_surface.get());  // NEW: Garanta init shared
   }
 
   static ShadingContextManager *instance() {
@@ -274,13 +269,8 @@ Suggestions are welcome as this is a tad beyond ridiculous...
       QMutexLocker mLocker(&m_mutex);
 
       // Release the shading context's output buffer
-      ::ContextLocker cLocker(*m_shadingContext);
-      m_shadingContext->resize(0, 0);
-
-#ifdef DIAGNOSTICS
-      DIAGNOSTICS_DUMP("ShaderLogs");
-      DIAGNOSTICS_CLEAR;
-#endif
+      ::ContextLocker cLocker(shadingContext());
+      shadingContext().resize(0, 0);
     }
   }
 
@@ -289,7 +279,7 @@ Suggestions are welcome as this is a tad beyond ridiculous...
       ShadingContextManager *m_this;
       ShadingContext::Support support() {
         QMutexLocker mLocker(&m_this->m_mutex);
-        ::ContextLocker cLocker(*m_this->m_shadingContext);
+        ::ContextLocker cLocker(m_this->shadingContext());
 
         return ShadingContext::support();
       }
@@ -609,18 +599,17 @@ bool ShaderFx::doGetBBox(double frame, TRectD &bbox,
   ShadingContextManager *manager = ShadingContextManager::instance();
   if (manager->touchSupport() != ShadingContext::OK) return true;
 
+  // CHANGED: Use shared instance + guard init
+  ShadingContext &context = manager->shadingContext();
+  if (!context.isInitialized()) return true;
+
   // Remember: info.m_affine MUST NOT BE CONSIDERED in doGetBBox's
   // implementation
   ::RectF bboxF(infiniteRectF);
 
   QMutexLocker mLocker(manager->mutex());
 
-  // ShadingContext& context = manager->shadingContext();
-  std::shared_ptr<ShadingContext> shadingContextPtr(
-      new ShadingContext(manager->getSurface()));
-  ShadingContext &context = *shadingContextPtr.get();
-
-  ::ContextLocker cLocker(context);
+  ::ContextLocker cLocker(context);  // CHANGED: No new; use shared
 
   // Build the varyings data
   QOpenGLShaderProgram *prog = 0;
@@ -912,12 +901,6 @@ void ShaderFx::getInputData(const TRectD &rect, double frame,
     GLvoid *bufs[] = {&buf[0]};
 
     context.transformFeedback(1, varyingSizes, bufs);
-
-#ifdef TRANSFORM_FEEDBACK_COUT
-    std::cout << "trFeedback: ";
-    for (int f = 0; f != bufFloatsCount; ++f) std::cout << buf[f] << " ";
-    std::cout << "\n" << std::endl;
-#endif
   }
 
   // Finalize output
@@ -977,13 +960,13 @@ void ShaderFx::doCompute(TTile &tile, double frame,
   ShadingContextManager *manager = ShadingContextManager::instance();
   if (manager->touchSupport() != ShadingContext::OK) return;
 
+  // CHANGED: Use shared instance + guard init
+  ShadingContext &context = manager->shadingContext();
+  if (!context.isInitialized()) return;
+
   QMutexLocker mLocker(
       manager->mutex());  // As GPU access can be considered sequential anyway,
                           // lock the full-scale mutex
-  std::shared_ptr<ShadingContext> shadingContextPtr(
-      new ShadingContext(manager->getSurface()));
-  ShadingContext &context = *shadingContextPtr.get();
-  // ShadingContext& context = manager->shadingContext();
 
   int pCount = getInputPortCount();
 
@@ -993,7 +976,7 @@ void ShaderFx::doCompute(TTile &tile, double frame,
   std::vector<TAffine> inputAffines(pCount);
 
   // Calculate input tiles
-  ::ContextLocker cLocker(context);
+  ::ContextLocker cLocker(context);  // CHANGED: No new; use shared
 
   std::unique_ptr<TTile[]> inTiles(
       new TTile[pCount]);  // NOTE: Input tiles must be STORED - they cannot
@@ -1016,17 +999,6 @@ void ShaderFx::doCompute(TTile &tile, double frame,
 
           TRenderSettings inputInfo(info);
           inputInfo.m_affine = inputAffines[p];
-
-#ifdef TRANSFORM_FEEDBACK_COUT
-          const TAffine &inAff = inputAffines[p];
-          std::cout << "inRect " << p << ": " << inRect.x0 << " " << inRect.y0
-                    << " " << inRect.x1 << " " << inRect.y1 << "\n";
-          std::cout << "inAff  " << p << ": " << inAff.a11 << " " << inAff.a12
-                    << " " << inAff.a13 << "\n";
-          std::cout << "          " << inAff.a21 << " " << inAff.a22 << " "
-                    << inAff.a23 << "\n"
-                    << std::endl;
-#endif
 
           port->allocateAndCompute(
               inTiles[p], inRect.getP00(),
@@ -1111,11 +1083,6 @@ void ShaderFx::doCompute(TTile &tile, double frame,
           texStorage.load(inTiles[p].getRaster(), p);
       }
 
-#ifdef DIAGNOSTICS
-      DIAGNOSTICS_TIMER("Shader Overall Times | " +
-                        m_shaderInterface->m_mainShader.m_name);
-#endif
-
       context.draw(tile.getRaster());
     }
   }
@@ -1128,16 +1095,15 @@ void ShaderFx::doDryCompute(TRectD &rect, double frame,
   ShadingContextManager *manager = ShadingContextManager::instance();
   if (manager->touchSupport() != ShadingContext::OK) return;
 
-  QMutexLocker mLocker(manager->mutex());
+  // CHANGED: Use shared instance + guard init
+  ShadingContext &context = manager->shadingContext();
+  if (!context.isInitialized()) return;
 
-  // ShadingContext& context = manager->shadingContext();
-  std::shared_ptr<ShadingContext> shadingContextPtr(
-      new ShadingContext(manager->getSurface()));
-  ShadingContext &context = *shadingContextPtr.get();
+  QMutexLocker mLocker(manager->mutex());
 
   int pCount = getInputPortCount();
   if (pCount > 0) {
-    ::ContextLocker cLocker(context);
+    ::ContextLocker cLocker(context);  // CHANGED: No new; use shared
 
     std::vector<TRectD> inputRects(pCount);
     std::vector<TAffine> inputAffines(pCount);
