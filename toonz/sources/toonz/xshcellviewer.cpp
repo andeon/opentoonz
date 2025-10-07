@@ -104,7 +104,7 @@ bool selectionContainTlvImage(TCellSelection *selection, TXsheet *xsheet,
   int r0, r1, c0, c1;
   selection->getSelectedCells(r0, c0, r1, c1);
 
-  // Verifico se almeno un livello della selezione e' un tlv
+  // Check if at least one level in the selection is a TLV
   int c, r;
   for (c = c0; c <= c1; c++)
     for (r = r0; r <= r1; r++) {
@@ -127,7 +127,7 @@ bool selectionContainRasterImage(TCellSelection *selection, TXsheet *xsheet,
   int r0, r1, c0, c1;
   selection->getSelectedCells(r0, c0, r1, c1);
 
-  // Verifico se almeno un livello della selezione e' un tlv
+  // Check if at least one level in the selection is a TLV
   int c, r;
   for (c = c0; c <= c1; c++)
     for (r = r0; r <= r1; r++) {
@@ -148,7 +148,7 @@ bool selectionContainRasterImage(TCellSelection *selection, TXsheet *xsheet,
 bool selectionContainLevelImage(TCellSelection *selection, TXsheet *xsheet) {
   int r0, r1, c0, c1;
   selection->getSelectedCells(r0, c0, r1, c1);
-  // Verifico se almeno un livello della selezione e' un tlv, un pli o un
+  // Check if at least one level in the selection is a TLV, a PLI, or a
   // fullcolor (!= .psd)
   int c, r;
   for (c = c0; c <= c1; c++)
@@ -473,7 +473,7 @@ class RenameCellUndo final : public TUndo {
   const TXshCell m_newCell;
 
 public:
-  // indices sono le colonne inserite
+  // The 'indices' variable contains the columns that were inserted
   RenameCellUndo(int row, int col, TXshCell oldCell, TXshCell newCell)
       : m_row(row), m_col(col), m_oldCell(oldCell), m_newCell(newCell) {}
 
@@ -2341,8 +2341,8 @@ void CellArea::drawSoundTextCell(QPainter &p, int row, int col) {
   QRect nameRect = o->rect(PredefinedRect::CELL_NAME).translated(QPoint(x, y));
   nameRect.adjust(0, 0, -frameAdj.x(), -frameAdj.y());
 
-  // il nome va scritto se e' diverso dalla cella precedente oppure se
-  // siamo su una marker line
+  // The name should be written if it is different from the previous cell
+  // or if we are on a marker line
   QString fontName = Preferences::instance()->getInterfaceFont();
   if (fontName == "") {
 #ifdef _WIN32
@@ -2843,8 +2843,8 @@ void CellArea::drawPaletteCell(QPainter &p, int row, int col,
     QColor penColor = isRed ? QColor(m_viewer->getErrorTextColor())
                             : m_viewer->getTextColor();
     p.setPen(penColor);
-    // il nome va scritto se e' diverso dalla cella precedente oppure se
-    // siamo su una marker line
+    // Display the name only if it's different from the previous cell,
+    // or if the current row is a marker line
     QString fontName = Preferences::instance()->getInterfaceFont();
     if (fontName == "") {
 #ifdef _WIN32
@@ -2858,8 +2858,8 @@ void CellArea::drawPaletteCell(QPainter &p, int row, int col,
     p.setFont(font);
     QFontMetrics fm(font);
 
-    // il numero va scritto se e' diverso dal precedente oppure se il livello
-    // e' diverso dal precedente
+    // The number should be written if it is different from the previous one
+    // or if the level is different from the previous one
     QString numberStr;
     if (!sameLevel || prevCell.m_frameId != cell.m_frameId) {
       // convert the last one digit of the frame number to alphabet
@@ -3172,7 +3172,7 @@ class CycleUndo final : public TUndo {
   CellArea *m_area;
 
 public:
-  // indices sono le colonne inserite
+  // indices represent the inserted columns
   CycleUndo(TStageObject *pegbar, CellArea *area)
       : m_pegbar(pegbar), m_area(area) {}
   void undo() const override {
@@ -3292,16 +3292,15 @@ void CellArea::mousePressEvent(QMouseEvent *event) {
     // TObjectHandle *oh = TApp::instance()->getCurrentObject();
     // oh->setObjectId(m_viewer->getObjectId(col));
 
-    // gmt, 28/12/2009. Non dovrebbe essere necessario, visto che dopo
-    // verra cambiata la colonna e quindi l'oggetto corrente
-    // Inoltre, facendolo qui, c'e' un problema con il calcolo del dpi
-    // (cfr. SceneViewer::onLevelChanged()): setObjectId() chiama (in cascata)
-    // onLevelChanged(), ma la colonna corrente risulta ancora quella di prima e
-    // quindi
-    // il dpi viene calcolato male. Quando si cambia la colonna l'oggetto
-    // corrente risulta
-    // gia' aggiornato e quindi non ci sono altre chiamate a onLevelChanged()
-    // cfr bug#5235
+    // gmt, 28/12/2009. This should not be necessary, since the column
+    // will be changed afterwards and thus the current object as well.
+    // Moreover, doing it here causes a problem with DPI calculation
+    // (see SceneViewer::onLevelChanged()): setObjectId() triggers (indirectly)
+    // onLevelChanged(), but at that point the current column is still the previous one,
+    // so the DPI is calculated incorrectly.
+    // When the column is changed, the current object is already updated,
+    // so no further calls to onLevelChanged() occur.
+    // See bug#5235
 
     TStageObject *pegbar = xsh->getStageObject(m_viewer->getObjectId(col));
 
@@ -3626,8 +3625,8 @@ void CellArea::mouseDoubleClickEvent(QMouseEvent *event) {
 
   if (col == -1) return;
 
-  // in modalita' xsheet as animation sheet non deve essere possibile creare
-  // livelli con doppio click: se la cella e' vuota non bisogna fare nulla
+  // In Xsheet mode (used as an animation sheet), double-clicking should not create
+  // new levels: if the cell is empty, nothing should happen
   if ((Preferences::instance()->isAnimationSheetEnabled() &&
        m_viewer->getXsheet()->getCell(row, col).isEmpty())) {
     TXshColumn *column = m_viewer->getXsheet()->getColumn(col);
@@ -3653,7 +3652,7 @@ void CellArea::contextMenuEvent(QContextMenuEvent *event) {
 
   QMenu menu(this);
 
-  // Verifico se ho cliccato su una nota
+  // Check if a note was clicked
   TXshNoteSet *notes = m_viewer->getXsheet()->getNotes();
   int i;
   for (i = notes->getCount() - 1; i >= 0; i--) {
@@ -3863,8 +3862,7 @@ void CellArea::createCellMenu(QMenu &menu, bool isCellSelected, TXshCell cell,
 
   if (isCellSelected) {
     bool addSeparator = false;
-    // open fx settings instead of level settings when clicked on zerary fx
-    // level
+    // Open FX settings instead of level settings when a Zerary FX level is clicked
     if (cell.m_level && cell.m_level->getZeraryFxLevel()) {
       menu.addAction(cmdManager->getAction(MI_FxParamEditor));
       addSeparator = true;
