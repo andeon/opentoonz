@@ -703,9 +703,10 @@ void RenameCellField::showInRowCol(int row, int col, bool multiColumnSelected) {
         else
           setFixedSize(o->cellWidth(), o->cellHeight() + 2);
         connect(this, &QLineEdit::textChanged, this,
-                [this, o, fm](const QString &text) {
+                [this, o](const QString &text) {
+                  QFontMetrics fm(this->font());
                   if (o->cellWidth() - 15 < fm.horizontalAdvance(text))
-                    setFixedWidth(fm.horizontalAdvance(text()) + 10);
+                    setFixedWidth(fm.horizontalAdvance(text) + 10);
                 });
       }
       // other level types
