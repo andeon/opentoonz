@@ -705,7 +705,7 @@ void RenameCellField::showInRowCol(int row, int col, bool multiColumnSelected) {
         connect(this, &QLineEdit::textChanged, this,
                 [this, o, fm](const QString &text) {
                   if (o->cellWidth() - 15 < fm.horizontalAdvance(text))
-                    setFixedWidth(fm.horizontalAdvance(text) + 10);
+                    setFixedWidth(fm.horizontalAdvance(text()) + 10);
                 });
       }
       // other level types
@@ -1685,7 +1685,7 @@ void CellArea::drawSoundCell(QPainter &p, int row, int col, bool isReference) {
   int z = 100 / frameZoomF;
   for (i = begin; i <= end; i++) {
     soundLevel->getValueAtPixel(o, soundPixel, minmax);
-    soundPixel += z;  // ++;
+    soundPixel += z;  // Increment soundPixel
     int min, max;
     pmin = minmax.first;
     pmax = minmax.second;
@@ -3770,18 +3770,35 @@ void CellArea::dragMoveEvent(QDragMoveEvent *e) {
 //-----------------------------------------------------------------------------
 
 void CellArea::dropEvent(QDropEvent *e) {
-  if (!getDragTool()) return;
+  if (!getDragTool()) {
+    e->ignore();  // Explicitly ignore if no tool—safer than return.
+    return;
+  }
+
   m_viewer->dragToolRelease(e);
+
+  // Handle intra-widget moves first (e.g., internal cell drags).
   if (e->source() == this) {
     e->setDropAction(Qt::MoveAction);
     e->accept();
-  } else if (acceptResourceOrFolderDrop(e->mimeData()->urls())) {
-    // For file dragging force CopyAction
+    return;
+  }
+
+  // Safely access MIME data for external drops (files/URLs).
+  const QMimeData *mimeData = e->mimeData();
+  if (!mimeData) {
+    e->ignore();  // Bail on null/invalid MIME—prevents urls() crash.
+    return;
+  }
+
+  // Now safe to call urls()—check for resources/folders.
+  if (acceptResourceOrFolderDrop(mimeData->urls())) {
+    // For file dragging, force CopyAction (no moves from external sources).
     e->setDropAction(Qt::CopyAction);
-    // For files, don't accept original proposed action in case it's a move
     e->accept();
-  } else
+  } else {
     e->acceptProposedAction();
+  }
 }
 
 //-----------------------------------------------------------------------------
