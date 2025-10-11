@@ -1,5 +1,3 @@
-
-
 #include "tfxparam.h"
 #include "tparamset.h"
 #include "stdfx.h"
@@ -9,6 +7,7 @@
 #include "ttzpimagefx.h"
 #include "toonz/tdistort.h"
 #include "texturefxP.h"
+#include "tparamuiconcept.h"  // *** ADICIONADO: Para definição completa de TParamUIConcept ***
 
 //==============================================================================
 
