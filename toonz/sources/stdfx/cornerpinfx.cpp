@@ -7,7 +7,7 @@
 #include "ttzpimagefx.h"
 #include "toonz/tdistort.h"
 #include "texturefxP.h"
-#include "tparamuiconcept.h"  // *** ADICIONADO: Para definição completa de TParamUIConcept ***
+#include "tparamuiconcept.h"  // *** ADDED: For the complete definition of TParamUIConcept ***
 
 //==============================================================================
 
@@ -50,7 +50,7 @@ public:
                      const TRenderSettings &infoOnOutput, TRectD &rectOnInput,
                      TRenderSettings &infoOnInput, TRectD &inBBox);
 
-  void getParamUIs(TParamUIConcept *&concepts, int &length) override;  // *** NOVA DECLARAÇÃO ***
+  void getParamUIs(TParamUIConcept *&concepts, int &length) override;  // *** NEW DECLARATION ***
 
 private:
   TRasterFxPort m_input;
@@ -188,7 +188,7 @@ bool CornerPinFx::doGetBBox(double frame, TRectD &bBox,
   if (m_input.isConnected()) {
     bool ret = m_input->doGetBBox(frame, bBox, info);
 
-    // *** OPCIONAL: Expande bbox pela cage de destino pra evitar clipping ***
+    // *** OPTIONAL: Expand bbox by the destination cage to avoid clipping ***
     // if (!m_deactivate->getValue()) {
     //   TPointD p00_a = m_p00_a->getValue(frame);
     //   TPointD p10_a = m_p10_a->getValue(frame);
@@ -256,7 +256,7 @@ void CornerPinFx::transform(double frame, int port, const TRectD &rectOnOutput,
   // factor,
   // we want the same factor applied on image levels, so that their detail is
   // appropriate
-  //(especially for vector images).
+  // (especially for vector images).
 
   double scale = 0;
   scale        = std::max(scale, norm(p10_a - p00_a) / norm(p10_b - p00_b));
@@ -432,14 +432,13 @@ void CornerPinFx::doCompute(TTile &tile, double frame,
 
   TTile invertMaskTile;
 
-  // carico il vettore items con gli indici dei colori
+  // Load the items vector with the color indices
   std::vector<std::string> items;
   std::string indexes = ::to_string(m_string->getValue());
   parseIndexes(indexes, items);
 
-  // genero il tile il cui raster contiene l'immagine in input a cui sono stati
-  // tolti i pixel
-  // colorati con gli indici contenuti nel vettore items
+  // Generate the tile whose raster contains the input image with the pixels
+  // colored with the indices contained in the items vector removed
   TRenderSettings ri2(ri);
   PaletteFilterFxRenderData *PaletteFilterData = new PaletteFilterFxRenderData;
   TRasterFxRenderDataP smartP(PaletteFilterData);
@@ -456,16 +455,15 @@ void CornerPinFx::doCompute(TTile &tile, double frame,
     return;
   }
 
-  // genero il tile il cui raster contiene l'immagine in input a cui sono stati
-  // tolti i pixel
-  // colorati con indici diversi da quelli contenuti nel vettore items
+  // Generate the tile whose raster contains the input image with the pixels
+  // colored with indices different from those contained in the items vector removed
   bool isSwatch                = ri2.m_isSwatch;
   if (isSwatch) ri2.m_isSwatch = false;
   PaletteFilterData->m_keep    = !(m_keep->getValue() == 1);
   m_input->compute(tile, frame, ri2);
   if (isSwatch) ri2.m_isSwatch = true;
 
-  // controllo se ho ottenuto quaclosa su cui si possa lavorare.
+  // Check if something workable was obtained
   TRect saveBox;
   TRop::computeBBox(tile.getRaster(), saveBox);
   if (saveBox.isEmpty()) {
@@ -666,6 +664,7 @@ int CornerPinFx::getMemoryRequirement(const TRectD &rect, double frame,
 }
 
 //-------------------------------------------------------------------------
+
 /*
 TRectD CornerPinFx::getContainingBox(const FourPoints &points)
 {
@@ -684,7 +683,7 @@ yMin=std::min(points.m_p00.y,points.m_p01.y,points.m_p10.y,points.m_p11.y);
 }
 */
 
-// *** NOVA IMPLEMENTAÇÃO: Ativa a UI da gaiola ***
+// *** NEW IMPLEMENTATION: Enables the cage UI ***
 void CornerPinFx::getParamUIs(TParamUIConcept *&concepts, int &length) {
   concepts = new TParamUIConcept[length = 2];
 
