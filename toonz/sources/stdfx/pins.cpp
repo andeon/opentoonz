@@ -560,13 +560,17 @@ static void solveSystems(double **a, double *bx) {
 
 static void computeTransformation(const FourPoints &s, const FourPoints &d,
                                   TAffine &aff, TPointD &perspectDen) {
-  // Using vectors for automatic memory management
-  std::vector<std::vector<double>> a(8, std::vector<double>(8));
-  std::vector<double> b(8);
+  double *a[8];
+  double b[8];
+  
+  // Allocate memory for matrix a
+  for (int i = 0; i < 8; i++) {
+    a[i] = new double[8];
+  }
 
-  buildMatrixes(s, d, a.data(), b.data());
+  buildMatrixes(s, d, a, b);
 
-  solveSystems(a.data(), b.data());
+  solveSystems(a, b);
 
   aff.a11       = b[0];
   aff.a12       = b[1];
@@ -576,6 +580,11 @@ static void computeTransformation(const FourPoints &s, const FourPoints &d,
   aff.a23       = b[5];
   perspectDen.x = b[6];
   perspectDen.y = b[7];
+
+  // Free allocated memory
+  for (int i = 0; i < 8; i++) {
+    delete[] a[i];
+  }
 }
 
 // ----------------------------------------------------------------------------
