@@ -51,6 +51,8 @@ public:
                      const TRenderSettings &infoOnOutput, TRectD &rectOnInput,
                      TRenderSettings &infoOnInput, TRectD &inBBox);
 
+  void getParamUIs(TParamUIConcept *&concepts, int &length) override;  // *** NOVA DECLARAÇÃO ***
+
 private:
   TRasterFxPort m_input;
   TRasterFxPort m_texture;
@@ -186,6 +188,20 @@ bool CornerPinFx::doGetBBox(double frame, TRectD &bBox,
                             const TRenderSettings &info) {
   if (m_input.isConnected()) {
     bool ret = m_input->doGetBBox(frame, bBox, info);
+
+    // *** OPCIONAL: Expande bbox pela cage de destino pra evitar clipping ***
+    // if (!m_deactivate->getValue()) {
+    //   TPointD p00_a = m_p00_a->getValue(frame);
+    //   TPointD p10_a = m_p10_a->getValue(frame);
+    //   TPointD p01_a = m_p01_a->getValue(frame);
+    //   TPointD p11_a = m_p11_a->getValue(frame);
+    //   double xMin = std::min({p00_a.x, p10_a.x, p01_a.x, p11_a.x});
+    //   double yMin = std::min({p00_a.y, p10_a.y, p01_a.y, p11_a.y});
+    //   double xMax = std::max({p00_a.x, p10_a.x, p01_a.x, p11_a.x});
+    //   double yMax = std::max({p00_a.y, p10_a.y, p01_a.y, p11_a.y});
+    //   bBox *= TRectD(xMin, yMin, xMax, yMax);
+    // }
+
     return ret;
   } else {
     bBox = TRectD();
@@ -668,6 +684,26 @@ yMin=std::min(points.m_p00.y,points.m_p01.y,points.m_p10.y,points.m_p11.y);
         return TRectD(xMin,yMin,xMax, yMax);
 }
 */
+
+// *** NOVA IMPLEMENTAÇÃO: Ativa a UI da gaiola ***
+void CornerPinFx::getParamUIs(TParamUIConcept *&concepts, int &length) {
+  concepts = new TParamUIConcept[length = 2];
+
+  concepts[0].m_type = TParamUIConcept::QUAD;
+  concepts[0].m_params.push_back(m_p01_b);
+  concepts[0].m_params.push_back(m_p11_b);
+  concepts[0].m_params.push_back(m_p10_b);
+  concepts[0].m_params.push_back(m_p00_b);
+  concepts[0].m_label = "Texture Src";
+
+  concepts[1].m_type = TParamUIConcept::QUAD;
+  concepts[1].m_params.push_back(m_p01_a);
+  concepts[1].m_params.push_back(m_p11_a);
+  concepts[1].m_params.push_back(m_p10_a);
+  concepts[1].m_params.push_back(m_p00_a);
+  concepts[1].m_label = "Control Cage";
+}
+
 // ------------------------------------------------------------------------
 
 FX_PLUGIN_IDENTIFIER(CornerPinFx, "cornerPinFx");
