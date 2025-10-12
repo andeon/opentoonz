@@ -685,21 +685,37 @@ yMin=std::min(points.m_p00.y,points.m_p01.y,points.m_p10.y,points.m_p11.y);
 
 // *** NEW IMPLEMENTATION: Enables the cage UI ***
 void CornerPinFx::getParamUIs(TParamUIConcept *&concepts, int &length) {
-  concepts = new TParamUIConcept[length = 2];
+  concepts = new TParamUIConcept[length = 6];
 
   concepts[0].m_type = TParamUIConcept::QUAD;
   concepts[0].m_params.push_back(m_p01_b);
   concepts[0].m_params.push_back(m_p11_b);
   concepts[0].m_params.push_back(m_p10_b);
   concepts[0].m_params.push_back(m_p00_b);
-  concepts[0].m_label = "Texture Src";
+  concepts[0].m_label = " Src";
 
   concepts[1].m_type = TParamUIConcept::QUAD;
   concepts[1].m_params.push_back(m_p01_a);
   concepts[1].m_params.push_back(m_p11_a);
   concepts[1].m_params.push_back(m_p10_a);
   concepts[1].m_params.push_back(m_p00_a);
-  concepts[1].m_label = "Control Cage";
+  concepts[1].m_label = " Dst";
+
+  concepts[2].m_type = TParamUIConcept::VECTOR;
+  concepts[2].m_params.push_back(m_p00_b);
+  concepts[2].m_params.push_back(m_p00_a);
+
+  concepts[3].m_type = TParamUIConcept::VECTOR;
+  concepts[3].m_params.push_back(m_p10_b);
+  concepts[3].m_params.push_back(m_p10_a);
+
+  concepts[4].m_type = TParamUIConcept::VECTOR;
+  concepts[4].m_params.push_back(m_p01_b);
+  concepts[4].m_params.push_back(m_p01_a);
+
+  concepts[5].m_type = TParamUIConcept::VECTOR;
+  concepts[5].m_params.push_back(m_p11_b);
+  concepts[5].m_params.push_back(m_p11_a);
 }
 
 // ------------------------------------------------------------------------
