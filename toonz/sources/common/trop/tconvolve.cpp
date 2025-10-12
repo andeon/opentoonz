@@ -103,11 +103,16 @@ void doConvolve_cm32_row_9_i(PIXOUT *pixout, int n, TPixelCM32 *pixarr[],
   p7 = pixarr[6];
   p8 = pixarr[7];
   p9 = pixarr[8];
+
+  // FIX: Create array of pointers to sample the correct neighbor for each i
+  TPixelCM32 *ps[9] = {p1, p2, p3, p4, p5, p6, p7, p8, p9};
+
   while (n-- > 0) {
+    // FIXED LOOP: Now uses ps[i] to get the correct pixel for each position
     for (int i = 0; i < 9; ++i) {
-      int tone  = p1->getTone();
-      int paint = p1->getPaint();
-      int ink   = p1->getInk();
+      int tone  = ps[i]->getTone();
+      int paint = ps[i]->getPaint();
+      int ink   = ps[i]->getInk();
       if (tone == TPixelCM32::getMaxTone())
         val[i] = paints[paint];
       else if (tone == 0)
