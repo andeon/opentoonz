@@ -1,3 +1,5 @@
+
+
 #include "tfxparam.h"
 #include "tparamset.h"
 #include "stdfx.h"
@@ -7,7 +9,7 @@
 #include "ttzpimagefx.h"
 #include "toonz/tdistort.h"
 #include "texturefxP.h"
-#include "tparamuiconcept.h"  // *** ADDED: For the complete definition of TParamUIConcept ***
+#include "tparamuiconcept.h" 
 
 //==============================================================================
 
@@ -50,7 +52,7 @@ public:
                      const TRenderSettings &infoOnOutput, TRectD &rectOnInput,
                      TRenderSettings &infoOnInput, TRectD &inBBox);
 
-  void getParamUIs(TParamUIConcept *&concepts, int &length) override;  // *** NEW DECLARATION ***
+  void getParamUIs(TParamUIConcept *&concepts, int &length) override;
 
 private:
   TRasterFxPort m_input;
@@ -188,19 +190,6 @@ bool CornerPinFx::doGetBBox(double frame, TRectD &bBox,
   if (m_input.isConnected()) {
     bool ret = m_input->doGetBBox(frame, bBox, info);
 
-    // *** OPTIONAL: Expand bbox by the destination cage to avoid clipping ***
-    // if (!m_deactivate->getValue()) {
-    //   TPointD p00_a = m_p00_a->getValue(frame);
-    //   TPointD p10_a = m_p10_a->getValue(frame);
-    //   TPointD p01_a = m_p01_a->getValue(frame);
-    //   TPointD p11_a = m_p11_a->getValue(frame);
-    //   double xMin = std::min({p00_a.x, p10_a.x, p01_a.x, p11_a.x});
-    //   double yMin = std::min({p00_a.y, p10_a.y, p01_a.y, p11_a.y});
-    //   double xMax = std::max({p00_a.x, p10_a.x, p01_a.x, p11_a.x});
-    //   double yMax = std::max({p00_a.y, p10_a.y, p01_a.y, p11_a.y});
-    //   bBox *= TRectD(xMin, yMin, xMax, yMax);
-    // }
-
     return ret;
   } else {
     bBox = TRectD();
@@ -251,12 +240,10 @@ void CornerPinFx::transform(double frame, int port, const TRectD &rectOnOutput,
   TPointD p11_a = m_p11_a->getValue(frame);
 
   // NOTE 1: An appropriate scale factor is sent below in the schematic,
-  // depending
-  // on the image distortion. For example, if the distortion brings a 2 scale
-  // factor,
+  // depending on the image distortion.
+  // For example, if the distortion brings a 2 scale factor,
   // we want the same factor applied on image levels, so that their detail is
-  // appropriate
-  // (especially for vector images).
+  // appropriate (especially for vector images).
 
   double scale = 0;
   scale        = std::max(scale, norm(p10_a - p00_a) / norm(p10_b - p00_b));
@@ -683,7 +670,7 @@ yMin=std::min(points.m_p00.y,points.m_p01.y,points.m_p10.y,points.m_p11.y);
 }
 */
 
-// *** NEW IMPLEMENTATION: Enables the cage UI ***
+// Enables the cage UI
 void CornerPinFx::getParamUIs(TParamUIConcept *&concepts, int &length) {
   concepts = new TParamUIConcept[length = 6];
 
