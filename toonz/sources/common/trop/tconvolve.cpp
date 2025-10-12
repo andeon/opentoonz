@@ -39,12 +39,14 @@ void doConvolve_row_9_i(PIXOUT *pixout, int n, PIXIN *pixarr[], long w[]) {
   p8 = pixarr[7];
   p9 = pixarr[8];
 
+  // Calculate right shift based on channel size difference
   int rightShift = 16 +
                    ((int)sizeof(typename PIXIN::Channel) -
                     (int)sizeof(typename PIXOUT::Channel)) *
                        8;
 
   while (n-- > 0) {
+    // Convolve each channel with 3x3 kernel weights
     pixout->r = (typename PIXOUT::Channel)(
         (p1->r * w1 + p2->r * w2 + p3->r * w3 + p4->r * w4 + p5->r * w5 +
          p6->r * w6 + p7->r * w7 + p8->r * w8 + p9->r * w9 + (1 << 15)) >>
@@ -62,6 +64,7 @@ void doConvolve_row_9_i(PIXOUT *pixout, int n, PIXIN *pixarr[], long w[]) {
          p6->m * w6 + p7->m * w7 + p8->m * w8 + p9->m * w9 + (1 << 15)) >>
         rightShift);
 
+    // Move to next pixel in all arrays
     p1++;
     p2++;
     p3++;
@@ -104,11 +107,11 @@ void doConvolve_cm32_row_9_i(PIXOUT *pixout, int n, TPixelCM32 *pixarr[],
   p8 = pixarr[7];
   p9 = pixarr[8];
 
-  // FIX: Create array of pointers to sample the correct neighbor for each i
-  TPixelCM32 *ps[9] = {p1, p2, p3, p4, p5, p6, p7, p8, p9};
+  // FIX: Create pixarr array directly to sample correct neighbors
+  TPixelCM32 **ps = pixarr;
 
   while (n-- > 0) {
-    // FIXED LOOP: Now uses ps[i] to get the correct pixel for each position
+    // FIXED LOOP: Now uses ps[i] to get the correct pixel for each kernel position
     for (int i = 0; i < 9; ++i) {
       int tone  = ps[i]->getTone();
       int paint = ps[i]->getPaint();
@@ -122,6 +125,7 @@ void doConvolve_cm32_row_9_i(PIXOUT *pixout, int n, TPixelCM32 *pixarr[],
             blend(inks[ink], paints[paint], tone, TPixelCM32::getMaxTone());
     }
 
+    // Convolve the converted RGB values
     pixout->r = (typename PIXOUT::Channel)(
         (val[0].r * w1 + val[1].r * w2 + val[2].r * w3 + val[3].r * w4 +
          val[4].r * w5 + val[5].r * w6 + val[6].r * w7 + val[7].r * w8 +
@@ -142,6 +146,8 @@ void doConvolve_cm32_row_9_i(PIXOUT *pixout, int n, TPixelCM32 *pixarr[],
          val[4].m * w5 + val[5].m * w6 + val[6].m * w7 + val[7].m * w8 +
          val[8].m * w9 + (1 << 15)) >>
         16);
+    
+    // Move to next pixel in all arrays
     p1++;
     p2++;
     p3++;
@@ -163,6 +169,7 @@ void doConvolve_row_i(PIXOUT *pixout, int n, PIXIN *pixarr[], long w[],
   long ar, ag, ab, am;
   int i;
 
+  // Calculate right shift based on channel size difference
   int rightShift = 16 +
                    ((int)sizeof(typename PIXIN::Channel) -
                     (int)sizeof(typename PIXOUT::Channel)) *
@@ -170,6 +177,7 @@ void doConvolve_row_i(PIXOUT *pixout, int n, PIXIN *pixarr[], long w[],
 
   while (n-- > 0) {
     ar = ag = ab = am = 0;
+    // Accumulate weighted sum for each channel
     for (i = 0; i < pixn; i++) {
       ar += pixarr[i]->r * w[i];
       ag += pixarr[i]->g * w[i];
@@ -177,6 +185,7 @@ void doConvolve_row_i(PIXOUT *pixout, int n, PIXIN *pixarr[], long w[],
       am += pixarr[i]->m * w[i];
       pixarr[i]++;
     }
+    // Apply right shift and store results
     pixout->r = (typename PIXOUT::Channel)((ar + (1 << 15)) >> rightShift);
     pixout->g = (typename PIXOUT::Channel)((ag + (1 << 15)) >> rightShift);
     pixout->b = (typename PIXOUT::Channel)((ab + (1 << 15)) >> rightShift);
@@ -203,6 +212,7 @@ void doConvolve_cm32_row_i(PIXOUT *pixout, int n, TPixelCM32 *pixarr[],
       int tone  = pixarr[i]->getTone();
       int paint = pixarr[i]->getPaint();
       int ink   = pixarr[i]->getInk();
+      // Convert CM32 pixel to RGB using palette
       if (tone == TPixelCM32::getMaxTone())
         val = paints[paint];
       else if (tone == 0)
@@ -210,12 +220,14 @@ void doConvolve_cm32_row_i(PIXOUT *pixout, int n, TPixelCM32 *pixarr[],
       else
         val = blend(inks[ink], paints[paint], tone, TPixelCM32::getMaxTone());
 
+      // Accumulate weighted RGB values
       ar += val.r * w[i];
       ag += val.g * w[i];
       ab += val.b * w[i];
       am += val.m * w[i];
       pixarr[i]++;
     }
+    // Store convolved result
     pixout->r = (typename PIXOUT::Channel)((ar + (1 << 15)) >> 16);
     pixout->g = (typename PIXOUT::Channel)((ag + (1 << 15)) >> 16);
     pixout->b = (typename PIXOUT::Channel)((ab + (1 << 15)) >> 16);
@@ -247,7 +259,7 @@ void doConvolve_3_i(TRasterPT<PIXOUT> rout, TRasterPT<PIXIN> rin, int dx,
   wrapin  = rin->getWrap();
   wrapout = rout->getWrap();
 
-  /* calcolo l'area di output interessata */
+  // Calculate the output area affected by convolution
   x1 = std::max(0, -dx - 1);
   y1 = std::max(0, -dy - 1);
   x2 = std::min(rout->getLx() - 1, -dx + rin->getLx());
@@ -259,6 +271,7 @@ void doConvolve_3_i(TRasterPT<PIXOUT> rout, TRasterPT<PIXIN> rin, int dx,
   bufferout = rout->pixels();
 
   for (y = y1; y <= y2; y++) {
+    // Calculate valid y-range for kernel
     fy1 = std::max(-1, -dy - y);
     fy2 = std::min(1, -dy + rin->getLy() - 1 - y);
     if (fy1 > fy2) continue;
@@ -267,13 +280,17 @@ void doConvolve_3_i(TRasterPT<PIXOUT> rout, TRasterPT<PIXIN> rin, int dx,
     pixin  = bufferin + wrapin * (y + dy) + (x + dx);
 
     while (x <= x2) {
+      // Calculate valid x-range for kernel
       fx1 = std::max(-1, -dx - x);
       fx2 = std::min(1, -dx + rin->getLx() - 1 - x);
+      // Determine how many pixels we can process in this segment
       if (x > -dx && x < -dx + rin->getLx() - 1)
         n = std::min(-dx + rin->getLx() - 1 - x, x2 - x + 1);
       else
         n = 1;
       if (n < 1) break;
+      
+      // Build pixel and weight arrays for current kernel position
       pixn = 0;
       for (fy = fy1; fy <= fy2; fy++)
         for (fx = fx1; fx <= fx2; fx++) {
@@ -281,10 +298,13 @@ void doConvolve_3_i(TRasterPT<PIXOUT> rout, TRasterPT<PIXIN> rin, int dx,
           w[pixn]      = (long)(conv[(fy + 1) * 3 + fx + 1] * (1 << 16));
           pixn++;
         }
+      
+      // Use optimized 3x3 convolution or generic version
       if (pixn == 9)
         doConvolve_row_9_i<PIXOUT, PIXIN>(pixout, n, pixarr, w);
       else
         doConvolve_row_i<PIXOUT, PIXIN>(pixout, n, pixarr, w, pixn);
+      
       x += n;
       pixin += n;
       pixout += n;
@@ -320,7 +340,7 @@ void doConvolve_i(TRasterPT<PIXOUT> rout, TRasterPT<PIXIN> rin, int dx, int dy,
   wrapin  = rin->getWrap();
   wrapout = rout->getWrap();
 
-  /* calcolo l'area di output interessata */
+  // Calculate the output area affected by convolution
   x1 = std::max(0, -dx - 1);
   y1 = std::max(0, -dy - 1);
   x2 = std::min(rout->getLx() - 1, -dx + rin->getLx());
@@ -332,6 +352,7 @@ void doConvolve_i(TRasterPT<PIXOUT> rout, TRasterPT<PIXIN> rin, int dx, int dy,
   bufferout = rout->pixels();
 
   for (y = y1; y <= y2; y++) {
+    // Calculate valid y-range for kernel
     fy1 = std::max(radius0, -dy - y);
     fy2 = std::min(radius1, -dy - y + rin->getLy() - 1);
     if (fy1 > fy2) continue;
@@ -340,13 +361,17 @@ void doConvolve_i(TRasterPT<PIXOUT> rout, TRasterPT<PIXIN> rin, int dx, int dy,
     pixin  = bufferin + wrapin * (y + dy) + (x + dx);
 
     while (x <= x2) {
+      // Calculate valid x-range for kernel
       fx1 = std::max(radius0, -dx - x);
       fx2 = std::min(radius1, -dx - x + rin->getLx() - 1);
+      // Determine how many pixels we can process in this segment
       if (x > -dx && x < -dx + rin->getLx() - 1)
         n = std::min(-dx + rin->getLx() - 1 - x, x2 - x + 1);
       else
         n = 1;
       if (n < 1) break;
+      
+      // Build pixel and weight arrays for current kernel position
       pixn = 0;
       for (fy = fy1; fy <= fy2; fy++)
         for (fx = fx1; fx <= fx2; fx++) {
@@ -356,6 +381,7 @@ void doConvolve_i(TRasterPT<PIXOUT> rout, TRasterPT<PIXIN> rin, int dx, int dy,
           pixn++;
         }
 
+      // Process convolution for this segment
       doConvolve_row_i<PIXOUT, PIXIN>(pixout, n, pixarr.get(), w.get(), pixn);
 
       x += n;
@@ -389,12 +415,13 @@ void doConvolve_cm32_3_i(TRasterPT<PIXOUT> rout, TRasterCM32P rin,
   wrapin  = rin->getWrap();
   wrapout = rout->getWrap();
 
-  /* calcolo l'area di output interessata */
+  // Calculate the output area affected by convolution
   x1 = std::max(0, -dx - 1);
   y1 = std::max(0, -dy - 1);
   x2 = std::min(rout->getLx() - 1, -dx + rin->getLx());
   y2 = std::min(rout->getLy() - 1, -dy + rin->getLy());
 
+  // Prepare color tables from palette
   int colorCount = palette->getStyleCount();
   colorCount     = std::max(
       {colorCount, TPixelCM32::getMaxInk(), TPixelCM32::getMaxPaint()});
@@ -407,10 +434,12 @@ void doConvolve_cm32_3_i(TRasterPT<PIXOUT> rout, TRasterCM32P rin,
   TPixelCM32 *bufferin = rin->pixels();
   PIXOUT *bufferout    = rout->pixels();
 
+  // Fill paint and ink color tables
   for (int i  = 0; i < palette->getStyleCount(); i++)
     paints[i] = inks[i] = palette->getStyle(i)->getAverageColor();
 
   for (y = y1; y <= y2; y++) {
+    // Calculate valid y-range for kernel
     fy1 = std::max(-1, -dy - y);
     fy2 = std::min(1, -dy + rin->getLy() - 1 - y);
     if (fy1 > fy2) continue;
@@ -419,13 +448,17 @@ void doConvolve_cm32_3_i(TRasterPT<PIXOUT> rout, TRasterCM32P rin,
     pixin  = bufferin + wrapin * (y + dy) + (x + dx);
 
     while (x <= x2) {
+      // Calculate valid x-range for kernel
       fx1 = std::max(-1, -dx - x);
       fx2 = std::min(1, -dx + rin->getLx() - 1 - x);
+      // Determine how many pixels we can process in this segment
       if (x > -dx && x < -dx + rin->getLx() - 1)
         n = std::min(-dx + rin->getLx() - 1 - x, x2 - x + 1);
       else
         n = 1;
       if (n < 1) break;
+      
+      // Build pixel and weight arrays for current kernel position
       pixn = 0;
       for (fy = fy1; fy <= fy2; fy++)
         for (fx = fx1; fx <= fx2; fx++) {
@@ -433,10 +466,13 @@ void doConvolve_cm32_3_i(TRasterPT<PIXOUT> rout, TRasterCM32P rin,
           w[pixn]      = (long)(conv[(fy + 1) * 3 + fx + 1] * (1 << 16));
           pixn++;
         }
+      
+      // Use optimized 3x3 convolution or generic version for CM32
       if (pixn == 9)
         doConvolve_cm32_row_9_i<PIXOUT>(pixout, n, pixarr, w, paints, inks);
       else
         doConvolve_cm32_row_i<PIXOUT>(pixout, n, pixarr, w, pixn, paints, inks);
+      
       x += n;
       pixin += n;
       pixout += n;
@@ -470,12 +506,13 @@ void doConvolve_cm32_i(TRasterPT<PIXOUT> rout, TRasterCM32P rin,
   wrapin  = rin->getWrap();
   wrapout = rout->getWrap();
 
-  /* calcolo l'area di output interessata */
+  // Calculate the output area affected by convolution
   x1 = std::max(0, -dx - 1);
   y1 = std::max(0, -dy - 1);
   x2 = std::min(rout->getLx() - 1, -dx + rin->getLx());
   y2 = std::min(rout->getLy() - 1, -dy + rin->getLy());
 
+  // Prepare color tables from palette
   int colorCount = palette->getStyleCount();
   colorCount     = std::max(
       {colorCount, TPixelCM32::getMaxInk(), TPixelCM32::getMaxPaint()});
@@ -488,10 +525,12 @@ void doConvolve_cm32_i(TRasterPT<PIXOUT> rout, TRasterCM32P rin,
   TPixelCM32 *bufferin = rin->pixels();
   PIXOUT *bufferout    = rout->pixels();
 
+  // Fill paint and ink color tables
   for (int i  = 0; i < palette->getStyleCount(); i++)
     paints[i] = inks[i] = palette->getStyle(i)->getAverageColor();
 
   for (y = y1; y <= y2; y++) {
+    // Calculate valid y-range for kernel
     fy1 = std::max(radius0, -dy - y);
     fy2 = std::min(radius1, -dy + rin->getLy() - 1 - y);
     if (fy1 > fy2) continue;
@@ -500,13 +539,17 @@ void doConvolve_cm32_i(TRasterPT<PIXOUT> rout, TRasterCM32P rin,
     pixin  = bufferin + wrapin * (y + dy) + (x + dx);
 
     while (x <= x2) {
+      // Calculate valid x-range for kernel
       fx1 = std::max(radius0, -dx - x);
       fx2 = std::min(radius1, -dx + rin->getLx() - 1 - x);
+      // Determine how many pixels we can process in this segment
       if (x > -dx && x < -dx + rin->getLx() - 1)
         n = std::min(-dx + rin->getLx() - 1 - x, x2 - x + 1);
       else
         n = 1;
       if (n < 1) break;
+      
+      // Build pixel and weight arrays for current kernel position
       pixn = 0;
       for (fy = fy1; fy <= fy2; fy++)
         for (fx = fx1; fx <= fx2; fx++) {
@@ -516,6 +559,7 @@ void doConvolve_cm32_i(TRasterPT<PIXOUT> rout, TRasterCM32P rin,
           pixn++;
         }
 
+      // Process convolution for CM32 pixels
       doConvolve_cm32_row_i<PIXOUT>(pixout, n, pixarr.get(), w.get(), pixn,
                                     paints, inks);
 
