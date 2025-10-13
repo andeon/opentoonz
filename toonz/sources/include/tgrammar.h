@@ -4,6 +4,7 @@
 #define TGRAMMAR_INCLUDED
 
 #include <memory>
+#include <string_view>  // C++17: for std::string_view
 
 // TnzCore includes
 #include "tcommon.h"
@@ -191,7 +192,7 @@ public:
                           const std::vector<Token> &tokens) const = 0;
 
   std::string getDescription() const { return m_description; }
-  void setDescription(std::string description) { m_description = description; }
+  void setDescription(std::string_view description) { m_description = std::string(description); }  // C++17: Use string_view to avoid unnecessary copies
 
   // helper methods
   CalculatorNode *popNode(std::vector<CalculatorNode *> &stack) const;
@@ -216,7 +217,7 @@ public:
 
   // returns matching <keywords, comment>
   typedef std::vector<std::pair<std::string, std::string>> Suggestions;
-  void getSuggestions(Suggestions &suggetsions, Position position) const;
+  void getSuggestions(Suggestions &suggestions, Position position) const;  // Fixed typo: suggetsions -> suggestions
 
 private:
   // not implemented

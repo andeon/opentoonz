@@ -17,7 +17,6 @@
 #include <math.h>
 #include <functional>
 #include <memory>
-#include <string_view>  // C++17: for std::string_view
 
 // Qt includes
 #include <QString>
