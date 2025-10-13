@@ -2,6 +2,9 @@ name: Enhanced OpenToonz Code Analysis
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - '**'
 
 jobs:
   Ubuntu:
@@ -31,20 +34,22 @@ jobs:
           libqt5serialport5-dev libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev \
           libpng-dev libjpeg-dev libglew-dev freeglut3-dev libfreetype6-dev libjson-c-dev \
           libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2
-    - name: Install cppcheck
-      run: sudo apt-get install -y cppcheck
 
-    - name: Run cppcheck
-      run: |
-        cppcheck --enable=all --inconclusive --quiet --std=c++17 --force \
-                 --suppress=missingIncludeSystem \
-                 -I toonz/sources/include \
-                 toonz/sources 2> cppcheck_report.txt || true
-        cat cppcheck_report.txt
-    - uses: actions/upload-artifact@v4
-      with:
-        name: cppcheck-report-${{ matrix.compiler }}
-        path: cppcheck_report.txt
+#    - name: Install cppcheck
+#      run: sudo apt-get install -y cppcheck
+
+#    - name: Run cppcheck
+#      run: |
+#        cppcheck --enable=all --inconclusive --quiet --std=c++17 --force \
+#                 --suppress=missingIncludeSystem \
+#                 -I toonz/sources/include \
+#                 toonz/sources 2> cppcheck_report.txt || true
+#        cat cppcheck_report.txt
+
+#    - uses: actions/upload-artifact@v4
+#      with:
+#        name: cppcheck-report-${{ matrix.compiler }}
+#        path: cppcheck_report.txt
 
     - name: Set up cache
       run: mkdir -p /home/runner/.ccache
@@ -56,11 +61,13 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-${{ matrix.compiler }}-
           ${{ runner.os }}-
+          
     - name: Build libtiff
       run: |
         cd thirdparty/tiff-4.0.3
         CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
         make -j $(nproc)
+        
     - name: Build
       run: |
         export CCACHE_DIR=/home/runner/.ccache
@@ -76,24 +83,26 @@ jobs:
           -DCMAKE_C_COMPILER=${{ matrix.cc }} \
           -DWITH_TRANSLATION=OFF
         ninja
-    - name: Install clang-tidy
-      run: sudo apt-get install -y clang-tidy
+        
+#    - name: Install clang-tidy
+#      run: sudo apt-get install -y clang-tidy
 
-    - name: Run clang-tidy
-      run: |
-        find toonz/sources/common/ -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_common_report.txt || true
+#    - name: Run clang-tidy
+#      run: |
+#        find toonz/sources/common/ -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_common_report.txt || true
         # find toonz/sources/stdfx -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_stdfx_report.txt || true
         
-    - uses: actions/upload-artifact@v4
-      with:
-        name: clang-tidy-report
-        path: clang_tidy_common_report.txt
+#    - uses: actions/upload-artifact@v4
+#      with:
+#        name: clang-tidy-report
+#        path: clang_tidy_common_report.txt
         
     - name: Install Infer
       run: |
         VERSION=1.2.0
-        curl -sSL https://github.com/facebook/infer/releases/download/v$VERSION/infer-linux64-v$VERSION.tar.xz | tar -xJ
-        echo "$PWD/infer-linux64-v$VERSION/bin" >> $GITHUB_PATH
+        curl -sSL "https://github.com/facebook/infer/releases/download/v$VERSION/infer-linux-x86_64-v$VERSION.tar.xz" | tar -xJ
+        sudo mv infer-linux-x86_64-v$VERSION /opt/infer
+        sudo ln -s /opt/infer/bin/infer /usr/local/bin/infer
 
     - name: Run Infer Static Analyzer (only on common/trop)
       run: |
