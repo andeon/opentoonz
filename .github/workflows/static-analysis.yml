@@ -103,21 +103,21 @@ jobs:
         sudo mv infer-linux-x86_64-v$VERSION /opt/infer
         sudo ln -s /opt/infer/bin/infer /usr/local/bin/infer
         
-    - name: Filter compile_commands.json to trop only
+    - name: Filter compile_commands.json to _selected
       run: |
         cd toonz/build
         if [ ! -f compile_commands.json ]; then
           echo "compile_commands.json not found."
           exit 1
         fi
-        jq '[.[] | select(.file | test("common/tvrender"))]' compile_commands.json > compile_commands_tvrender.json
+        jq '[.[] | select(.file | test("common/tvrender") or test("common/tiio"))]' compile_commands.json > compile_commands_selected.json
         
-    - name: Run Infer Static Analyzer (only on common/tvrender)
+    - name: Run Infer Static Analyzer (only _selected)
       run: |
         cd toonz
         mkdir -p infer-out
         infer capture \
-          --compilation-database build/compile_commands_tvrender.json \
+          --compilation-database build/compile_commands_selected.json \
           --reactive \
           --continue
         infer analyze \
