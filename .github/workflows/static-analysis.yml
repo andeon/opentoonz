@@ -120,9 +120,7 @@ jobs:
           --reactive \
           --continue
         infer analyze \
-          --results-dir infer-out \
-          --no-default-checkers \
-          --checkers=biabduction,linters,threadsafety
+          --results-dir infer-out
 
     - uses: actions/upload-artifact@v4
       with:
