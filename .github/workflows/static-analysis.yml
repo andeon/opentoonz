@@ -101,47 +101,30 @@ jobs:
         VERSION=1.2.0
         curl -sSL "https://github.com/facebook/infer/releases/download/v$VERSION/infer-linux-x86_64-v$VERSION.tar.xz" | tar -xJ
         sudo mv infer-linux-x86_64-v$VERSION /opt/infer
-        sudo ln -sf /opt/infer/bin/infer /usr/local/bin/infer
-    
-    - name: Filter compile_commands.json to common only
+        sudo ln -s /opt/infer/bin/infer /usr/local/bin/infer
+        
+    - name: Filter compile_commands.json to trop only
       run: |
         cd toonz/build
         if [ ! -f compile_commands.json ]; then
           echo "compile_commands.json not found."
           exit 1
         fi
-        jq '[.[] | select(.file | test("common"))]' compile_commands.json > compile_commands_common.json
-    
-    - name: Run Infer Static Analyzer (batched by compile_commands.json)
+        jq '[.[] | select(.file | test("common/tvrender"))]' compile_commands.json > compile_commands_tvrender.json
+        
+    - name: Run Infer Static Analyzer (only on common/tvrender)
       run: |
         cd toonz
         mkdir -p infer-out
-        cd build
-        # Divide compile_commands_common.json em batches de 50 comandos
-        jq -c '.[]' compile_commands_common.json | split -l 50 - batch_
-    
-        for batch in batch_*; do
-          echo "Processing batch $batch"
-          # Reconstrói JSON válido com colchetes e vírgulas
-          echo "[" > current_batch.json
-          sed '$!s/$/,/' $batch >> current_batch.json
-          echo "]" >> current_batch.json
-    
-          # Executa capture com o mesmo diretório de saída do analyze
-          cd ..
-          batch_dir="infer-out/batch-$(basename $batch)"
-          infer capture \
-            --compilation-database build/current_batch.json \
-            --results-dir "$batch_dir" \
-            --continue --reactive
-    
-          infer analyze --results-dir "$batch_dir" || true
-          cd build
-        done
-    
+        infer capture \
+          --compilation-database build/compile_commands_tvrender.json \
+          --reactive \
+          --continue
+        infer analyze \
+          --results-dir infer-out
     - uses: actions/upload-artifact@v4
       with:
-        name: infer-report-trop
+        name: infer-report-tvrender
         path: toonz/infer-out
 
         
