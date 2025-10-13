@@ -119,8 +119,9 @@ jobs:
         split -l 50 filelist.txt batch_
         for batch in batch_*; do
           echo "Processing batch $batch"
+          files=$(paste -sd, $batch)  # converte lista em vírgula separada
           infer capture --compilation-database build/compile_commands_common.json \
-            --source-files $(cat $batch) --continue --reactive
+            --source-files "$files" --continue --reactive
           infer analyze --results-dir infer-out/batch-$(basename $batch) || true
         done
     
