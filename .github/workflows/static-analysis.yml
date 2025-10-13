@@ -87,8 +87,7 @@ jobs:
 
     - name: Run clang-tidy
       run: |
-        jq -r '.[].file' toonz/build/compile_commands.json | grep '^toonz/sources/common/' | xargs clang-tidy -p=toonz/build > clang_tidy_common_report.txt || true
-        # find toonz/sources/common/ -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_common_report.txt || true
+        find toonz/sources/common/ -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_common_report.txt || true
         # find toonz/sources/stdfx -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_stdfx_report.txt || true
         
     - uses: actions/upload-artifact@v4
@@ -110,7 +109,7 @@ jobs:
           echo "compile_commands.json not found."
           exit 1
         fi
-        jq '[.[] | select(.file | test("common/(expressions|psdlib|tapptools|tvrender|tiio|tcolor)/"))]' compile_commands.json > compile_commands_selected.json
+        jq '[.[] | select(.file | test("common/(expressions|psdlib|tapptools|tcache|tcolor|tcore|tvrender|tiio|tcolor)/"))]' compile_commands.json > compile_commands_selected.json
         
     - name: Run Infer Static Analyzer (only _selected)
       run: |
