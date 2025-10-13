@@ -50,15 +50,20 @@ jobs:
         CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
         make -j $(nproc)
         
-    - name: Build
+    - name: Build project
       run: |
         export CCACHE_DIR=/home/runner/.ccache
         export CC="ccache ${{ matrix.cc }}"
         export CXX="ccache ${{ matrix.cxx }}"
         cd toonz
-        mkdir build
+        mkdir -p build
         cd build
-        cmake ../sources -G Ninja -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCMAKE_C_COMPILER=${{ matrix.cc }} -DWITH_TRANSLATION=OFF
+        cmake ../sources -G Ninja \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+          -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+          -DWITH_TRANSLATION=OFF
         ninja
         
 #    - name: Install cppcheck
@@ -100,14 +105,21 @@ jobs:
     - name: Filter compile_commands.json to trop only
       run: |
         cd toonz/build
+        if [ ! -f compile_commands.json ]; then
+          echo "❌ compile_commands.json not found."
+          exit 1
+        fi
         jq '[.[] | select(.file | test("common/trop"))]' compile_commands.json > compile_commands_trop.json
-    
+
     - name: Run Infer Static Analyzer (only on common/trop)
       run: |
         cd toonz
         mkdir -p infer-out
-        infer analyze \
+        infer capture \
           --compilation-database build/compile_commands_trop.json \
+          --reactive \
+          --continue
+        infer analyze \
           --results-dir infer-out \
           --no-default-checkers \
           --checkers=biabduction,linters,threadsafety
