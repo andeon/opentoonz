@@ -127,11 +127,15 @@ jobs:
           sed '$!s/$/,/' $batch >> current_batch.json
           echo "]" >> current_batch.json
     
-          # Executa o infer capture e analyze
+          # Executa capture com o mesmo diretório de saída do analyze
           cd ..
-          infer capture --compilation-database build/current_batch.json \
+          batch_dir="infer-out/batch-$(basename $batch)"
+          infer capture \
+            --compilation-database build/current_batch.json \
+            --results-dir "$batch_dir" \
             --continue --reactive
-          infer analyze --results-dir infer-out/batch-$(basename $batch) || true
+    
+          infer analyze --results-dir "$batch_dir" || true
           cd build
         done
     
