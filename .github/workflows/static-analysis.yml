@@ -1,6 +1,7 @@
 name: Enhanced OpenToonz Code Analysis
 
-on: [push, pull_request]
+on:
+  workflow_dispatch:
 
 jobs:
   Ubuntu:
@@ -73,50 +74,46 @@ jobs:
           -DCMAKE_C_COMPILER=${{ matrix.cc }} \
           -DWITH_TRANSLATION=OFF
         ninja
-        
     - name: Install clang-tidy
       run: sudo apt-get install -y clang-tidy
-      
+
     - name: Run clang-tidy
       run: |
-        find toonz/sources/common/trop -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_trop_report.txt || true
+        find toonz/sources/common/ -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_common_report.txt || true
         # find toonz/sources/stdfx -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_stdfx_report.txt || true
+        
     - uses: actions/upload-artifact@v4
       with:
         name: clang-tidy-report
-        path: clang_tidy_trop_report.txt
-        # path: clang_tidy_stdfx_report.txt
+        path: clang_tidy_common_report.txt
         
-  StaticAnalysis:
-    needs: Ubuntu
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
+    - name: Install Infer
+      run: |
+        VERSION=1.2.0
+        curl -sSL https://github.com/facebook/infer/releases/download/v$VERSION/infer-linux64-v$VERSION.tar.xz | tar -xJ
+        echo "$PWD/infer-linux64-v$VERSION/bin" >> $GITHUB_PATH
 
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build clang-tools
+    - name: Run Infer Static Analyzer (only on common/trop)
+      run: |
+        cd toonz
+        mkdir -p infer-out
+        infer capture \
+          --compilation-database build/compile_commands.json \
+          --reactive \
+          --continue \
+          -- \
+          find sources/common/trop -name '*.cpp' -exec clang++ -c -std=c++17 -I sources/include {} \;
 
-      - name: Configure with CMake
-        run: |
-          cd toonz
-          mkdir build-analyze
-          cd build-analyze
-          cmake ../sources -G Ninja \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-            -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_C_COMPILER=clang \
-            -DWITH_TRANSLATION=OFF
+        infer analyze \
+          --results-dir infer-out \
+          --no-default-checkers \
+          --checkers=biabduction,linters,threadsafety
 
-      - name: Full scan-build analysis
-        run: |
-          cd toonz/build-analyze
-          scan-build -o ../../scan_report ninja || true
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: clang-static-analyzer-full-build
-          path: scan_report
-
+    - uses: actions/upload-artifact@v4
+      with:
+        name: infer-report-trop
+        path: toonz/infer-out
+        
 #    - name: Create Artifact
 #      run: |
 #        cd toonz/build
