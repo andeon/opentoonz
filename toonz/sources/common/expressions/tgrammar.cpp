@@ -17,6 +17,7 @@
 #include <math.h>
 #include <functional>
 #include <memory>
+#include <string_view>  // C++17: for std::string_view
 
 // Qt includes
 #include <QString>
@@ -33,7 +34,7 @@ namespace TSyntax {
 //
 // RandomManager
 //
-//   es. x = RandomManager::instance()->getValue(seed, frame);
+//   e.g. x = RandomManager::instance()->getValue(seed, frame);
 //
 //-------------------------------------------------------------------
 
@@ -239,7 +240,7 @@ public:
       static inline double compute(const TDoubleParam &param, double f) {
         if (param.getKeyframeCount() >= 2 &&
             f < param.keyframeIndexToFrame(0)) {
-          TDoubleKeyframe kf = param.getKeyframe(0);
+          const TDoubleKeyframe &kf = param.getKeyframe(0);
           if (kf.m_type == TDoubleKeyframe::Expression ||
               kf.m_type == TDoubleKeyframe::SimilarShape)
             return param.getDefaultValue();
@@ -396,10 +397,10 @@ class ConstantPattern final : public Pattern {
   double m_value;
 
 public:
-  ConstantPattern(std::string constantName, double value,
-                  std::string description = "")
+  ConstantPattern(std::string_view constantName, double value,
+                  std::string_view description = "")
       : m_constantName(constantName), m_value(value) {
-    setDescription(description);
+    setDescription(std::string(description));
   }
 
   std::string getFirstKeyword() const override { return m_constantName; }
@@ -430,10 +431,10 @@ class VariablePattern final : public Pattern {
   int m_varIdx;
 
 public:
-  VariablePattern(std::string variableName, int varIdx,
-                  std::string description = "")
+  VariablePattern(std::string_view variableName, int varIdx,
+                  std::string_view description = "")
       : m_variableName(variableName), m_varIdx(varIdx) {
-    setDescription(description);
+    setDescription(std::string(description));
   }
 
   std::string getFirstKeyword() const override { return m_variableName; }
@@ -466,7 +467,7 @@ class Op2Pattern final : public Pattern {
   int m_priority;
 
 public:
-  Op2Pattern(std::string opName, int priority)
+  Op2Pattern(std::string_view opName, int priority)
       : m_opName(opName), m_priority(priority) {}
   int getPriority() const override { return m_priority; }
   std::string getFirstKeyword() const override { return m_opName; }
@@ -535,8 +536,8 @@ class NotPattern final : public Pattern {
   std::string m_prefix;
 
 public:
-  NotPattern(std::string prefix, std::string description) : m_prefix(prefix) {
-    setDescription(description);
+  NotPattern(std::string_view prefix, std::string_view description) : m_prefix(prefix) {
+    setDescription(std::string(description));
   }
   int getPriority() const override { return 5; }
   std::string getFirstKeyword() const override { return m_prefix; }
@@ -648,7 +649,7 @@ protected:
   std::vector<double> m_optionalArgDefaults;
 
 public:
-  FunctionPattern(std::string functionName, int minArgCount)
+  FunctionPattern(std::string_view functionName, int minArgCount)
       : m_functionName(functionName)
       , m_implicitArgAllowed(false)
       , m_minArgCount(minArgCount) {}
@@ -750,10 +751,10 @@ public:
 template <class Function>
 class F0Pattern final : public FunctionPattern {
 public:
-  F0Pattern(std::string functionName) : FunctionPattern(functionName, 0) {}
+  F0Pattern(std::string_view functionName) : FunctionPattern(functionName, 0) {}
   void createNode(Calculator *calc, std::vector<CalculatorNode *> &stack,
                   const std::vector<Token> &tokens) const override {
-    stack.push_back(new Op0Node<Function>(calc, m_functionName));
+    stack.push_back(new Op0Node<Function>(calc));
   }
 };
 
@@ -762,9 +763,9 @@ public:
 template <class Function>
 class F1Pattern final : public FunctionPattern {
 public:
-  F1Pattern(std::string functionName, std::string descr = "")
+  F1Pattern(std::string_view functionName, std::string_view descr = "")
       : FunctionPattern(functionName, 1) {
-    setDescription(descr);
+    setDescription(std::string(descr));
   }
   void createNode(Calculator *calc, std::vector<CalculatorNode *> &stack,
                   const std::vector<Token> &tokens) const override {
@@ -777,9 +778,9 @@ public:
 template <class Function>
 class F2Pattern final : public FunctionPattern {
 public:
-  F2Pattern(std::string functionName, std::string descr = "")
+  F2Pattern(std::string_view functionName, std::string_view descr = "")
       : FunctionPattern(functionName, 2) {
-    setDescription(descr);
+    setDescription(std::string(descr));
   }
   void createNode(Calculator *calc, std::vector<CalculatorNode *> &stack,
                   const std::vector<Token> &tokens) const override {
@@ -794,9 +795,9 @@ public:
 template <class Function>
 class F3Pattern final : public FunctionPattern {
 public:
-  F3Pattern(std::string functionName, std::string descr = "")
+  F3Pattern(std::string_view functionName, std::string_view descr = "")
       : FunctionPattern(functionName, 3) {
-    setDescription(descr);
+    setDescription(std::string(descr));
   }
   void createNode(Calculator *calc, std::vector<CalculatorNode *> &stack,
                   const std::vector<Token> &tokens) const override {
@@ -812,10 +813,10 @@ public:
 template <class Function>
 class Fs2Pattern final : public FunctionPattern {
 public:
-  Fs2Pattern(std::string functionName, std::string description)
+  Fs2Pattern(std::string_view functionName, std::string_view description)
       : FunctionPattern(functionName, 1) {
     allowImplicitArg(true);
-    setDescription(description);
+    setDescription(std::string(description));
   }
   void createNode(Calculator *calc, std::vector<CalculatorNode *> &stack,
                   const std::vector<Token> &tokens) const override {
@@ -830,11 +831,11 @@ public:
 template <class Function>
 class Fs3Pattern final : public FunctionPattern {
 public:
-  Fs3Pattern(std::string functionName, double defVal, std::string descr)
+  Fs3Pattern(std::string_view functionName, double defVal, std::string_view descr)
       : FunctionPattern(functionName, 1) {
     allowImplicitArg(true);
     addOptionalArg(defVal);
-    setDescription(descr);
+    setDescription(std::string(descr));
   }
   void createNode(Calculator *calc, std::vector<CalculatorNode *> &stack,
                   const std::vector<Token> &tokens) const override {
@@ -848,7 +849,7 @@ public:
 
 class CyclePattern final : public FunctionPattern {
 public:
-  CyclePattern(std::string functionName) : FunctionPattern(functionName, 1) {
+  CyclePattern(std::string_view functionName) : FunctionPattern(functionName, 1) {
     setDescription(
         "cycle(period)\nCycles the transitions of the period previous frames "
         "to the selected range");
@@ -866,12 +867,12 @@ class RandomPattern final : public FunctionPattern {
   bool m_seed;
 
 public:
-  RandomPattern(std::string functionName, bool seed, std::string description)
+  RandomPattern(std::string_view functionName, bool seed, std::string_view description)
       : FunctionPattern(functionName, seed ? 1 : 0), m_seed(seed) {
     allowImplicitArg(true);
     addOptionalArg(0);
     addOptionalArg(0);
-    setDescription(description);
+    setDescription(std::string(description));
   }
   void createNode(Calculator *calc, std::vector<CalculatorNode *> &stack,
                   const std::vector<Token> &tokens) const override {
@@ -893,13 +894,13 @@ class PeriodicRandomPattern final : public FunctionPattern {
   bool m_seed;
 
 public:
-  PeriodicRandomPattern(std::string functionName, bool seed,
-                        std::string description)
+  PeriodicRandomPattern(std::string_view functionName, bool seed,
+                        std::string_view description)
       : FunctionPattern(functionName, seed ? 2 : 1), m_seed(seed) {
     allowImplicitArg(true);
     addOptionalArg(0);
     addOptionalArg(0);
-    setDescription(description);
+    setDescription(std::string(description));
   }
   void createNode(Calculator *calc, std::vector<CalculatorNode *> &stack,
                   const std::vector<Token> &tokens) const override {
@@ -928,12 +929,12 @@ public:
   PatternTable(Grammar::Position position) : m_position(position) {}
 
   ~PatternTable() {
-    for (std::map<std::string, Pattern *>::iterator it = m_kTable.begin();
-         it != m_kTable.end(); ++it)
-      delete it->second;
-    for (std::vector<Pattern *>::iterator it = m_uTable.begin();
-         it != m_uTable.end(); ++it)
-      delete *it;
+    for (auto&& [key, pattern] : m_kTable) {  // C++17 structured binding
+      delete pattern;
+    }
+    for (auto&& pattern : m_uTable) {  // C++17 structured binding
+      delete pattern;
+    }
   }
 
   void addPattern(Pattern *pattern) {
@@ -987,7 +988,7 @@ public:
 
 //===================================================================
 //
-// funzioni trigonometriche, log, exp, ecc.
+// trigonometric functions, log, exp, etc.
 //
 //-------------------------------------------------------------------
 
