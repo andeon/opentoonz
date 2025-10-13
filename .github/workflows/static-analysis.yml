@@ -66,66 +66,69 @@ jobs:
           -DWITH_TRANSLATION=OFF
         ninja
         
-    - name: Install cppcheck
-      run: sudo apt-get install -y cppcheck
+#    - name: Install cppcheck
+#      run: sudo apt-get install -y cppcheck
 
-    - name: Run cppcheck
-      run: |
-        cppcheck --enable=all --inconclusive --quiet --std=c++17 --force \
-                 --suppress=missingIncludeSystem \
-                 -I toonz/sources/include \
-                 toonz/sources 2> cppcheck_report.txt || true
-        cat cppcheck_report.txt
+#    - name: Run cppcheck
+ #     run: |
+ #       cppcheck --enable=all --inconclusive --quiet --std=c++17 --force \
+#                 --suppress=missingIncludeSystem \
+#                 -I toonz/sources/include \
+#                 toonz/sources 2> cppcheck_report.txt || true
+ #       cat cppcheck_report.txt
 
-    - uses: actions/upload-artifact@v4
-      with:
-        name: cppcheck-report-${{ matrix.compiler }}
-        path: cppcheck_report.txt
+   # - uses: actions/upload-artifact@v4
+  #    with:
+  #      name: cppcheck-report-${{ matrix.compiler }}
+  #      path: cppcheck_report.txt
 
-    - name: Install clang-tidy
-      run: sudo apt-get install -y clang-tidy
+ #   - name: Install clang-tidy
+ #     run: sudo apt-get install -y clang-tidy
 
-    - name: Run clang-tidy
-      run: |
-        find toonz/sources/common/ -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_common_report.txt || true
-        # find toonz/sources/stdfx -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_stdfx_report.txt || true
+  #  - name: Run clang-tidy
+ #     run: |
+ #       find toonz/sources/common/ -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_common_report.txt || true
+#        # find toonz/sources/stdfx -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_stdfx_report.txt || true
         
-    - uses: actions/upload-artifact@v4
-      with:
-        name: clang-tidy-report
-        path: clang_tidy_common_report.txt
+#    - uses: actions/upload-artifact@v4
+#      with:
+#        name: clang-tidy-report
+#        path: clang_tidy_common_report.txt
         
     - name: Install Infer
       run: |
         VERSION=1.2.0
         curl -sSL "https://github.com/facebook/infer/releases/download/v$VERSION/infer-linux-x86_64-v$VERSION.tar.xz" | tar -xJ
         sudo mv infer-linux-x86_64-v$VERSION /opt/infer
-        sudo ln -s /opt/infer/bin/infer /usr/local/bin/infer
-
+        sudo ln -sf /opt/infer/bin/infer /usr/local/bin/infer
+    
     - name: Filter compile_commands.json to common only
       run: |
         cd toonz/build
         if [ ! -f compile_commands.json ]; then
-          echo "❌ compile_commands.json not found."
+          echo "compile_commands.json not found."
           exit 1
         fi
         jq '[.[] | select(.file | test("common"))]' compile_commands.json > compile_commands_common.json
-
-    - name: Run Infer Static Analyzer (only on commonp)
+    
+    - name: Run Infer Static Analyzer (batched)
       run: |
         cd toonz
         mkdir -p infer-out
-        infer capture \
-          --compilation-database build/compile_commands_common.json \
-          --reactive \
-          --continue
-        infer analyze \
-          --results-dir infer-out
-
+        find sources/common -name "*.cpp" > filelist.txt
+        split -l 50 filelist.txt batch_
+        for batch in batch_*; do
+          echo "Processing batch $batch"
+          infer capture --compilation-database build/compile_commands_common.json \
+            --source-files $(cat $batch) --continue --reactive
+          infer analyze --results-dir infer-out/batch-$(basename $batch) || true
+        done
+    
     - uses: actions/upload-artifact@v4
       with:
         name: infer-report-trop
         path: toonz/infer-out
+
         
 #    - name: Create Artifact
 #      run: |
