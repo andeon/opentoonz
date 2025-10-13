@@ -1,0 +1,264 @@
+name: Enhanced OpenToonz Code Analysis
+
+on: [push, pull_request]
+
+jobs:
+  Ubuntu:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        compiler: [clang]
+       #  compiler: [gcc, clang]
+        include:
+      # - compiler: gcc
+      #   cc: gcc
+      #   cxx: g++
+          - compiler: clang
+            cc: clang
+            cxx: clang++
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Install libraries
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake pkg-config ninja-build ccache \
+          libboost-all-dev qtbase5-dev qt5-qmake qtscript5-dev qttools5-dev qttools5-dev-tools \
+          qtmultimedia5-dev qtwayland5 libqt5svg5-dev libqt5opengl5-dev libqt5multimedia5-plugins \
+          libqt5serialport5-dev libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev \
+          libpng-dev libjpeg-dev libglew-dev freeglut3-dev libfreetype6-dev libjson-c-dev \
+          libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2
+    - name: Install cppcheck
+      run: sudo apt-get install -y cppcheck
+
+    - name: Run cppcheck
+      run: |
+        cppcheck --enable=all --inconclusive --quiet --std=c++17 --force \
+                 --suppress=missingIncludeSystem \
+                 -I toonz/sources/include \
+                 toonz/sources 2> cppcheck_report.txt || true
+        cat cppcheck_report.txt
+    - uses: actions/upload-artifact@v4
+      with:
+        name: cppcheck-report-${{ matrix.compiler }}
+        path: cppcheck_report.txt
+
+    - name: Set up cache
+      run: mkdir -p /home/runner/.ccache
+
+    - uses: actions/cache@v4
+      with:
+        path: /home/runner/.ccache
+        key: ${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.compiler }}-
+          ${{ runner.os }}-
+    - name: Build libtiff
+      run: |
+        cd thirdparty/tiff-4.0.3
+        CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
+        make -j $(nproc)
+    - name: Build
+      run: |
+        export CCACHE_DIR=/home/runner/.ccache
+        export CC="ccache ${{ matrix.cc }}"
+        export CXX="ccache ${{ matrix.cxx }}"
+        cd toonz
+        mkdir build
+        cd build
+        cmake ../sources -G Ninja \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+          -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+          -DWITH_TRANSLATION=OFF
+        ninja
+        
+    - name: Install clang-tidy
+      run: sudo apt-get install -y clang-tidy
+      
+    - name: Run clang-tidy
+      run: |
+        find toonz/sources/common/trop -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_trop_report.txt || true
+        # find toonz/sources/stdfx -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_stdfx_report.txt || true
+    - uses: actions/upload-artifact@v4
+      with:
+        name: clang-tidy-report
+        path: clang_tidy_trop_report.txt
+        # path: clang_tidy_stdfx_report.txt
+        
+  StaticAnalysis:
+    needs: Ubuntu
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build clang-tools
+
+      - name: Configure with CMake
+        run: |
+          cd toonz
+          mkdir build-analyze
+          cd build-analyze
+          cmake ../sources -G Ninja \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang \
+            -DWITH_TRANSLATION=OFF
+
+      - name: Full scan-build analysis
+        run: |
+          cd toonz/build-analyze
+          scan-build -o ../../scan_report ninja || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clang-static-analyzer-full-build
+          path: scan_report
+
+#    - name: Create Artifact
+#      run: |
+#        cd toonz/build
+#        sudo ninja install
+
+#        mkdir -p appdir/usr
+#        cp -r /opt/opentoonz/* appdir/usr
+#        cp appdir/usr/share/applications/*.desktop appdir
+#        cp appdir/usr/share/icons/hicolor/*/apps/*.png appdir
+
+#        mkdir artifact
+#        mv appdir/usr/share/opentoonz/stuff artifact/portablestuff
+#        rmdir appdir/usr/share/opentoonz
+
+#        wget -q -c 'https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage'
+#        wget -q -c 'https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage'
+#        wget -q -c 'https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage'
+#        chmod 755 linuxdeploy-x86_64.AppImage
+#        chmod 755 linuxdeploy-plugin-qt-x86_64.AppImage
+#        chmod 755 linuxdeploy-plugin-appimage-x86_64.AppImage
+
+#        cat << EOF > apprun.sh
+#        #!/usr/bin/env bash
+#        exec "\${APPDIR}/usr/bin/OpenToonz"
+#        EOF
+#        chmod 755 apprun.sh
+
+#        export LD_LIBRARY_PATH='appdir/usr/lib/opentoonz'
+#        ./linuxdeploy-x86_64.AppImage --appdir=appdir --plugin=qt --output=appimage --custom-apprun=apprun.sh \
+#        --executable=appdir/usr/bin/lzocompress \
+#        --executable=appdir/usr/bin/lzodecompress \
+#        --executable=appdir/usr/bin/tcleanup \
+#        --executable=appdir/usr/bin/tcomposer \
+#        --executable=appdir/usr/bin/tconverter \
+#        --executable=appdir/usr/bin/tfarmcontroller \
+#        --executable=appdir/usr/bin/tfarmserver
+#        mv OpenToonz*.AppImage artifact/OpenToonz.AppImage
+#        ARTIFACT_NAME=Opentoonz-${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
+#        mv artifact ${ARTIFACT_NAME}
+#        tar zcf ${ARTIFACT_NAME}.tar.gz ${ARTIFACT_NAME}
+
+#    - uses: actions/upload-artifact@v4
+#      with:
+#        name: Opentoonz-${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
+#        path: toonz/build/Opentoonz-${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}.tar.gz
+
+
+#       ✅ Linting step (clang-format)
+#      - name: Run clang-format check
+#        uses: jidicula/clang-format-action@v4.13.0
+#        with:
+#          clang-format-version: '17'
+#          fallback-style: 'Google'          # Can be LLVM, Mozilla, etc.
+#          exclude-regex: '^./thirdparty/.*$|^//.*$'
+
+#       ❌ Install required libraries
+#      - name: Install libraries
+#        run: |
+#          sudo apt-get update
+#          sudo apt-get install -y build-essential cmake pkg-config ninja-build ccache \
+#            libboost-all-dev qtbase5-dev qt5-qmake qtscript5-dev qttools5-dev \
+#            qttools5-dev-tools qtmultimedia5-dev qtwayland5 libqt5svg5-dev \
+#            libqt5opengl5-dev libqt5multimedia5-plugins libqt5serialport5-dev \
+#            libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev libpng-dev \
+#            libjpeg-dev libglew-dev freeglut3-dev libfreetype6-dev libjson-c-dev \
+#            libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2 \
+#            clang-14 llvm-14 libclang-14-dev llvm-14-dev \
+#            clang-tidy pkg-config
+
+#       ❌ Install IWYU
+#      - name: Install IWYU (Include-What-You-Use)
+#        if: matrix.compiler == 'clang'                
+#        run: |
+#          git clone --recursive https://github.com/include-what-you-use/include-what-you-use.git
+#          cd include-what-you-use
+#          git checkout clang_14
+#          mkdir build && cd build
+#          cmake .. -G Ninja \
+#            -DCMAKE_PREFIX_PATH="/usr/lib/llvm-14" \
+#            -DCMAKE_C_COMPILER=clang-14 \
+#            -DCMAKE_CXX_COMPILER=clang++-14
+#          ninja
+#          sudo ninja install
+#          
+#          IWYU_DIR=$(include-what-you-use -print-resource-dir 2>/dev/null || true)
+#          CLANG_DIR=$(clang -print-resource-dir)
+#          if [ -n "$IWYU_DIR" ] && [ ! -e "$IWYU_DIR" ]; then
+#            sudo mkdir -p "$(dirname "$IWYU_DIR")"
+#            sudo ln -s "$CLANG_DIR" "$IWYU_DIR"
+#          fi
+
+#       ❌ Set up cache
+#      - name: Set up cache
+#        run: mkdir -p /home/runner/.ccache
+
+#      - uses: actions/cache@v4
+#        with:
+#          path: /home/runner/.ccache
+#          key: ${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
+#          restore-keys: |
+#            ${{ runner.os }}-${{ matrix.compiler }}-
+#            ${{ runner.os }}-
+
+#       ❌ Build libtiff
+#      - name: Build libtiff
+#        run: |
+#          if [ ! -f thirdparty/tiff-4.0.3/libtiff.a ]; then
+#            cd thirdparty/tiff-4.0.3
+#            CFLAGS='-fPIC' CXXFLAGS='-fPIC' ./configure --disable-jbig
+#            make -j$(nproc)
+#          fi
+
+#     ❌ Build OpenToonz
+#      - name: Build
+#        run: |
+#          export CCACHE_DIR=/home/runner/.ccache
+#          export CC="ccache ${{ matrix.cc }}"
+#          export CXX="ccache ${{ matrix.cxx }}"
+#          mkdir -p toonz/build
+#          cd toonz/build
+#          cmake ../sources -G Ninja \
+#            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+#            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+#            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+#            -DWITH_TRANSLATION=OFF \
+#            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+#          ninja
+
+#      ❌ Run IWYU (Include-What-You-Use)
+#      - name: Run Include-What-You-Use (IWYU)
+#        if: matrix.compiler == 'clang'
+#        run: |
+#          echo "📦 Executando IWYU em todos os arquivos do tnztools com paralelismo..."
+#          cd toonz/build
+#          jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/toonzlib.*\.(cpp|c)$" > all_sources.txt
+#          cat all_sources.txt | xargs -n 1 -P $(nproc) -I {} \
+#            iwyu_tool.py -p . "{}" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
+#            2>/dev/null | tee full_iwyu_report.txt
+#          echo "📊 Análise final concluída."
+#          if grep -q "should remove" full_iwyu_report.txt; then
+#            echo "❌ IWYU encontrou headers desnecessários."
+#            exit 1
+#          else
+#            echo "✅ IWYU OK!"
+#          fi
