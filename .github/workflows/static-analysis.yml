@@ -22,8 +22,6 @@ jobs:
             cxx: clang++
     steps:
     - uses: actions/checkout@v5
-      with:
-        lfs: false
 
     - name: Install libraries
       run: |
@@ -34,23 +32,7 @@ jobs:
           libqt5serialport5-dev libsuperlu-dev liblz4-dev libusb-1.0-0-dev liblzo2-dev \
           libpng-dev libjpeg-dev libglew-dev freeglut3-dev libfreetype6-dev libjson-c-dev \
           libmypaint-dev libopencv-dev libturbojpeg-dev libomp-dev libfuse2
-
-#    - name: Install cppcheck
-#      run: sudo apt-get install -y cppcheck
-
-#    - name: Run cppcheck
-#      run: |
-#        cppcheck --enable=all --inconclusive --quiet --std=c++17 --force \
-#                 --suppress=missingIncludeSystem \
-#                 -I toonz/sources/include \
-#                 toonz/sources 2> cppcheck_report.txt || true
-#        cat cppcheck_report.txt
-
-#    - uses: actions/upload-artifact@v4
-#      with:
-#        name: cppcheck-report-${{ matrix.compiler }}
-#        path: cppcheck_report.txt
-
+          
     - name: Set up cache
       run: mkdir -p /home/runner/.ccache
 
@@ -58,7 +40,7 @@ jobs:
       with:
         path: /home/runner/.ccache
         key: ${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}
-        restore-keys: |
+        restore-keys: | 
           ${{ runner.os }}-${{ matrix.compiler }}-
           ${{ runner.os }}-
           
@@ -76,14 +58,25 @@ jobs:
         cd toonz
         mkdir build
         cd build
-        cmake ../sources -G Ninja \
-          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
-          -DCMAKE_C_COMPILER=${{ matrix.cc }} \
-          -DWITH_TRANSLATION=OFF
+        cmake ../sources -G Ninja -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DCMAKE_C_COMPILER=${{ matrix.cc }} -DWITH_TRANSLATION=OFF
         ninja
         
+#    - name: Install cppcheck
+#      run: sudo apt-get install -y cppcheck
+
+#    - name: Run cppcheck
+#      run: |
+#        cppcheck --enable=all --inconclusive --quiet --std=c++17 --force \
+#                 --suppress=missingIncludeSystem \
+#                 -I toonz/sources/include \
+#                 toonz/sources 2> cppcheck_report.txt || true
+#        cat cppcheck_report.txt
+
+#    - uses: actions/upload-artifact@v4
+#      with:
+#        name: cppcheck-report-${{ matrix.compiler }}
+#        path: cppcheck_report.txt
+
 #    - name: Install clang-tidy
 #      run: sudo apt-get install -y clang-tidy
 
@@ -104,18 +97,17 @@ jobs:
         sudo mv infer-linux-x86_64-v$VERSION /opt/infer
         sudo ln -s /opt/infer/bin/infer /usr/local/bin/infer
 
+    - name: Filter compile_commands.json to trop only
+      run: |
+        cd toonz/build
+        jq '[.[] | select(.file | test("common/trop"))]' compile_commands.json > compile_commands_trop.json
+    
     - name: Run Infer Static Analyzer (only on common/trop)
       run: |
         cd toonz
         mkdir -p infer-out
-        infer capture \
-          --compilation-database build/compile_commands.json \
-          --reactive \
-          --continue \
-          -- \
-          find sources/common/trop -name '*.cpp' -exec clang++ -c -std=c++17 -I sources/include {} \;
-
         infer analyze \
+          --compilation-database build/compile_commands_trop.json \
           --results-dir infer-out \
           --no-default-checkers \
           --checkers=biabduction,linters,threadsafety
