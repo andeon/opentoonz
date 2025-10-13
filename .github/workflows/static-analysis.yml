@@ -2,9 +2,6 @@ name: Enhanced OpenToonz Code Analysis
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - '*/*'
 
 jobs:
   Ubuntu:
@@ -22,6 +19,8 @@ jobs:
             cxx: clang++
     steps:
     - uses: actions/checkout@v5
+      with:
+        lfs: false
 
     - name: Install libraries
       run: |
