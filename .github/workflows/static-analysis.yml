@@ -83,10 +83,11 @@ jobs:
   #      path: cppcheck_report.txt
 
  #   - name: Install clang-tidy
- #     run: sudo apt-get install -y clang-tidy
+ #     run: sudo apt-get install -y clang-tidy jq
 
   #  - name: Run clang-tidy
  #     run: |
+ #       jq -r '.[].file' toonz/build/compile_commands.json | grep '^toonz/sources/common/' | xargs clang-tidy -p=toonz/build > clang_tidy_common_report.txt || true
  #       find toonz/sources/common/ -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_common_report.txt || true
 #        # find toonz/sources/stdfx -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_stdfx_report.txt || true
         
@@ -111,18 +112,27 @@ jobs:
         fi
         jq '[.[] | select(.file | test("common"))]' compile_commands.json > compile_commands_common.json
     
-    - name: Run Infer Static Analyzer (batched)
+    - name: Run Infer Static Analyzer (batched by compile_commands.json)
       run: |
         cd toonz
         mkdir -p infer-out
-        find sources/common -name "*.cpp" > filelist.txt
-        split -l 50 filelist.txt batch_
+        cd build
+        # Divide compile_commands_common.json em batches de 50 comandos
+        jq -c '.[]' compile_commands_common.json | split -l 50 - batch_
+    
         for batch in batch_*; do
           echo "Processing batch $batch"
-          files=$(paste -sd, $batch)  # converte lista em vírgula separada
-          infer capture --compilation-database build/compile_commands_common.json \
-            --source-files "$files" --continue --reactive
+          # Reconstrói JSON válido com colchetes e vírgulas
+          echo "[" > current_batch.json
+          sed '$!s/$/,/' $batch >> current_batch.json
+          echo "]" >> current_batch.json
+    
+          # Executa o infer capture e analyze
+          cd ..
+          infer capture --compilation-database build/current_batch.json \
+            --continue --reactive
           infer analyze --results-dir infer-out/batch-$(basename $batch) || true
+          cd build
         done
     
     - uses: actions/upload-artifact@v4
