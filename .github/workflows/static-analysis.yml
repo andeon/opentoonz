@@ -3,7 +3,8 @@ name: Enhanced OpenToonz Code Analysis
 on:
   workflow_dispatch:
   push:
-    branches: '**'
+    branches:
+      - '*/*'
 
 jobs:
   Ubuntu:
