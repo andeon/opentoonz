@@ -87,13 +87,13 @@ jobs:
 
     - name: Run clang-tidy
       run: |
-        find toonz/sources/common/ -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_common_report.txt || true
+        find toonz/sources/ -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_all_report.txt || true
         # find toonz/sources/stdfx -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_stdfx_report.txt || true
         
     - uses: actions/upload-artifact@v4
       with:
         name: clang-tidy-report
-        path: clang_tidy_common_report.txt
+        path: clang_tidy_all_report.txt
         
     - name: Install Infer
       run: |
@@ -102,25 +102,37 @@ jobs:
         sudo mv infer-linux-x86_64-v$VERSION /opt/infer
         sudo ln -s /opt/infer/bin/infer /usr/local/bin/infer
         
-    - name: Filter compile_commands.json to _selected
-      run: |
-        cd toonz/build
-        if [ ! -f compile_commands.json ]; then
-          echo "compile_commands.json not found."
-          exit 1
-        fi
-        jq '[.[] | select(.file | test("common/(expressions|psdlib|tapptools|tcache|tcolor|tcore|tvrender|tiio|tcolor)/"))]' compile_commands.json > compile_commands_selected.json
+#    - name: Filter compile_commands.json to _selected
+#      run: |
+#        cd toonz/build
+#        if [ ! -f compile_commands.json ]; then
+#          echo "compile_commands.json not found."
+#          exit 1
+#        fi
+#        jq '[.[] | select(.file | test("common/(expressions|psdlib|tapptools|tcache|tcolor|tcore|tvrender|tiio|tcolor)/"))]' compile_commands.json > compile_commands_selected.json
         
-    - name: Run Infer Static Analyzer (only _selected)
+#    - name: Run Infer Static Analyzer (only _selected)
+#      run: |
+#        cd toonz
+#        mkdir -p infer-out
+#        infer capture \
+#          --compilation-database build/compile_commands_selected.json \
+#          --reactive \
+#          --continue
+#        infer analyze \
+#          --results-dir infer-out
+    
+    - name: Run Infer Static Analyzer
       run: |
         cd toonz
         mkdir -p infer-out
         infer capture \
-          --compilation-database build/compile_commands_selected.json \
+          --compilation-database build/compile_commands.json \
           --reactive \
           --continue
         infer analyze \
           --results-dir infer-out
+          
     - uses: actions/upload-artifact@v4
       with:
         name: infer-report-tvrender
