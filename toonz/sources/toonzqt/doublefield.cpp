@@ -1,9 +1,12 @@
 
 
 #include <math.h>
+#include <array>
+
 #include "toonzqt/doublefield.h"
 #include "toonzqt/dvdialog.h"
 #include "tunit.h"
+
 
 #include <QDoubleValidator>
 #include <QHBoxLayout>
