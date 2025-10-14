@@ -82,18 +82,19 @@ jobs:
   #      name: cppcheck-report-${{ matrix.compiler }}
   #      path: cppcheck_report.txt
 
-    - name: Install clang-tidy
-      run: sudo apt-get install -y clang-tidy
+#    - name: Install clang-tidy
+#      run: sudo apt-get install -y clang-tidy
 
-    - name: Run clang-tidy
-      run: |
-        find toonz/sources/ -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_all_report.txt || true
+#    - name: Run clang-tidy
+#      run: |
+#        find toonz/sources/common -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_common_report.txt || true
+#        find toonz/sources/ -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_all_report.txt || true
         # find toonz/sources/stdfx -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_stdfx_report.txt || true
         
-    - uses: actions/upload-artifact@v4
-      with:
-        name: clang-tidy-report
-        path: clang_tidy_all_report.txt
+#    - uses: actions/upload-artifact@v4
+#      with:
+#        name: clang-tidy-report
+#        path: clang_tidy_common_report.txt
         
     - name: Install Infer
       run: |
