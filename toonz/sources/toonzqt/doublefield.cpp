@@ -27,8 +27,8 @@ void DoubleValueLineEdit::focusOutEvent(QFocusEvent *e) {
       qobject_cast<MeasuredDoubleLineEdit *>(this);
   if (lineEdit) {
     int decimal  = lineEdit->getDecimals();
-    isOutOfRange = (value < minValue - pow(0.1, decimal + 1) ||
-                    value > maxValue + pow(0.1, decimal + 1));
+    isOutOfRange = (value < minValue - std::pow(0.1, decimal + 1) ||
+                    value > maxValue + std::pow(0.1, decimal + 1));
   } else
     isOutOfRange = (value < minValue || value > maxValue);
 
@@ -100,11 +100,11 @@ DoubleValueField::DoubleValueField(QWidget *parent,
 
   //---- layout
   QHBoxLayout *layout = new QHBoxLayout(this);
-  layout->setMargin(0);
+  layout->setContentsMargins(0,0,0,0);
   layout->setSpacing(5);
   {
     QVBoxLayout *vLayout = new QVBoxLayout(field);
-    vLayout->setMargin(0);
+    vLayout->setContentsMargins(0,0,0,0);
     vLayout->setSpacing(0);
     {
       vLayout->addWidget(m_lineEdit);
@@ -145,30 +145,34 @@ DoubleValueField::DoubleValueField(QWidget *parent,
 //-----------------------------------------------------------------------------
 
 double DoubleValueField::pos2value(int x) const {
-  int decimal = m_lineEdit->getDecimals();
-  if (m_isLinearSlider) return (double)x * pow(0.1, decimal);
+  const int decimal = m_lineEdit->getDecimals();
+  if (m_isLinearSlider) return static_cast<double>(x) * std::pow(0.1, decimal);
 
-  // nonlinear slider case
-  double rangeSize = (double)(m_slider->maximum() - m_slider->minimum());
-  double posRatio  = (double)(x - m_slider->minimum()) / rangeSize;
-  double t;
-  if (posRatio <= 0.5)
-    t = 0.04 * posRatio;
-  else if (posRatio <= 0.75)
-    t = -0.02 + 0.08 * posRatio;
-  else if (posRatio <= 0.9)
-    t = -0.26 + 0.4 * posRatio;
-  else
-    t = -8.0 + 9.0 * posRatio;
-  double sliderValue = round((double)m_slider->minimum() + rangeSize * t);
-  return sliderValue * pow(0.1, decimal);
+  // nonlinear slider case - use constexpr where is possile
+  constexpr std::array<double, 4> thresholds{0.5, 0.75, 0.9, 1.0};
+  const double rangeSize = static_cast<double>(m_slider->maximum() - m_slider->minimum());
+  const double posRatio  = static_cast<double>(x - m_slider->minimum()) / rangeSize;
+  
+  double t = 0.0;
+  if (posRatio <= thresholds[0]) {
+      t = 0.04 * posRatio;
+  } else if (posRatio <= thresholds[1]) {
+      t = -0.02 + 0.08 * posRatio;
+  } else if (posRatio <= thresholds[2]) {
+      t = -0.26 + 0.4 * posRatio;
+  } else {
+      t = -8.0 + 9.0 * posRatio;
+  }
+
+  const double sliderValue = std::round(static_cast<double>(m_slider->minimum()) + rangeSize * t);
+  return sliderValue * std::pow(0.1, decimal);
 }
 
 //-----------------------------------------------------------------------------
 
 int DoubleValueField::value2pos(double v) const {
   int decimal        = m_lineEdit->getDecimals();
-  double sliderValue = round(v * pow(10., decimal));
+  double sliderValue = round(v * std::pow(10., decimal));
   if (m_isLinearSlider) return (int)sliderValue;
 
   // nonlinear slider case
@@ -200,8 +204,8 @@ void DoubleValueField::setRange(double minValue, double maxValue) {
   m_roller->setRange(minValue, maxValue);
 
   int decimal   = m_lineEdit->getDecimals();
-  int sliderMax = (int)round(maxValue * pow(10., decimal));
-  int sliderMin = (int)round(minValue * pow(10., decimal));
+  int sliderMax = (int)round(maxValue * std::pow(10., decimal));
+  int sliderMin = (int)round(minValue * std::pow(10., decimal));
 
   m_slider->setRange(sliderMin, sliderMax);
 
@@ -352,7 +356,7 @@ void DoubleLineEdit::setValue(double value) {
 double DoubleLineEdit::getValue() {
   // FIX: Normalize comma to dot for parsing, allowing both "3.5" and "3,5" regardless of system locale
   QString normalizedText = text().replace(',', '.');
-  return normalizedText.toDouble();
+  return QLocale::c().toDouble(normalizedText);
 }
 
 //-----------------------------------------------------------------------------
@@ -390,7 +394,7 @@ DoubleField::DoubleField(QWidget *parent, bool isRollerHide, int decimals)
   lineEdit->setDecimals(decimals);
 
   // Set step for roller too
-  if (!isRollerHide) m_roller->setStep(pow(0.1, decimals));
+  if (!isRollerHide) m_roller->setStep(std::pow(0.1, decimals));
 }
 
 //=============================================================================
@@ -493,20 +497,23 @@ void MeasuredDoubleLineEdit::onEditingFinished() {
   int err = -10;
   // FIX: Normalize comma to dot for parsing, allowing both "3.5 px" and "3,5 px" regardless of system locale
   QString normalizedText = text().replace(',', '.');
-  m_value->setValue(normalizedText.toStdWString(), &err);
+  bool ok = false;
+  double parsedValue = QLocale::c().toDouble(normalizedText, &ok);
+  m_value->setValue(TMeasuredValue::MainUnit, parsedValue);
 
   bool outOfRange = false;
-  if (!err) {
+  if (ok) {
     double v   = getValue();
     outOfRange = m_minValue > v || m_maxValue < v;
   }
 
-  if (err) {
+  if (!ok) {
     m_errorHighlighting = 1;
     if (m_errorHighlightingTimerId == 0)
       m_errorHighlightingTimerId = startTimer(40);
   } else {
-    if (m_errorHighlightingTimerId != 0) killTimer(m_errorHighlightingTimerId);
+    if (m_errorHighlightingTimerId != 0)
+      killTimer(m_errorHighlightingTimerId);
     m_errorHighlightingTimerId = 0;
     m_errorHighlighting        = 0;
     setStyleSheet("");
@@ -626,5 +633,5 @@ void MeasuredDoubleField::setDecimals(int decimals) {
   if (lineEdit) lineEdit->setDecimals(decimals);
 
   // Set step for roller too
-  if (isRollerEnabled()) m_roller->setStep(pow(0.1, std::max(decimals - 1, 1)));
+  if (isRollerEnabled()) m_roller->setStep(std::pow(0.1, std::max(decimals - 1, 1)));
 }
