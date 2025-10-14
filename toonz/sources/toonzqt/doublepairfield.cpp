@@ -12,6 +12,8 @@
 #include <QMouseEvent>
 #include <QSlider>
 #include <QHBoxLayout>
+#include <QDoubleValidator>
+#include <QLocale>
 
 using namespace DVGui;
 
@@ -358,6 +360,18 @@ DoublePairField::DoublePairField(QWidget *parent, bool isMaxRangeLimited)
   DoubleLineEdit *rightLineEdit =
       dynamic_cast<DoubleLineEdit *>(m_rightLineEdit);
   rightLineEdit->setDecimals(2);
+
+  // FIX: Forces English locale for parsing decimals with dot (.)
+  int decimals = 2;  // Same precision set above
+  QDoubleValidator *leftValidator = new QDoubleValidator(leftLineEdit);
+  leftValidator->setLocale(QLocale(QLocale::English, QLocale::UnitedStates));
+  leftValidator->setDecimals(decimals);
+  leftLineEdit->setValidator(leftValidator);
+
+  QDoubleValidator *rightValidator = new QDoubleValidator(rightLineEdit);
+  rightValidator->setLocale(QLocale(QLocale::English, QLocale::UnitedStates));
+  rightValidator->setDecimals(decimals);
+  rightLineEdit->setValidator(rightValidator);
 }
 
 //=============================================================================
@@ -371,6 +385,21 @@ MeasuredDoublePairField::MeasuredDoublePairField(QWidget *parent,
                            new MeasuredDoubleLineEdit(0)) {
   m_leftLineEdit->setFixedSize(63, WidgetHeight);
   m_rightLineEdit->setFixedSize(63, WidgetHeight);
+
+  // FIX: Forces English locale for parsing decimals with dot (.)
+  // Assumes default precision of 2; if you want dynamic, call setPrecision(2) here
+  int decimals = 2;
+  MeasuredDoubleLineEdit *leftLineEdit = dynamic_cast<MeasuredDoubleLineEdit *>(m_leftLineEdit);
+  QDoubleValidator *leftValidator = new QDoubleValidator(leftLineEdit);
+  leftValidator->setLocale(QLocale(QLocale::English, QLocale::UnitedStates));
+  leftValidator->setDecimals(decimals);
+  leftLineEdit->setValidator(leftValidator);
+
+  MeasuredDoubleLineEdit *rightLineEdit = dynamic_cast<MeasuredDoubleLineEdit *>(m_rightLineEdit);
+  QDoubleValidator *rightValidator = new QDoubleValidator(rightLineEdit);
+  rightValidator->setLocale(QLocale(QLocale::English, QLocale::UnitedStates));
+  rightValidator->setDecimals(decimals);
+  rightLineEdit->setValidator(rightValidator);
 }
 
 //-----------------------------------------------------------------------------
@@ -387,7 +416,8 @@ void MeasuredDoublePairField::setMeasure(std::string measureName) {
 }
 
 //-----------------------------------------------------------------------------
-/*--設定ファイルからインタフェースの精度を変える--*/
+
+/*-- Change the interface precision from the settings file --*/
 void MeasuredDoublePairField::setPrecision(int precision) {
   MeasuredDoubleLineEdit *leftLineEdit =
       dynamic_cast<MeasuredDoubleLineEdit *>(m_leftLineEdit);
@@ -395,4 +425,10 @@ void MeasuredDoublePairField::setPrecision(int precision) {
   MeasuredDoubleLineEdit *rightLineEdit =
       dynamic_cast<MeasuredDoubleLineEdit *>(m_rightLineEdit);
   if (rightLineEdit) rightLineEdit->setDecimals(precision);
+
+  // FIX: Updates validators with new precision
+  QDoubleValidator *leftValidator = qobject_cast<QDoubleValidator *>(leftLineEdit->validator());
+  if (leftValidator) leftValidator->setDecimals(precision);
+  QDoubleValidator *rightValidator = qobject_cast<QDoubleValidator *>(rightLineEdit->validator());
+  if (rightValidator) rightValidator->setDecimals(precision);
 }
