@@ -70,17 +70,17 @@ jobs:
 #      run: sudo apt-get install -y cppcheck
 
 #    - name: Run cppcheck
- #     run: |
- #       cppcheck --enable=all --inconclusive --quiet --std=c++17 --force \
+#      run: |
+#        cppcheck --enable=all --inconclusive --quiet --std=c++17 --force \
 #                 --suppress=missingIncludeSystem \
 #                 -I toonz/sources/include \
 #                 toonz/sources 2> cppcheck_report.txt || true
- #       cat cppcheck_report.txt
+#        cat cppcheck_report.txt
 
-   # - uses: actions/upload-artifact@v4
-  #    with:
-  #      name: cppcheck-report-${{ matrix.compiler }}
-  #      path: cppcheck_report.txt
+#    - uses: actions/upload-artifact@v4
+#      with:
+#        name: cppcheck-report-${{ matrix.compiler }}
+#        path: cppcheck_report.txt
 
 #    - name: Install clang-tidy
 #      run: sudo apt-get install -y clang-tidy
@@ -103,37 +103,27 @@ jobs:
         sudo mv infer-linux-x86_64-v$VERSION /opt/infer
         sudo ln -s /opt/infer/bin/infer /usr/local/bin/infer
         
-#    - name: Filter compile_commands.json to _selected
-#      run: |
-#        cd toonz/build
-#        if [ ! -f compile_commands.json ]; then
-#          echo "compile_commands.json not found."
-#          exit 1
-#        fi
+    - name: Filter compile_commands.json to _selected
+      run: |
+        cd toonz/build
+        if [ ! -f compile_commands.json ]; then
+          echo "compile_commands.json not found."
+          exit 1
+        fi
+         jq '[.[] | select(.file | test("rastertapetool.cpp"))]' compile_commands.json > compile_commands_rastertapetool.json
 #        jq '[.[] | select(.file | test("common/(expressions|psdlib|tapptools|tcache|tcolor|tcore|tvrender|tiio|tcolor)/"))]' compile_commands.json > compile_commands_selected.json
         
-#    - name: Run Infer Static Analyzer (only _selected)
-#      run: |
-#        cd toonz
-#        mkdir -p infer-out
-#        infer capture \
-#          --compilation-database build/compile_commands_selected.json \
-#          --reactive \
-#          --continue
-#        infer analyze \
-#          --results-dir infer-out
-    
-    - name: Run Infer Static Analyzer
+    - name: Run Infer Static Analyzer (only _selected)
       run: |
         cd toonz
         mkdir -p infer-out
         infer capture \
-          --compilation-database build/compile_commands.json \
+          --compilation-database build/compile_commands_selected.json \
           --reactive \
           --continue
         infer analyze \
           --results-dir infer-out
-          
+            
     - uses: actions/upload-artifact@v4
       with:
         name: infer-report-tvrender
@@ -188,7 +178,7 @@ jobs:
 #        path: toonz/build/Opentoonz-${{ runner.os }}-${{ matrix.compiler }}-${{ github.sha }}.tar.gz
 
 
-#       ✅ Linting step (clang-format)
+#         Linting step (clang-format)
 #      - name: Run clang-format check
 #        uses: jidicula/clang-format-action@v4.13.0
 #        with:
@@ -196,7 +186,7 @@ jobs:
 #          fallback-style: 'Google'          # Can be LLVM, Mozilla, etc.
 #          exclude-regex: '^./thirdparty/.*$|^//.*$'
 
-#       ❌ Install required libraries
+#        Install required libraries
 #      - name: Install libraries
 #        run: |
 #          sudo apt-get update
@@ -210,7 +200,7 @@ jobs:
 #            clang-14 llvm-14 libclang-14-dev llvm-14-dev \
 #            clang-tidy pkg-config
 
-#       ❌ Install IWYU
+#        Install IWYU
 #      - name: Install IWYU (Include-What-You-Use)
 #        if: matrix.compiler == 'clang'                
 #        run: |
@@ -232,7 +222,7 @@ jobs:
 #            sudo ln -s "$CLANG_DIR" "$IWYU_DIR"
 #          fi
 
-#       ❌ Set up cache
+#        Set up cache
 #      - name: Set up cache
 #        run: mkdir -p /home/runner/.ccache
 
@@ -244,7 +234,7 @@ jobs:
 #            ${{ runner.os }}-${{ matrix.compiler }}-
 #            ${{ runner.os }}-
 
-#       ❌ Build libtiff
+#        Build libtiff
 #      - name: Build libtiff
 #        run: |
 #          if [ ! -f thirdparty/tiff-4.0.3/libtiff.a ]; then
@@ -253,7 +243,7 @@ jobs:
 #            make -j$(nproc)
 #          fi
 
-#     ❌ Build OpenToonz
+#        Build OpenToonz
 #      - name: Build
 #        run: |
 #          export CCACHE_DIR=/home/runner/.ccache
@@ -269,20 +259,20 @@ jobs:
 #            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 #          ninja
 
-#      ❌ Run IWYU (Include-What-You-Use)
+#       Run IWYU (Include-What-You-Use)
 #      - name: Run Include-What-You-Use (IWYU)
 #        if: matrix.compiler == 'clang'
 #        run: |
-#          echo "📦 Executando IWYU em todos os arquivos do tnztools com paralelismo..."
+#          echo " Executando IWYU em todos os arquivos do tnztools com paralelismo..."
 #          cd toonz/build
 #          jq -r '.[].file' compile_commands.json | grep -E "^.*/sources/toonzlib.*\.(cpp|c)$" > all_sources.txt
 #          cat all_sources.txt | xargs -n 1 -P $(nproc) -I {} \
 #            iwyu_tool.py -p . "{}" -- -Xiwyu --mapping_file=/usr/local/share/include-what-you-use/qt5_11.imp \
 #            2>/dev/null | tee full_iwyu_report.txt
-#          echo "📊 Análise final concluída."
+#          echo " Análise final concluída."
 #          if grep -q "should remove" full_iwyu_report.txt; then
-#            echo "❌ IWYU encontrou headers desnecessários."
+#            echo " IWYU encontrou headers desnecessários."
 #            exit 1
 #          else
-#            echo "✅ IWYU OK!"
+#            echo " IWYU OK!"
 #          fi
