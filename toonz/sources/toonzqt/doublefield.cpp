@@ -379,7 +379,8 @@ void DoubleLineEdit::setValue(double value) {
   value = std::clamp(value, minValue, maxValue);
   QString str;
   str.setNum(value);
-  if (m_validator->validate(str, 0) == QValidator::Acceptable) {
+  int pos = 0;
+  if (m_validator->validate(str, pos) == QValidator::Acceptable) {
     setText(str);
     // Ensures only decimals are truncated, not leading digits.
     setCursorPosition(0);
