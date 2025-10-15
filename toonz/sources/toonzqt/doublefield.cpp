@@ -370,18 +370,15 @@ DoubleLineEdit::DoubleLineEdit(QWidget *parent, double value)
 //-----------------------------------------------------------------------------
 
 void DoubleLineEdit::setValue(double value) {
+  if (!std::isfinite(value)) return;
   double minValue, maxValue;
   getRange(minValue, maxValue);
   value = std::clamp(value, minValue, maxValue);
-  QString str;
-  str.setNum(value);
-  if (m_validator->validate(str, 0) == QValidator::Acceptable) {
-    setText(str);
+  setText(QString::number(value, 'f', m_validator->decimals()));
     // Make the cursor on the first digit, so if the string to display is longer than the field the digits that are 
     // truncated are the last ones and not the first (they should be the ones after the decimal point).
     setCursorPosition(0);
   }
-}
 
 //-----------------------------------------------------------------------------
 
@@ -592,7 +589,7 @@ void MeasuredDoubleLineEdit::mousePressEvent(QMouseEvent *e) {
 
 void MeasuredDoubleLineEdit::mouseMoveEvent(QMouseEvent *e) {
   if ((m_mouseDragEditing && (e->buttons() & Qt::MiddleButton)) || m_labelClicked) {
-    int precision = (m_maxValue > 100) ? 0 : ((m_maxValue > 10) ? 1 : 2);
+    int precision = getDecimals();
     m_value->modifyValue((e->x() - m_xMouse) / 2, precision);
     m_xMouse = e->x();
     valueToText();
