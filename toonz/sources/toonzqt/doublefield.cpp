@@ -2,7 +2,7 @@
 
 #include <math.h>
 #include <array>
-#include <QtGlobal> // para qFuzzyCompare
+#include <QtGlobal>
 
 #include "toonzqt/doublefield.h"
 #include "toonzqt/dvdialog.h"
@@ -26,20 +26,20 @@ void DoubleValueLineEdit::focusOutEvent(QFocusEvent *e) {
   getRange(minValue, maxValue);
 
   bool isOutOfRange;
-  // Absorb rounding errors
-  MeasuredDoubleLineEdit *lineEdit =
-      qobject_cast<MeasuredDoubleLineEdit *>(this);
+  MeasuredDoubleLineEdit *lineEdit = dynamic_cast<MeasuredDoubleLineEdit *>(this);
   if (lineEdit) {
     int decimal  = lineEdit->getDecimals();
     isOutOfRange = (value < minValue - std::pow(0.1, decimal + 1) ||
                     value > maxValue + std::pow(0.1, decimal + 1));
-  } else
+  } else {
     isOutOfRange = (value < minValue || value > maxValue);
+  }
 
   if (isOutOfRange) {
     setValue(tcrop(value, minValue, maxValue));
     emit editingFinished();
   }
+
   QLineEdit::focusOutEvent(e);
   m_isTyping = false;
 }
@@ -144,11 +144,11 @@ DoubleValueField::DoubleValueField(QWidget *parent,
                        SLOT(onRollerValueChanged(bool)));
   ret      = ret && connect(m_slider, SIGNAL(valueChanged(int)),
                        SLOT(onSliderChanged(int)));
-  ret      = ret &&
-        connect(m_slider, SIGNAL(sliderReleased()), SLOT(onSliderReleased()));
-  ret = ret && connect(m_lineEdit, SIGNAL(editingFinished()), this,
+  ret      = ret && connect(m_slider, SIGNAL(sliderReleased()),
+                       SLOT(onSliderReleased()));
+  ret      = ret && connect(m_lineEdit, SIGNAL(editingFinished()), this,
                        SIGNAL(valueEditedByHand()));
-  ret = ret && connect(m_slider, SIGNAL(sliderReleased()), this,
+  ret      = ret && connect(m_slider, SIGNAL(sliderReleased()), this,
                        SIGNAL(valueEditedByHand()));
   assert(ret);
 
@@ -236,12 +236,20 @@ void DoubleValueField::setRange(double minValue, double maxValue) {
 //-----------------------------------------------------------------------------
 
 void DoubleValueField::setValue(double value) {
-  if (qFuzzyCompare(m_lineEdit->getValue() + 1.0, value + 1.0)) return;
+  if (!std::isfinite(value) || qFuzzyCompare(m_lineEdit->getValue() + 1.0, value + 1.0)) return;
+  double minValue, maxValue;
+  getRange(minValue, maxValue);
+  value = std::clamp(value, minValue, maxValue);
+  bool signalsBlocked = m_slider->blockSignals(true);
   m_lineEdit->setValue(value);
   m_roller->setValue(value);
-  m_slider->setValue(value2pos(value));
-  // Force repaint... sometimes it doesn't update and update doesn't seem to solve the problem!!!
-  m_slider->update();
+  int newSliderPos = value2pos(value);
+  if (m_slider->value() != newSliderPos) {
+    m_slider->setValue(newSliderPos);
+    // Force repaint... sometimes it doesn't update and update doesn't seem to solve the problem!!!
+    m_slider->update();
+  }
+  m_slider->blockSignals(signalsBlocked);
 }
 
 //-----------------------------------------------------------------------------
@@ -364,14 +372,15 @@ DoubleLineEdit::DoubleLineEdit(QWidget *parent, double value)
 void DoubleLineEdit::setValue(double value) {
   double minValue, maxValue;
   getRange(minValue, maxValue);
-  if (value < minValue) value = minValue;
-  if (value > maxValue) value = maxValue;
+  value = std::clamp(value, minValue, maxValue);
   QString str;
   str.setNum(value);
-  setText(str);
-
-  // Make the cursor on the first digit, so if the string to display is longer than the field the digits that are truncated are the last ones and not the first (they should be the ones after the decimal point).
-  setCursorPosition(0);
+  if (m_validator->validate(str, 0) == QValidator::Acceptable) {
+    setText(str);
+    // Make the cursor on the first digit, so if the string to display is longer than the field the digits that are 
+    // truncated are the last ones and not the first (they should be the ones after the decimal point).
+    setCursorPosition(0);
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -598,12 +607,12 @@ void MeasuredDoubleLineEdit::mouseMoveEvent(QMouseEvent *e) {
 
 void MeasuredDoubleLineEdit::mouseReleaseEvent(QMouseEvent *e) {
   if ((m_mouseDragEditing && e->buttons() == Qt::NoButton) || m_labelClicked) {
-    m_xMouse = -1;
+    m_xMouse   = -1;
     m_modified = true;
     onEditingFinished();
     clearFocus();
     m_mouseDragEditing = false;
-    m_labelClicked = false;
+    m_labelClicked     = false;
     e->accept();
   } else {
     QLineEdit::mouseReleaseEvent(e);
@@ -646,10 +655,8 @@ void MeasuredDoubleField::setMeasure(std::string measureName) {
 //-----------------------------------------------------------------------------
 
 void MeasuredDoubleField::setDecimals(int decimals) {
-  MeasuredDoubleLineEdit *lineEdit =
-      qobject_cast<MeasuredDoubleLineEdit *>(m_lineEdit);
+  MeasuredDoubleLineEdit *lineEdit = dynamic_cast<MeasuredDoubleLineEdit *>(m_lineEdit);
   if (lineEdit) lineEdit->setDecimals(decimals);
-
   // Set step for roller too
   if (isRollerEnabled()) m_roller->setStep(std::pow(0.1, std::max(decimals - 1, 1)));
 }
