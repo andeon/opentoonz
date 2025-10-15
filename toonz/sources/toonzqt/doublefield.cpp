@@ -171,10 +171,16 @@ double DoubleValueField::pos2value(int x) const {
   const int decimal = m_lineEdit->getDecimals();
   if (m_isLinearSlider) return static_cast<double>(x) * std::pow(0.1, decimal);
 
-  // nonlinear slider case - use constexpr where is possile
-  constexpr std::array<double, 4> thresholds{0.5, 0.75, 0.9, 1.0};
+  // nonlinear slider case - use constexpr where is possible
+  static constexpr std::array<double, 4> thresholds{0.5, 0.75, 0.9, 1.0};
   const double rangeSize = static_cast<double>(m_slider->maximum() - m_slider->minimum());
-  const double posRatio  = static_cast<double>(x - m_slider->minimum()) / rangeSize;
+  
+  // Safety check for zero range
+  if (std::abs(rangeSize) < std::numeric_limits<double>::epsilon()) {
+      return static_cast<double>(x) * std::pow(0.1, decimal);
+  }
+  
+  const double posRatio = static_cast<double>(x - m_slider->minimum()) / rangeSize;
 
   double t = 0.0;
   if (posRatio <= thresholds[0]) {
