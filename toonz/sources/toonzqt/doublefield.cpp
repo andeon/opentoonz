@@ -377,11 +377,14 @@ void DoubleLineEdit::setValue(double value) {
   double minValue, maxValue;
   getRange(minValue, maxValue);
   value = std::clamp(value, minValue, maxValue);
-  setText(QString::number(value, 'f', m_validator->decimals()));
-    // Make the cursor on the first digit, so if the string to display is longer than the field the digits that are 
-    // truncated are the last ones and not the first (they should be the ones after the decimal point).
+  QString str;
+  str.setNum(value);
+  if (m_validator->validate(str, 0) == QValidator::Acceptable) {
+    setText(str);
+    // Ensures only decimals are truncated, not leading digits.
     setCursorPosition(0);
   }
+}
 
 //-----------------------------------------------------------------------------
 
