@@ -2,6 +2,7 @@
 
 #include <math.h>
 #include <array>
+#include <QtGlobal> // para qFuzzyCompare
 
 #include "toonzqt/doublefield.h"
 #include "toonzqt/dvdialog.h"
@@ -46,7 +47,7 @@ void DoubleValueLineEdit::focusOutEvent(QFocusEvent *e) {
 //-----------------------------------------------------------------------------
 
 void DoubleValueLineEdit::mousePressEvent(QMouseEvent *e) {
-  if (e->button() == Qt::MiddleButton) {
+  if (e->buttons() == Qt::MiddleButton) {
     m_xMouse           = e->x();
     m_mouseDragEditing = true;
     e->accept();
@@ -67,21 +68,38 @@ void DoubleValueLineEdit::mouseMoveEvent(QMouseEvent *e) {
     m_xMouse = e->x();
     emit valueChanged();
     e->accept();
-  } else
+  } else {
     QLineEdit::mouseMoveEvent(e);
+  }
 }
+
 
 //-----------------------------------------------------------------------------
 
 void DoubleValueLineEdit::mouseReleaseEvent(QMouseEvent *e) {
-  if (m_mouseDragEditing && e->button() == Qt::MiddleButton) {
+  if (m_mouseDragEditing && e->buttons() == Qt::NoButton) {
     m_mouseDragEditing = false;
     clearFocus();
     e->accept();
-  } else
+  } else {
     QLineEdit::mouseReleaseEvent(e);
+  }
 }
 
+//-----------------------------------------------------------------------------
+
+void DoubleValueLineEdit::keyPressEvent(QKeyEvent *event) {
+    // Allow users to type comma as decimal separator by converting it to a dot.
+    if (event->text() == ",") {
+        QKeyEvent dotEvent(QEvent::KeyPress, Qt::Key_Period, Qt::NoModifier, ".");
+        QLineEdit::keyPressEvent(&dotEvent);
+    } else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+        emit editingFinished();
+        clearFocus();
+    } else {
+        QLineEdit::keyPressEvent(event);
+    }
+}
 //=============================================================================
 // DoubleValueField
 //-----------------------------------------------------------------------------
@@ -118,7 +136,7 @@ DoubleValueField::DoubleValueField(QWidget *parent,
   }
   setLayout(layout);
 
-  //---- signal-slot connections
+  //---- signal/slot connections
   bool ret = true;
   ret      = ret && connect(m_lineEdit, SIGNAL(valueChanged()),
                        SLOT(onLineEditValueChanged()));
@@ -139,7 +157,7 @@ DoubleValueField::DoubleValueField(QWidget *parent,
   layout->addWidget(m_spaceWidget, 1, Qt::AlignLeft);
 
   setRange(-100.0, 100.0);
-  
+
   double value = getValue();
   m_roller->setValue(value);
   m_slider->setValue(value2pos(value));
@@ -155,7 +173,7 @@ double DoubleValueField::pos2value(int x) const {
   constexpr std::array<double, 4> thresholds{0.5, 0.75, 0.9, 1.0};
   const double rangeSize = static_cast<double>(m_slider->maximum() - m_slider->minimum());
   const double posRatio  = static_cast<double>(x - m_slider->minimum()) / rangeSize;
-  
+
   double t = 0.0;
   if (posRatio <= thresholds[0]) {
       t = 0.04 * posRatio;
@@ -218,12 +236,12 @@ void DoubleValueField::setRange(double minValue, double maxValue) {
 //-----------------------------------------------------------------------------
 
 void DoubleValueField::setValue(double value) {
-  if (m_lineEdit->getValue() == value) return;
+  if (qFuzzyCompare(m_lineEdit->getValue() + 1.0, value + 1.0)) return;
   m_lineEdit->setValue(value);
   m_roller->setValue(value);
   m_slider->setValue(value2pos(value));
   // Force repaint... sometimes it doesn't update and update doesn't seem to solve the problem!!!
-  m_slider->repaint();
+  m_slider->update();
 }
 
 //-----------------------------------------------------------------------------
@@ -276,8 +294,8 @@ void DoubleValueField::onSliderChanged(int sliderPos) {
   double val = pos2value(sliderPos);
 
   // Control necessary to prevent the change signal from being emitted more than once.
-  if (m_lineEdit->getValue() == val ||
-      (m_roller->getValue() == val && m_roller->isVisible()))
+  if (qFuzzyCompare(m_lineEdit->getValue() + 1.0, val + 1.0) ||
+      (qFuzzyCompare(m_roller->getValue() + 1.0, val + 1.0) && m_roller->isVisible()))
     return;
   m_lineEdit->setValue(val);
   m_roller->setValue(val);
@@ -294,8 +312,8 @@ void DoubleValueField::onLineEditValueChanged() {
   int decimal  = m_lineEdit->getDecimals();
 
   // Control necessary to prevent the change signal from being emitted more than once.
-  if ((pos2value(m_slider->value()) == value && m_slider->isVisible()) ||
-      (m_roller->getValue() == value && m_roller->isVisible()))
+  if ((qFuzzyCompare(pos2value(m_slider->value()) + 1.0, value + 1.0) && m_slider->isVisible()) ||
+      (qFuzzyCompare(m_roller->getValue() + 1.0, value + 1.0) && m_roller->isVisible()))
     return;
   m_slider->setValue(value2pos(value));
   m_roller->setValue(value);
@@ -307,8 +325,8 @@ void DoubleValueField::onLineEditValueChanged() {
 void DoubleValueField::onRollerValueChanged(bool isDragging) {
   double value = m_roller->getValue();
 
-  if (value == m_lineEdit->getValue()) {
-    assert(pos2value(m_slider->value()) == value || !m_slider->isVisible());
+  if (qFuzzyCompare(value + 1.0, m_lineEdit->getValue() + 1.0)) {
+    assert(qFuzzyCompare(pos2value(m_slider->value()) + 1.0, value + 1.0) || !m_slider->isVisible());
     // If isDragging is false, it's right that the change notification is emitted.
     if (!isDragging) emit valueChanged(isDragging);
     return;
@@ -331,6 +349,8 @@ DoubleLineEdit::DoubleLineEdit(QWidget *parent, double value)
   m_validator =
       new QDoubleValidator(-(std::numeric_limits<double>::max)(),
                            (std::numeric_limits<double>::max)(), 5, this);
+  m_validator->setLocale(QLocale::c());
+
   setValidator(m_validator);
 
   setValue(value);
@@ -357,9 +377,7 @@ void DoubleLineEdit::setValue(double value) {
 //-----------------------------------------------------------------------------
 
 double DoubleLineEdit::getValue() {
-  // FIX: Normalize comma to dot for parsing, allowing both "3.5" and "3,5" regardless of system locale
-  QString normalizedText = text().replace(',', '.');
-  return QLocale::c().toDouble(normalizedText);
+  return QLocale::c().toDouble(text());
 }
 
 //-----------------------------------------------------------------------------
@@ -498,25 +516,20 @@ void MeasuredDoubleLineEdit::onEditingFinished() {
   QString oldStyleSheet = styleSheet();
 
   int err = -10;
-  // FIX: Normalize comma to dot for parsing, allowing both "3.5 px" and "3,5 px" regardless of system locale
-  QString normalizedText = text().replace(',', '.');
-  bool ok = false;
-  double parsedValue = QLocale::c().toDouble(normalizedText, &ok);
-  m_value->setValue(TMeasuredValue::MainUnit, parsedValue);
+  m_value->setValue(text().toStdWString(), &err);
 
   bool outOfRange = false;
-  if (ok) {
+  if (!err) {
     double v   = getValue();
     outOfRange = m_minValue > v || m_maxValue < v;
   }
 
-  if (!ok) {
+  if (err) {
     m_errorHighlighting = 1;
     if (m_errorHighlightingTimerId == 0)
       m_errorHighlightingTimerId = startTimer(40);
   } else {
-    if (m_errorHighlightingTimerId != 0)
-      killTimer(m_errorHighlightingTimerId);
+    if (m_errorHighlightingTimerId != 0) killTimer(m_errorHighlightingTimerId);
     m_errorHighlightingTimerId = 0;
     m_errorHighlighting        = 0;
     setStyleSheet("");
@@ -553,7 +566,7 @@ void MeasuredDoubleLineEdit::timerEvent(QTimerEvent *) {
 //-----------------------------------------------------------------------------
 
 void MeasuredDoubleLineEdit::mousePressEvent(QMouseEvent *e) {
-  if ((e->button() == Qt::MiddleButton) || m_labelClicked) {
+  if ((e->buttons() == Qt::MiddleButton) || m_labelClicked) {
     m_xMouse           = e->x();
     m_mouseDragEditing = true;
     e->accept();
@@ -576,23 +589,25 @@ void MeasuredDoubleLineEdit::mouseMoveEvent(QMouseEvent *e) {
     valueToText();
     m_modified = false;
     e->accept();
-  } else
+  } else {
     QLineEdit::mouseMoveEvent(e);
+  }
 }
 
 //-----------------------------------------------------------------------------
 
 void MeasuredDoubleLineEdit::mouseReleaseEvent(QMouseEvent *e) {
-  if ((m_mouseDragEditing && e->button() == Qt::MiddleButton) || m_labelClicked) {
-    m_xMouse   = -1;
+  if ((m_mouseDragEditing && e->buttons() == Qt::NoButton) || m_labelClicked) {
+    m_xMouse = -1;
     m_modified = true;
     onEditingFinished();
     clearFocus();
     m_mouseDragEditing = false;
-    m_labelClicked     = false;
+    m_labelClicked = false;
     e->accept();
-  } else
+  } else {
     QLineEdit::mouseReleaseEvent(e);
+  }
 }
 
 void MeasuredDoubleLineEdit::receiveMousePress(QMouseEvent *e) {
