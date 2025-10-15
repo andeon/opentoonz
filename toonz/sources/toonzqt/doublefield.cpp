@@ -26,7 +26,9 @@ void DoubleValueLineEdit::focusOutEvent(QFocusEvent *e) {
   getRange(minValue, maxValue);
 
   bool isOutOfRange;
-  MeasuredDoubleLineEdit *lineEdit = dynamic_cast<MeasuredDoubleLineEdit *>(this);
+  // Absorb rounding errors
+  MeasuredDoubleLineEdit *lineEdit =
+      qobject_cast<MeasuredDoubleLineEdit *>(this);
   if (lineEdit) {
     int decimal  = lineEdit->getDecimals();
     isOutOfRange = (value < minValue - std::pow(0.1, decimal + 1) ||
@@ -246,7 +248,8 @@ void DoubleValueField::setValue(double value) {
   int newSliderPos = value2pos(value);
   if (m_slider->value() != newSliderPos) {
     m_slider->setValue(newSliderPos);
-    // Force repaint... sometimes it doesn't update and update doesn't seem to solve the problem!!!
+    // Force repaint()... sometimes it doesn't update and update doesn't seem to solve the problem!!!
+    // try use update() for now
     m_slider->update();
   }
   m_slider->blockSignals(signalsBlocked);
@@ -417,7 +420,8 @@ DoubleField::DoubleField(QWidget *parent, bool isRollerHide, int decimals)
     : DoubleValueField(parent, new DoubleLineEdit(0)) {
   if (isRollerHide) enableRoller(false);
 
-  DoubleLineEdit *lineEdit = dynamic_cast<DoubleLineEdit *>(m_lineEdit);
+  DoubleLineEdit *lineEdit = qobject_cast<DoubleLineEdit *>(m_lineEdit);
+  assert(lineEdit);
   lineEdit->setDecimals(decimals);
 
   // Set step for roller too
@@ -643,8 +647,7 @@ MeasuredDoubleField::MeasuredDoubleField(QWidget *parent, bool isRollerHide)
 //-----------------------------------------------------------------------------
 
 void MeasuredDoubleField::setMeasure(std::string measureName) {
-  MeasuredDoubleLineEdit *lineEdit =
-      dynamic_cast<MeasuredDoubleLineEdit *>(m_lineEdit);
+  MeasuredDoubleLineEdit *lineEdit = qobject_cast<MeasuredDoubleLineEdit *>(m_lineEdit);
   assert(lineEdit);
   lineEdit->setMeasure(measureName);
 }
@@ -652,7 +655,8 @@ void MeasuredDoubleField::setMeasure(std::string measureName) {
 //-----------------------------------------------------------------------------
 
 void MeasuredDoubleField::setDecimals(int decimals) {
-  MeasuredDoubleLineEdit *lineEdit = dynamic_cast<MeasuredDoubleLineEdit *>(m_lineEdit);
+  MeasuredDoubleLineEdit *lineEdit =
+      qobject_cast<MeasuredDoubleLineEdit *>(m_lineEdit);
   if (lineEdit) lineEdit->setDecimals(decimals);
   // Set step for roller too
   if (isRollerEnabled()) m_roller->setStep(std::pow(0.1, std::max(decimals - 1, 1)));
