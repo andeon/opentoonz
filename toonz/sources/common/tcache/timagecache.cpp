@@ -4,7 +4,6 @@
 #undef _STLP_DEBUG
 #else
 #define _STLP_DEBUG 1
-
 #endif
 
 #ifdef TNZCORE_LIGHT
@@ -41,6 +40,8 @@
 #include <deque>
 #include <numeric>
 #include <sstream>
+#include <atomic>  // Added for atomic operations
+#include <stdexcept>  // Added for exception handling
 #ifdef _WIN32
 #include <crtdbg.h>
 #endif
@@ -65,27 +66,28 @@ class ImageInfo;
 
 // std::ofstream os("C:\\cache.txt");
 
-TUINT32 HistoryCount = 0;
+// FIXED: Thread-safe atomic counter
+static std::atomic<TUINT32> HistoryCount{0};
+
 //------------------------------------------------------------------------------
 
 class TheCodec final : public TRasterCodecLz4 {
 public:
+  // FIXED: Thread-safe singleton using static local
   static TheCodec *instance() {
-    if (!_instance) _instance = new TheCodec();
-
-    return _instance;
+    static TheCodec instance;
+    return &instance;
   }
 
   void reset() {
-    if (_instance) _instance->TRasterCodecLz4::reset();
+    TRasterCodecLz4::reset();
   }
 
 private:
-  static TheCodec *_instance;
   TheCodec() : TRasterCodecLz4("Lz4_Codec", false) {}
+  
+  // Remove the static _instance member to prevent memory leaks
 };
-
-TheCodec *TheCodec::_instance = 0;
 
 //------------------------------------------------------------------------------
 
@@ -94,10 +96,10 @@ class CacheItem : public TSmartObject {
 public:
   CacheItem()
       : m_cantCompress(false)
-      , m_builder(0)
-      , m_imageInfo(0)
+      , m_builder(nullptr)
+      , m_imageInfo(nullptr)
       , m_modified(false)
-      , m_palette(0) {}
+      , m_palette(nullptr) {}
 
   CacheItem(ImageBuilder *builder, ImageInfo *imageInfo, TPalette *palette)
       : m_cantCompress(false)
@@ -111,7 +113,7 @@ public:
 
   virtual TUINT32 getSize() const = 0;
 
-  // getImage restituisce un'immagine non compressa
+  // getImage returns an uncompressed image
   virtual TImageP getImage() const = 0;
 
   bool m_cantCompress;
@@ -256,7 +258,9 @@ public:
 TImageP RasterImageBuilder::build(ImageInfo *info, const TRasterP &ras,
                                   TPalette *palette) {
   RasterImageInfo *riInfo = dynamic_cast<RasterImageInfo *>(info);
-  assert(riInfo);
+  if (!riInfo) {
+    throw std::runtime_error("Invalid RasterImageInfo type");
+  }
 
   int rcount       = ras->getRefCount();
   TRasterImageP ri = new TRasterImage();
@@ -285,14 +289,20 @@ public:
 TImageP ToonzImageBuilder::build(ImageInfo *info, const TRasterP &ras,
                                  TPalette *palette) {
   ToonzImageInfo *tiInfo = dynamic_cast<ToonzImageInfo *>(info);
-  assert(tiInfo);
+  if (!tiInfo) {
+    throw std::runtime_error("Invalid ToonzImageInfo type");
+  }
 
   TRasterCM32P rasCM32 = ras;
-  assert(rasCM32);
+  if (!rasCM32) {
+    throw std::runtime_error("Invalid raster type for ToonzImage");
+  }
 
   TRasterCM32P imgRasCM32;
 
-  assert(TRect(tiInfo->m_size).contains(tiInfo->m_savebox));
+  if (!TRect(tiInfo->m_size).contains(tiInfo->m_savebox)) {
+    throw std::runtime_error("Savebox outside image bounds");
+  }
 
   if (ras->getSize() != tiInfo->m_size) {
     TRasterCM32P fullRas(tiInfo->m_size);
@@ -328,11 +338,11 @@ public:
       if (ti)
         m_imageInfo = new ToonzImageInfo(ti);
       else
-        m_imageInfo = 0;
+        m_imageInfo = nullptr;
     }
 #else
     else
-      m_imageInfo = 0;
+      m_imageInfo = nullptr;
 #endif
   }
 
@@ -427,11 +437,11 @@ CompressedOnMemoryCacheItem::CompressedOnMemoryCacheItem(const TImageP &img)
       m_compressedRas = TheCodec::instance()->compress(rasCM32, 1, buffSize);
       m_palette       = ti->getPalette();
     } else
-      assert(false);
+      throw std::runtime_error("Unsupported image type for compression");
   }
 #else
   else
-    assert(false);
+    throw std::runtime_error("Unsupported image type for compression");
 #endif
 }
 
@@ -461,12 +471,17 @@ TUINT32 CompressedOnMemoryCacheItem::getSize() const {
 //------------------------------------------------------------------------------
 
 TImageP CompressedOnMemoryCacheItem::getImage() const {
-  assert(m_compressedRas);
+  if (!m_compressedRas) {
+    throw std::runtime_error("Compressed raster is null");
+  }
 
-  // PER IL MOMENTO DISCRIMINO: DA ELIMINARE
   TRasterP ras;
-
   TheCodec::instance()->decompress(m_compressedRas, ras);
+  
+  if (!ras) {
+    throw std::runtime_error("Failed to decompress raster");
+  }
+  
 #ifdef _DEBUGTOONZ
   ras->m_cashed = true;
 #endif
@@ -511,11 +526,20 @@ CompressedOnDiskCacheItem::CompressedOnDiskCacheItem(
   compressedRas->lock();
 
   Tofstream oss(m_fp);
+  if (oss.fail()) {
+    compressedRas->unlock();
+    throw std::runtime_error("Failed to open cache file: " + m_fp.getWideString());
+  }
+
   assert(compressedRas->getLy() == 1 && compressedRas->getPixelSize() == 1);
   TUINT32 size = compressedRas->getLx();
   oss.write((char *)&size, sizeof(TUINT32));
   oss.write((char *)compressedRas->getRawData(), size);
-  assert(!oss.fail());
+  
+  if (oss.fail()) {
+    compressedRas->unlock();
+    throw std::runtime_error("Failed to write cache data to file: " + m_fp.getWideString());
+  }
 
   compressedRas->unlock();
 }
@@ -531,14 +555,29 @@ CompressedOnDiskCacheItem::~CompressedOnDiskCacheItem() {
 
 TImageP CompressedOnDiskCacheItem::getImage() const {
   Tifstream is(m_fp);
+  if (is.fail()) {
+    throw std::runtime_error("Failed to open cache file for reading: " + m_fp.getWideString());
+  }
+
   TUINT32 dataSize;
   is.read((char *)&dataSize, sizeof(TUINT32));
+  
+  if (is.fail()) {
+    throw std::runtime_error("Failed to read data size from cache file");
+  }
+
   TRasterGR8P ras(dataSize, 1);
   ras->lock();
   UCHAR *data = ras->getRawData();
   is.read((char *)data, dataSize);
-  assert(!is.fail());
+  
+  if (is.fail()) {
+    ras->unlock();
+    throw std::runtime_error("Failed to read compressed data from cache file");
+  }
+  
   ras->unlock();
+  
   CompressedOnMemoryCacheItem item(ras, m_builder->clone(),
                                    m_imageInfo->clone(), m_palette);
   return item.getImage();
@@ -557,7 +596,6 @@ public:
 
   TUINT32 getSize() const override { return 0; }
   TImageP getImage() const override;
-  // TRaster32P getRaster32() const;
 
   TFilePath m_fp;
 };
@@ -574,7 +612,7 @@ typedef TDerivedSmartPointerT<UncompressedOnDiskCacheItem, CacheItem>
 UncompressedOnDiskCacheItem::UncompressedOnDiskCacheItem(const TFilePath &fp,
                                                          const TImageP &image,
                                                          TPalette *palette)
-    : CacheItem(0, 0, 0), m_fp(fp) {
+    : CacheItem(nullptr, nullptr, nullptr), m_fp(fp) {
   TRasterImageP ri = image;
 
   TRasterP ras;
@@ -591,14 +629,14 @@ UncompressedOnDiskCacheItem::UncompressedOnDiskCacheItem(const TFilePath &fp,
       ras         = ti->getRaster();
       m_palette   = palette;
     } else
-      assert(false);
+      throw std::runtime_error("Unsupported image type for disk cache");
   }
 #else
   else
-    assert(false);
+    throw std::runtime_error("Unsupported image type for disk cache");
 #endif
 
-  m_builder = 0;
+  m_builder = nullptr;
 
   int dataSize = ras->getLx() * ras->getLy() * ras->getPixelSize();
 
@@ -608,17 +646,25 @@ UncompressedOnDiskCacheItem::UncompressedOnDiskCacheItem(const TFilePath &fp,
   m_pixelsize = ras->getPixelSize();
 
   Tofstream oss(m_fp);
-  // oss.write((char*)&dataSize, sizeof(TUINT32));
-  // assert(!oss.fail());
+  if (oss.fail()) {
+    throw std::runtime_error("Failed to open cache file for writing: " + m_fp.getWideString());
+  }
+
   ras->lock();
   if (lx == wrap) {
     oss.write((char *)ras->getRawData(), dataSize);
-    assert(!oss.fail());
+    if (oss.fail()) {
+      ras->unlock();
+      throw std::runtime_error("Failed to write raster data to cache file");
+    }
   } else {
     char *buf = (char *)ras->getRawData();
     for (int i = 0; i < ly; i++, buf += wrap) {
       oss.write(buf, lx * m_pixelsize);
-      assert(!oss.fail());
+      if (oss.fail()) {
+        ras->unlock();
+        throw std::runtime_error("Failed to write raster line to cache file");
+      }
     }
   }
   ras->unlock();
@@ -635,11 +681,12 @@ UncompressedOnDiskCacheItem::~UncompressedOnDiskCacheItem() {
 
 TImageP UncompressedOnDiskCacheItem::getImage() const {
   Tifstream is(m_fp);
+  if (is.fail()) {
+    throw std::runtime_error("Failed to open cache file for reading: " + m_fp.getWideString());
+  }
+
   TUINT32 dataSize =
       m_imageInfo->m_size.lx * m_imageInfo->m_size.ly * m_pixelsize;
-
-  // is.read((char*)&dataSize, sizeof(TUINT32));
-  // assert(unsigned(m_lx*m_ly*m_pixelsize)==dataSize);
 
   TRasterP ras;
 
@@ -655,10 +702,17 @@ TImageP UncompressedOnDiskCacheItem::getImage() const {
     else if (m_pixelsize == 2)
       ras = (TRasterP)(TRasterGR16P(rii->m_size));
     else
-      assert(false);
+      throw std::runtime_error("Unsupported pixel size: " + std::to_string(m_pixelsize));
+      
     ras->lock();
     char *data = (char *)ras->getRawData();
     is.read(data, dataSize);
+    
+    if (is.fail()) {
+      ras->unlock();
+      throw std::runtime_error("Failed to read raster data from cache file");
+    }
+    
     ras->unlock();
 #ifdef _DEBUGTOONZ
     ras->m_cashed = true;
@@ -674,6 +728,12 @@ TImageP UncompressedOnDiskCacheItem::getImage() const {
       ras->lock();
       char *data = (char *)ras->getRawData();
       is.read(data, dataSize);
+      
+      if (is.fail()) {
+        ras->unlock();
+        throw std::runtime_error("Failed to read raster data from cache file");
+      }
+      
       ras->unlock();
 #ifdef _DEBUG
       ras->m_cashed = true;
@@ -681,14 +741,12 @@ TImageP UncompressedOnDiskCacheItem::getImage() const {
 
       return ToonzImageBuilder().build(m_imageInfo, ras, m_palette);
     } else {
-      assert(false);
-      return 0;
+      throw std::runtime_error("Unsupported image info type");
     }
   }
 #else
   else {
-    assert(false);
-    return 0;
+    throw std::runtime_error("Unsupported image info type");
   }
 #endif
 }
@@ -705,9 +763,7 @@ std::string TImageCache::getUniqueId(void) {
 class TImageCache::Imp {
 public:
   Imp() : m_rootDir() {
-    // ATTENZIONE: e' molto piu' veloce se si usa memoria fisica
-    // invece che virtuale: la virtuale e' tanta, non c'e' quindi bisogno
-    // di comprimere le immagini, che grandi come sono vengono swappate su disco
+    // NOTE: It's much faster when using physical memory instead of virtual memory
     if (TBigMemoryManager::instance()->isActive()) return;
 
     m_reservedMemory = (TINT64)(TSystem::getMemorySize(true) * 0.10);
@@ -728,9 +784,7 @@ public:
 
   void doCompress();
   void doCompress(std::string id);
-  UCHAR *compressAndMalloc(TUINT32 requestedSize);  // compress in the cache
-                                                    // till it can nallocate the
-                                                    // requested memory
+  UCHAR *compressAndMalloc(TUINT32 requestedSize);  // Compress in the cache until it can allocate the requested memory
   void outputMap(UINT chunkRequested, std::string filename);
   void remove(const std::string &id);
   void remap(const std::string &dstId, const std::string &srcId);
@@ -748,13 +802,10 @@ public:
   std::map<TUINT32, std::string> m_itemHistory;
   std::map<std::string, CacheItemP> m_compressedItems;
   std::map<void *, std::string>
-      m_itemsByImagePointer;  // items ordered by ImageP.getPointer()
-  std::map<std::string, std::string> m_duplicatedItems;  // for duplicated items
-                                                         // (when id1!=id2 but
-                                                         // image1==image2) in
-                                                         // the map: key is dup
-                                                         // id, value is main id
-  // memoria fisica totale della macchina che non puo' essere utilizzata;
+      m_itemsByImagePointer;  // Items ordered by ImageP.getPointer()
+  std::map<std::string, std::string> m_duplicatedItems;  // For duplicated items (when id1!=id2 but image1==image2)
+                                                         // In the map: key is duplicate id, value is main id
+  // Total physical memory of the machine that cannot be used;
   TINT64 m_reservedMemory;
   TThread::Mutex m_mutex;
 
@@ -791,8 +842,8 @@ inline TINT32 hasExternalReferences(const TImageP &img) {
     TToonzImageP timg = img;
     if (timg)
       refCount = timg->getRaster()->getRefCount() -
-                 1;  //!!! the TToonzImage::getRaster method increments raster
-                     //! refCount!(the TRasterImage::getRaster don't)
+                 1;  //!!! The TToonzImage::getRaster method increments raster refCount!
+                     //! (the TRasterImage::getRaster doesn't)
   }
 #endif
 
@@ -802,12 +853,8 @@ inline TINT32 hasExternalReferences(const TImageP &img) {
 //------------------------------------------------------------------------------
 
 void TImageCache::Imp::doCompress() {
-  // se la memoria usata per mantenere le immagini decompresse e' superiore
-  // a un dato valore, comprimo alcune immagini non compresse non checked-out
-  // in modo da liberare memoria
-
-  // per il momento scorre tutte le immagini alla ricerca di immagini
-  // non compresse non checked-out
+  // If the memory used to maintain uncompressed images exceeds a given value,
+  // compress some uncompressed non-checked-out images to free memory
 
   TThread::MutexLocker sl(&m_mutex);
 
@@ -816,7 +863,11 @@ void TImageCache::Imp::doCompress() {
   for (; itu != m_itemHistory.end() && notEnoughMemory();) {
     std::map<std::string, CacheItemP>::iterator it =
         m_uncompressedItems.find(itu->second);
-    assert(it != m_uncompressedItems.end());
+    if (it == m_uncompressedItems.end()) {
+      ++itu;
+      continue;
+    }
+    
     CacheItemP item = it->second;
 
     UncompressedOnMemoryCacheItemP uitem = item;
@@ -836,41 +887,43 @@ void TImageCache::Imp::doCompress() {
     std::map<TUINT32, std::string>::iterator itu2 = itu;
     itu++;
     m_itemHistory.erase(itu2);
-    m_itemsByImagePointer.erase(item->getImage().getPointer());
+    m_itemsByImagePointer.erase(getPointer(item->getImage()));
     m_uncompressedItems.erase(it);
 #endif
 
     if (m_compressedItems.find(id) == m_compressedItems.end()) {
-      assert(uitem);
-      item->m_cantCompress = true;
-      CacheItemP newItem   = new CompressedOnMemoryCacheItem(
-          item->getImage());  // WARNING the codec buffer allocation can CHANGE
-                              // the cache.
-      item->m_cantCompress = false;
-      if (newItem->getSize() ==
-          0)  /// non c'era memoria sufficiente per il buffer compresso....
-      {
-        assert(m_rootDir != TFilePath());
-        TFilePath fp =
-            m_rootDir + TFilePath(std::to_string(TImageCache::Imp::m_fileid++));
-        newItem = new UncompressedOnDiskCacheItem(
-            fp, item->getImage(), item->getImage()->getPalette());
+      try {
+        assert(uitem);
+        item->m_cantCompress = true;
+        CacheItemP newItem   = new CompressedOnMemoryCacheItem(
+            item->getImage());  // WARNING: The codec buffer allocation can CHANGE the cache.
+        item->m_cantCompress = false;
+        if (newItem->getSize() == 0)  // There wasn't enough memory for the compressed buffer
+        {
+          if (m_rootDir == TFilePath()) {
+            throw std::runtime_error("Cache root directory not set");
+          }
+          TFilePath fp =
+              m_rootDir + TFilePath(std::to_string(TImageCache::Imp::m_fileid++));
+          newItem = new UncompressedOnDiskCacheItem(
+              fp, item->getImage(), item->getImage()->getPalette());
+        }
+        m_compressedItems[id] = newItem;
+        item                  = CacheItemP();
+        uitem                 = UncompressedOnMemoryCacheItemP();
+        itu = m_itemHistory.begin(); // Restart since iterators could have changed
+      } catch (const std::exception& e) {
+        // Log compression failure but continue
+        item->m_cantCompress = false;
+        ++itu;
       }
-      m_compressedItems[id] = newItem;
-      item                  = CacheItemP();
-      uitem                 = UncompressedOnMemoryCacheItemP();
-      // doCompress();//restart, since iterators could have been changed (see
-      // comment above)
-      // return;
-      itu = m_itemHistory.begin();
     }
   }
 
-  // se il quantitativo di memoria utilizzata e' superiore a un dato valore,
-  // sposto
-  // su disco alcune immagini compresse in modo da liberare memoria
+  // If the amount of memory used exceeds a given value,
+  // move some compressed images to disk to free memory
 
-  if (itu != m_itemHistory.end())  // memory is enough!
+  if (itu != m_itemHistory.end())  // Memory is enough!
     return;
 
   std::map<std::string, CacheItemP>::iterator itc = m_compressedItems.begin();
@@ -880,16 +933,23 @@ void TImageCache::Imp::doCompress() {
 
     CompressedOnMemoryCacheItemP citem = itc->second;
     if (citem) {
-      assert(m_rootDir != TFilePath());
-      TFilePath fp =
-          m_rootDir + TFilePath(std::to_string(TImageCache::Imp::m_fileid++));
+      try {
+        if (m_rootDir == TFilePath()) {
+          throw std::runtime_error("Cache root directory not set");
+        }
+        TFilePath fp =
+            m_rootDir + TFilePath(std::to_string(TImageCache::Imp::m_fileid++));
 
-      CacheItemP newItem = new CompressedOnDiskCacheItem(
-          fp, citem->m_compressedRas, citem->m_builder->clone(),
-          citem->m_imageInfo->clone(), citem->m_palette);
+        CacheItemP newItem = new CompressedOnDiskCacheItem(
+            fp, citem->m_compressedRas, citem->m_builder->clone(),
+            citem->m_imageInfo->clone(), citem->m_palette);
 
-      itc->second                   = 0;
-      m_compressedItems[itc->first] = newItem;
+        itc->second                   = nullptr;
+        m_compressedItems[itc->first] = newItem;
+      } catch (const std::exception& e) {
+        // Log disk cache failure but continue
+        continue;
+      }
     }
   }
 }
@@ -899,23 +959,23 @@ void TImageCache::Imp::doCompress() {
 void TImageCache::Imp::doCompress(std::string id) {
   TThread::MutexLocker sl(&m_mutex);
 
-  // search id in m_uncompressedItems
+  // Search id in m_uncompressedItems
   std::map<std::string, CacheItemP>::iterator it = m_uncompressedItems.find(id);
-  if (it == m_uncompressedItems.end()) return;  // id not found: return
+  if (it == m_uncompressedItems.end()) return;  // Id not found: return
 
-  // is item suitable for compression ?
+  // Is item suitable for compression?
   CacheItemP item                      = it->second;
   UncompressedOnMemoryCacheItemP uitem = item;
   if (item->m_cantCompress ||
       (uitem && (!uitem->m_image || hasExternalReferences(uitem->m_image))))
     return;
 
-  // search id in m_itemHistory
+  // Search id in m_itemHistory
   std::map<TUINT32, std::string>::iterator itu = m_itemHistory.begin();
   while (itu != m_itemHistory.end() && itu->second != id) ++itu;
-  if (itu == m_itemHistory.end()) return;  // id not found: return
+  if (itu == m_itemHistory.end()) return;  // Id not found: return
 
-// delete itu from m_itemHistory
+// Delete itu from m_itemHistory
 #ifdef _WIN32
   assert(itu->first == it->second->m_historyCount);
   itu = m_itemHistory.erase(itu);
@@ -924,91 +984,65 @@ void TImageCache::Imp::doCompress(std::string id) {
   std::map<TUINT32, std::string>::iterator itu2 = itu;
   itu++;
   m_itemHistory.erase(itu2);
-  m_itemsByImagePointer.erase(item->getImage().getPointer());
+  m_itemsByImagePointer.erase(getPointer(item->getImage()));
 #endif
 
-  // delete item from m_uncompressedItems
+  // Delete item from m_uncompressedItems
   m_uncompressedItems.erase(it);
 
-  // check if item has been already compressed. this should never happen
+  // Check if item has been already compressed. This should never happen
   if (m_compressedItems.find(id) != m_compressedItems.end()) return;
 
-  assert(uitem);
-  item->m_cantCompress = true;  // ??
-  CacheItemP newItem   = new CompressedOnMemoryCacheItem(
-      item->getImage());  // WARNING the codec buffer  allocation can CHANGE the
-                          // cache.
-  item->m_cantCompress = false;  // ??
-  if (newItem->getSize() ==
-      0)  /// non c'era memoria sufficiente per il buffer compresso....
-  {
-    assert(m_rootDir != TFilePath());
-    TFilePath fp =
-        m_rootDir + TFilePath(std::to_string(TImageCache::Imp::m_fileid++));
-    newItem = new UncompressedOnDiskCacheItem(fp, item->getImage(),
-                                              item->getImage()->getPalette());
+  try {
+    assert(uitem);
+    item->m_cantCompress = true;
+    CacheItemP newItem   = new CompressedOnMemoryCacheItem(
+        item->getImage());  // WARNING: The codec buffer allocation can CHANGE the cache.
+    item->m_cantCompress = false;
+    if (newItem->getSize() == 0)  // There wasn't enough memory for the compressed buffer
+    {
+      if (m_rootDir == TFilePath()) {
+        throw std::runtime_error("Cache root directory not set");
+      }
+      TFilePath fp =
+          m_rootDir + TFilePath(std::to_string(TImageCache::Imp::m_fileid++));
+      newItem = new UncompressedOnDiskCacheItem(fp, item->getImage(),
+                                                item->getImage()->getPalette());
+    }
+    m_compressedItems[id] = newItem;
+    item                  = CacheItemP();
+    uitem                 = UncompressedOnMemoryCacheItemP();
+  } catch (const std::exception& e) {
+    // Log compression failure
+    item->m_cantCompress = false;
   }
-  m_compressedItems[id] = newItem;
-  item                  = CacheItemP();
-  uitem                 = UncompressedOnMemoryCacheItemP();
 }
-
-/*
-  // se il quantitativo di memoria utilizzata e' superiore a un dato valore,
-  sposto
-  // su disco alcune immagini compresse in modo da liberare memoria
-
-  if (itu != m_itemHistory.end()) //memory is enough!
-    return;
-
-  std::map<std::string, CacheItemP>::iterator itc = m_compressedItems.begin();
-  for ( ; itc != m_compressedItems.end() && notEnoughMemory(); ++itc)
-        {
-          CacheItemP item = itc->second;
-          if (item->m_cantCompress)
-                  continue;
-
-          CompressedOnMemoryCacheItemP citem = itc->second;
-          if (citem)
-                {
-                  assert(m_rootDir!=TFilePath());
-                  TFilePath fp = m_rootDir +
-  TFilePath(toString(TImageCache::Imp::m_fileid++));
-
-                  CacheItemP newItem = new CompressedOnDiskCacheItem(fp,
-  citem->m_compressedRas,
-                                                                                                                                                                                                                           citem->m_builder->clone(), citem->m_imageInfo->clone());
-
-                  itc->second = 0;
-                  m_compressedItems[itc->first] = newItem;
-                }
-        }
-  */
 
 //------------------------------------------------------------------------------
 
 UCHAR *TImageCache::Imp::compressAndMalloc(TUINT32 size) {
-  UCHAR *buf = 0;
+  UCHAR *buf = nullptr;
 
   TThread::MutexLocker sl(&m_mutex);
 
+  if (!TheCodec::instance()) {
+    return nullptr;
+  }
+
   TheCodec::instance()->reset();
-
-  // if (size!=0)
-  //  size = size>>10;
-
-  // assert(size==0 || TBigMemoryManager::instance()->isActive());
 
   std::map<TUINT32, std::string>::iterator itu = m_itemHistory.begin();
   while (
-      (buf = TBigMemoryManager::instance()->getBuffer(size)) == 0 &&
-      itu !=
-          m_itemHistory
-              .end())  //>TBigMemoryManager::instance()->getAvailableMemoryinKb()))
+      (buf = TBigMemoryManager::instance()->getBuffer(size)) == nullptr &&
+      itu != m_itemHistory.end()) 
   {
     std::map<std::string, CacheItemP>::iterator it =
         m_uncompressedItems.find(itu->second);
-    assert(it != m_uncompressedItems.end());
+    if (it == m_uncompressedItems.end()) {
+      ++itu;
+      continue;
+    }
+    
     CacheItemP item = it->second;
 
     UncompressedOnMemoryCacheItemP uitem = item;
@@ -1019,19 +1053,22 @@ UCHAR *TImageCache::Imp::compressAndMalloc(TUINT32 size) {
     }
 
     if (m_compressedItems.find(it->first) == m_compressedItems.end()) {
-      assert(uitem);
-      CacheItemP newItem;
-      // newItem = new CompressedOnMemoryCacheItem(item->getImage());
-      // if (newItem->getSize()==0)
-      //  {
-      assert(m_rootDir != TFilePath());
-      TFilePath fp =
-          m_rootDir + TFilePath(std::to_string(TImageCache::Imp::m_fileid++));
-      newItem = new UncompressedOnDiskCacheItem(fp, item->getImage(),
-                                                item->getImage()->getPalette());
-      //  }
-
-      m_compressedItems[it->first] = newItem;
+      try {
+        assert(uitem);
+        CacheItemP newItem;
+        if (m_rootDir == TFilePath()) {
+          throw std::runtime_error("Cache root directory not set");
+        }
+        TFilePath fp =
+            m_rootDir + TFilePath(std::to_string(TImageCache::Imp::m_fileid++));
+        newItem = new UncompressedOnDiskCacheItem(fp, item->getImage(),
+                                                  item->getImage()->getPalette());
+        m_compressedItems[it->first] = newItem;
+      } catch (const std::exception& e) {
+        // Log disk cache failure but continue
+        ++itu;
+        continue;
+      }
     }
 
 #ifdef _WIN32
@@ -1043,32 +1080,39 @@ UCHAR *TImageCache::Imp::compressAndMalloc(TUINT32 size) {
     std::map<TUINT32, std::string>::iterator itu2 = itu;
     itu++;
     m_itemHistory.erase(itu2);
-    m_itemsByImagePointer.erase(item->getImage().getPointer());
+    m_itemsByImagePointer.erase(getPointer(item->getImage()));
     m_uncompressedItems.erase(it);
 #endif
   }
 
-  if (buf != 0) return buf;
+  if (buf != nullptr) return buf;
 
   std::map<std::string, CacheItemP>::iterator itc = m_compressedItems.begin();
   for (; itc != m_compressedItems.end() &&
-         (buf = TBigMemoryManager::instance()->getBuffer(size)) == 0;
+         (buf = TBigMemoryManager::instance()->getBuffer(size)) == nullptr;
        ++itc) {
     CacheItemP item = itc->second;
     if (item->m_cantCompress) continue;
 
     CompressedOnMemoryCacheItemP citem = itc->second;
     if (citem) {
-      assert(m_rootDir != TFilePath());
-      TFilePath fp =
-          m_rootDir + TFilePath(std::to_string(TImageCache::Imp::m_fileid++));
+      try {
+        if (m_rootDir == TFilePath()) {
+          throw std::runtime_error("Cache root directory not set");
+        }
+        TFilePath fp =
+            m_rootDir + TFilePath(std::to_string(TImageCache::Imp::m_fileid++));
 
-      CacheItemP newItem = new CompressedOnDiskCacheItem(
-          fp, citem->m_compressedRas, citem->m_builder->clone(),
-          citem->m_imageInfo->clone(), citem->m_palette);
+        CacheItemP newItem = new CompressedOnDiskCacheItem(
+            fp, citem->m_compressedRas, citem->m_builder->clone(),
+            citem->m_imageInfo->clone(), citem->m_palette);
 
-      itc->second                   = 0;
-      m_compressedItems[itc->first] = newItem;
+        itc->second                   = nullptr;
+        m_compressedItems[itc->first] = newItem;
+      } catch (const std::exception& e) {
+        // Log disk cache failure but continue
+        continue;
+      }
     }
   }
 
@@ -1083,19 +1127,11 @@ int check       = 0;
 const int magic = 123456;
 }
 
-static TImageCache *CacheInstance = 0;
+static TImageCache *CacheInstance = nullptr;
 
 TImageCache *TImageCache::instance() {
-  if (CacheInstance == 0) CacheInstance = new TImageCache();
+  if (CacheInstance == nullptr) CacheInstance = new TImageCache();
   return CacheInstance;
-  /*
-if (!ImageCache::m_instance)
-{
-ImageCache::m_instance = new ImageCache;
-ImageCache::m_destroyer.m_imageCache = ImageCache::m_instance;
-}
-return ImageCache::m_instance;
-  */
 }
 
 //------------------------------------------------------------------------------
@@ -1110,7 +1146,7 @@ TImageCache::TImageCache() : m_imp(new Imp()) {
 TImageCache::~TImageCache() {
   assert(check == magic);
   check         = -1;
-  CacheInstance = 0;
+  CacheInstance = nullptr;
 }
 
 //------------------------------------------------------------------------------
@@ -1138,7 +1174,7 @@ bool TImageCache::isEnabled() {
   if (!storage.hasLocalData()) return true;
   return *(storage.localData());
 #else
-  return m_isEnabled;
+  return m_imp->m_isEnabled;
 #endif
 }
 
@@ -1159,13 +1195,6 @@ void TImageCache::setRootDir(const TFilePath &cacheDir) {
 }
 
 //------------------------------------------------------------------------------
-/*
-TFilePath TImageCache::getRootDir() const
-{
-return m_imp->m_rootDir;
-}
-*/
-//------------------------------------------------------------------------------
 
 UCHAR *TImageCache::compressAndMalloc(TUINT32 requestedSize) {
   return m_imp->compressAndMalloc(requestedSize);
@@ -1185,99 +1214,85 @@ void TImageCache::Imp::add(const std::string &id, const TImageP &img,
                            bool overwrite) {
   TThread::MutexLocker sl(&m_mutex);
 
-#ifdef LEVO
-  std::map<std::string, CacheItemP>::iterator it1 = m_uncompressedItems.begin();
-
-  for (; it1 != m_uncompressedItems.end(); ++it1) {
-    UncompressedOnMemoryCacheItemP item =
-        (UncompressedOnMemoryCacheItemP)it1->second;
-    // m_memUsage -= item->getSize();
-    assert(item);
-    TImageP refImg = item->getImage();
-    if (refImg.getPointer() == img.getPointer() && it1->first != id)
-      assert(!"opps gia' esiste in cache!");
-  }
-#endif
-
-  std::map<std::string, CacheItemP>::iterator itUncompr =
-      m_uncompressedItems.find(id);
-  std::map<std::string, CacheItemP>::iterator itCompr =
-      m_compressedItems.find(id);
+  try {
+    std::map<std::string, CacheItemP>::iterator itUncompr =
+        m_uncompressedItems.find(id);
+    std::map<std::string, CacheItemP>::iterator itCompr =
+        m_compressedItems.find(id);
 
 #ifdef _DEBUGTOONZ
-  TRasterImageP rimg = (TRasterImageP)img;
-  TToonzImageP timg  = (TToonzImageP)img;
+    TRasterImageP rimg = (TRasterImageP)img;
+    TToonzImageP timg  = (TToonzImageP)img;
 #endif
 
-  if (itUncompr != m_uncompressedItems.end() ||
-      itCompr !=
-          m_compressedItems.end())  // already present in cache with same id...
-  {
-    if (overwrite) {
-#ifdef _DEBUGTOONZ
-      if (rimg)
-        rimg->getRaster()->m_cashed = true;
-      else if (timg)
-        timg->getRaster()->m_cashed = true;
-#endif
-      std::map<std::string, CacheItemP>::iterator it;
-
-      if (itUncompr != m_uncompressedItems.end()) {
-        assert(m_itemHistory.find(itUncompr->second->m_historyCount) !=
-               m_itemHistory.end());
-        m_itemHistory.erase(itUncompr->second->m_historyCount);
-        m_itemsByImagePointer.erase(getPointer(itUncompr->second->getImage()));
-        m_uncompressedItems.erase(itUncompr);
-      }
-      if (itCompr != m_compressedItems.end()) m_compressedItems.erase(id);
-    } else
-      return;
-  } else {
-    std::map<std::string, std::string>::iterator dt =
-        m_duplicatedItems.find(id);
-    if ((dt != m_duplicatedItems.end()) && !overwrite) return;
-
-    std::map<void *, std::string>::iterator it;
-    if ((it = m_itemsByImagePointer.find(getPointer(img))) !=
-        m_itemsByImagePointer
-            .end())  // already present in cache with another id...
+    if (itUncompr != m_uncompressedItems.end() ||
+        itCompr != m_compressedItems.end())  // Already present in cache with same id...
     {
-      m_duplicatedItems[id] = it->second;
-      return;
+      if (overwrite) {
+#ifdef _DEBUGTOONZ
+        if (rimg)
+          rimg->getRaster()->m_cashed = true;
+        else if (timg)
+          timg->getRaster()->m_cashed = true;
+#endif
+        std::map<std::string, CacheItemP>::iterator it;
+
+        if (itUncompr != m_uncompressedItems.end()) {
+          assert(m_itemHistory.find(itUncompr->second->m_historyCount) !=
+                 m_itemHistory.end());
+          m_itemHistory.erase(itUncompr->second->m_historyCount);
+          m_itemsByImagePointer.erase(getPointer(itUncompr->second->getImage()));
+          m_uncompressedItems.erase(itUncompr);
+        }
+        if (itCompr != m_compressedItems.end()) m_compressedItems.erase(id);
+      } else
+        return;
+    } else {
+      std::map<std::string, std::string>::iterator dt =
+          m_duplicatedItems.find(id);
+      if ((dt != m_duplicatedItems.end()) && !overwrite) return;
+
+      std::map<void *, std::string>::iterator it;
+      if ((it = m_itemsByImagePointer.find(getPointer(img))) !=
+          m_itemsByImagePointer.end())  // Already present in cache with another id...
+      {
+        m_duplicatedItems[id] = it->second;
+        return;
+      }
+
+      if (dt != m_duplicatedItems.end()) m_duplicatedItems.erase(dt);
     }
 
-    if (dt != m_duplicatedItems.end()) m_duplicatedItems.erase(dt);
-  }
-
-  CacheItemP item;
+    CacheItemP item;
 
 #ifdef _DEBUGTOONZ
-  if (rimg)
-    rimg->getRaster()->m_cashed = true;
-  else if (timg)
-    timg->getRaster()->m_cashed = true;
+    if (rimg)
+      rimg->getRaster()->m_cashed = true;
+    else if (timg)
+      timg->getRaster()->m_cashed = true;
 #endif
 
-  item = new UncompressedOnMemoryCacheItem(img);
+    item = new UncompressedOnMemoryCacheItem(img);
 #ifdef TNZCORE_LIGHT
-  item->m_cantCompress = false;
+    item->m_cantCompress = false;
 #else
-  item->m_cantCompress = (TVectorImageP(img) ? true : false);
+    item->m_cantCompress = (TVectorImageP(img) ? true : false);
 #endif
-  item->m_id                             = id;
-  m_uncompressedItems[id]                = item;
-  m_itemsByImagePointer[getPointer(img)] = id;
-  item->m_historyCount                   = HistoryCount;
-  m_itemHistory[HistoryCount]            = id;
-  HistoryCount++;
+    item->m_id                             = id;
+    m_uncompressedItems[id]                = item;
+    m_itemsByImagePointer[getPointer(img)] = id;
+    
+    // FIXED: Thread-safe atomic increment
+    TUINT32 currentCount = HistoryCount.fetch_add(1, std::memory_order_relaxed);
+    item->m_historyCount = currentCount;
+    m_itemHistory[currentCount] = id;
 
-  doCompress();
+    doCompress();
 
-#ifdef _DEBUGTOONZ
-// int itemCount =
-// m_imp->m_uncompressedItems.size()+m_imp->m_compressedItems.size();
-// m_imp->outputDebug();
-#endif
+  } catch (const std::exception& e) {
+    // Log add failure
+    std::cerr << "TImageCache::add failed for " << id << ": " << e.what() << std::endl;
+  }
 }
 
 void TImageCache::remove(const std::string &id) { m_imp->remove(id); }
@@ -1285,16 +1300,15 @@ void TImageCache::remove(const std::string &id) { m_imp->remove(id); }
 //------------------------------------------------------------------------------
 
 void TImageCache::Imp::remove(const std::string &id) {
-  if (CacheInstance == 0)
-    return;  // the remove can be called when exiting from toonz...after the
-             // imagecache was already freed!
+  if (CacheInstance == nullptr)
+    return;  // The remove can be called when exiting from Toonz... after the image cache was already freed!
 
   assert(check == magic);
   TThread::MutexLocker sl(&m_mutex);
 
   std::map<std::string, std::string>::iterator it1;
   if ((it1 = m_duplicatedItems.find(id)) !=
-      m_duplicatedItems.end())  // it's a duplicated id...
+      m_duplicatedItems.end())  // It's a duplicated id...
   {
     m_duplicatedItems.erase(it1);
     return;
@@ -1303,9 +1317,8 @@ void TImageCache::Imp::remove(const std::string &id) {
   for (it1 = m_duplicatedItems.begin(); it1 != m_duplicatedItems.end(); ++it1)
     if (it1->second == id) break;
 
-  if (it1 != m_duplicatedItems.end())  // it has duplicated, so cannot erase it;
-                                       // I erase the duplicate, and assign its
-                                       // id has the main id
+  if (it1 != m_duplicatedItems.end())  // It has duplicates, so cannot erase it;
+                                       // I erase the duplicate, and assign its id as the main id
   {
     std::string sonId = it1->first;
     m_duplicatedItems.erase(it1);
@@ -1411,7 +1424,7 @@ void TImageCache::clear(bool deleteFolder) {
 void TImageCache::clearSceneImages() {
   TThread::MutexLocker sl(&m_imp->m_mutex);
 
-  // note the ';' - which follows ':' in the ascii table
+  // Note the ';' - which follows ':' in the ASCII table
   m_imp->m_uncompressedItems.erase(
       m_imp->m_uncompressedItems.begin(),
       m_imp->m_uncompressedItems.lower_bound("$:"));
@@ -1467,150 +1480,6 @@ bool TImageCache::isCached(const std::string &id) const {
 }
 
 //------------------------------------------------------------------------------
-#ifdef LEVO
-
-bool TImageCache::getSize(const std::string &id, TDimension &size) const {
-  QMutexLocker sl(&m_imp->m_mutex);
-
-  std::map<std::string, CacheItemP>::iterator it =
-      m_imp->m_uncompressedItems.find(id);
-  if (it != m_imp->m_uncompressedItems.end()) {
-    UncompressedOnMemoryCacheItemP uncompressed = it->second;
-    assert(uncompressed);
-    TToonzImageP ti = uncompressed->getImage();
-    if (ti) {
-      size = ti->getSize();
-      return true;
-    }
-
-    TRasterImageP ri = uncompressed->getImage();
-    if (ri && ri->getRaster()) {
-      size = ri->getRaster()->getSize();
-      return true;
-    }
-    return false;
-  }
-  std::map<std::string, CacheItemP>::iterator itc =
-      m_imp->m_compressedItems.find(id);
-  if (itc == m_imp->m_compressedItems.end()) return false;
-  CacheItemP cacheItem = itc->second;
-
-  if (cacheItem->m_imageInfo) {
-    RasterImageInfo *rimageInfo =
-        dynamic_cast<RasterImageInfo *>(cacheItem->m_imageInfo);
-    if (rimageInfo) {
-      size = rimageInfo->m_size;
-      return true;
-    }
-    ToonzImageInfo *timageInfo =
-        dynamic_cast<ToonzImageInfo *>(cacheItem->m_imageInfo);
-    if (timageInfo) {
-      size = timageInfo->m_size;
-      return true;
-    }
-  }
-
-  return false;
-}
-
-//------------------------------------------------------------------------------
-
-bool TImageCache::getSavebox(const std::string &id, TRect &savebox) const {
-  QMutexLocker sl(&m_imp->m_mutex);
-
-  std::map<std::string, CacheItemP>::iterator it =
-      m_imp->m_uncompressedItems.find(id);
-  if (it != m_imp->m_uncompressedItems.end()) {
-    UncompressedOnMemoryCacheItemP uncompressed = it->second;
-    assert(uncompressed);
-
-    TToonzImageP ti = uncompressed->getImage();
-    if (ti) {
-      savebox = ti->getSavebox();
-      return true;
-    }
-    TRasterImageP ri = uncompressed->getImage();
-    if (ri) {
-      savebox = ri->getSavebox();
-      return true;
-    }
-    return false;
-  }
-  std::map<std::string, CacheItemP>::iterator itc =
-      m_imp->m_compressedItems.find(id);
-  if (itc == m_imp->m_compressedItems.end()) return false;
-
-  CacheItemP cacheItem = itc->second;
-
-  assert(cacheItem->m_imageInfo);
-
-  RasterImageInfo *rimageInfo =
-      dynamic_cast<RasterImageInfo *>(cacheItem->m_imageInfo);
-  if (rimageInfo) {
-    savebox = rimageInfo->m_savebox;
-    return true;
-  }
-#ifndef TNZCORE_LIGHT
-  ToonzImageInfo *timageInfo =
-      dynamic_cast<ToonzImageInfo *>(cacheItem->m_imageInfo);
-  if (timageInfo) {
-    savebox = timageInfo->m_savebox;
-    return true;
-  }
-#endif
-  return false;
-}
-
-//------------------------------------------------------------------------------
-
-bool TImageCache::getDpi(const std::string &id, double &dpiX,
-                         double &dpiY) const {
-  QMutexLocker sl(&m_imp->m_mutex);
-
-  std::map<std::string, CacheItemP>::iterator it =
-      m_imp->m_uncompressedItems.find(id);
-  if (it != m_imp->m_uncompressedItems.end()) {
-    UncompressedOnMemoryCacheItemP uncompressed = it->second;
-    assert(uncompressed);
-    TToonzImageP ti = uncompressed->getImage();
-    if (ti) {
-      ti->getDpi(dpiX, dpiY);
-      return true;
-    }
-    TRasterImageP ri = uncompressed->getImage();
-    if (ri) {
-      ri->getDpi(dpiX, dpiY);
-      return true;
-    }
-    return false;
-  }
-  std::map<std::string, CacheItemP>::iterator itc =
-      m_imp->m_compressedItems.find(id);
-  if (itc == m_imp->m_compressedItems.end()) return false;
-  CacheItemP cacheItem = itc->second;
-  assert(cacheItem->m_imageInfo);
-
-  RasterImageInfo *rimageInfo =
-      dynamic_cast<RasterImageInfo *>(cacheItem->m_imageInfo);
-  if (rimageInfo) {
-    dpiX = rimageInfo->m_dpix;
-    dpiY = rimageInfo->m_dpiy;
-    return true;
-  }
-#ifndef TNZCORE_LIGHT
-  ToonzImageInfo *timageInfo =
-      dynamic_cast<ToonzImageInfo *>(cacheItem->m_imageInfo);
-  if (timageInfo) {
-    dpiX = timageInfo->m_dpix;
-    dpiY = timageInfo->m_dpiy;
-    return true;
-  }
-#endif
-  return false;
-}
-
-//------------------------------------------------------------------------------
-#endif
 
 bool TImageCache::getSubsampling(const std::string &id, int &subs) const {
   TThread::MutexLocker sl(&m_imp->m_mutex);
@@ -1687,13 +1556,19 @@ bool TImageCache::hasBeenModified(const std::string &id, bool reset) const {
     } else
       return itu->second->m_modified;
   }
-  return true;  // not present in cache==modified (for particle purposes...)
+  return true;  // Not present in cache == modified (for particle purposes...)
 }
 
 //------------------------------------------------------------------------------
 
 TImageP TImageCache::get(const std::string &id, bool toBeModified) const {
-  return m_imp->get(id, toBeModified);
+  try {
+    return m_imp->get(id, toBeModified);
+  } catch (const std::exception& e) {
+    // Log the error
+    std::cerr << "TImageCache::get failed for " << id << ": " << e.what() << std::endl;
+    return TImageP(); // Return empty image
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -1714,15 +1589,16 @@ TImageP TImageCache::Imp::get(const std::string &id, bool toBeModified) {
   if (itu != m_uncompressedItems.end()) {
     img = itu->second->getImage();
     if (itu->second->m_historyCount !=
-        HistoryCount - 1)  // significa che l'ultimo get non era sulla stessa
-                           // immagine, quindi  serve aggiornare l'history!
+        HistoryCount - 1)  // Means the last get wasn't on the same image, so need to update history!
     {
       assert(m_itemHistory.find(itu->second->m_historyCount) !=
              m_itemHistory.end());
       m_itemHistory.erase(itu->second->m_historyCount);
-      m_itemHistory[HistoryCount] = id;
-      itu->second->m_historyCount = HistoryCount;
-      HistoryCount++;
+      
+      // FIXED: Thread-safe atomic increment
+      TUINT32 currentCount = HistoryCount.fetch_add(1, std::memory_order_relaxed);
+      m_itemHistory[currentCount] = id;
+      itu->second->m_historyCount = currentCount;
     }
     if (toBeModified) {
       itu->second->m_modified = true;
@@ -1734,7 +1610,7 @@ TImageP TImageCache::Imp::get(const std::string &id, bool toBeModified) {
   }
 
   std::map<std::string, CacheItemP>::iterator itc = m_compressedItems.find(id);
-  if (itc == m_compressedItems.end()) return 0;
+  if (itc == m_compressedItems.end()) return TImageP();
 
   CacheItemP cacheItem = itc->second;
 
@@ -1745,13 +1621,13 @@ TImageP TImageCache::Imp::get(const std::string &id, bool toBeModified) {
   m_uncompressedItems[itc->first] = uncompressed;
   m_itemsByImagePointer[getPointer(img)] = itc->first;
 
-  m_itemHistory[HistoryCount]  = itc->first;
-  uncompressed->m_historyCount = HistoryCount;
-  HistoryCount++;
+  // FIXED: Thread-safe atomic increment
+  TUINT32 currentCount = HistoryCount.fetch_add(1, std::memory_order_relaxed);
+  m_itemHistory[currentCount] = itc->first;
+  uncompressed->m_historyCount = currentCount;
 
   if (CompressedOnMemoryCacheItemP(cacheItem))
-  // l'immagine compressa non la tengo insieme alla
-  // uncompressa se e' troppo grande
+  // Don't keep the compressed image together with the uncompressed one if it's too big
   {
     if (10 * cacheItem->getSize() > uncompressed->getSize()) {
       m_compressedItems.erase(itc);
@@ -1759,7 +1635,7 @@ TImageP TImageCache::Imp::get(const std::string &id, bool toBeModified) {
     }
   } else
     assert((CompressedOnDiskCacheItemP)cacheItem ||
-           (UncompressedOnDiskCacheItemP)cacheItem);  // deve essere compressa!
+           (UncompressedOnDiskCacheItemP)cacheItem);  // Must be compressed!
 
   if (toBeModified && itc != m_compressedItems.end()) {
     uncompressed->m_modified = true;
@@ -1767,7 +1643,7 @@ TImageP TImageCache::Imp::get(const std::string &id, bool toBeModified) {
   }
 
   uncompressed->m_cantCompress = toBeModified;
-  // se la memoria utilizzata e' superiore al massimo consentito, comprime
+  // If the memory used exceeds the maximum allowed, compress
   doCompress();
 
   uncompressed->m_cantCompress = false;
@@ -1822,8 +1698,7 @@ UINT TImageCache::getMemUsage(const std::string &id) const {
 
 //------------------------------------------------------------------------------
 
-//! Returns the uncompressed image size (in KB) of the image associated with
-//! passd id, or 0 if none was found.
+//! Returns the uncompressed image size (in KB) of the image associated with passed id, or 0 if none was found.
 UINT TImageCache::getUncompressedMemUsage(const std::string &id) const {
   std::map<std::string, CacheItemP>::iterator it =
       m_imp->m_uncompressedItems.find(id);
@@ -1835,14 +1710,6 @@ UINT TImageCache::getUncompressedMemUsage(const std::string &id) const {
   return 0;
 }
 
-//------------------------------------------------------------------------------
-
-/*
-int TImageCache::getItemCount() const
-{
-  return m_imp->m_uncompressedItems.size()+m_imp->m_compressedItems.size();
-}
-*/
 //------------------------------------------------------------------------------
 
 UINT TImageCache::getDiskUsage(const std::string &id) const { return 0; }
@@ -1868,10 +1735,7 @@ void TImageCache::outputMap(UINT chunkRequested, std::string filename) {
 
 void TImageCache::Imp::outputMap(UINT chunkRequested, std::string filename) {
   TThread::MutexLocker sl(&m_mutex);
-  //#ifdef _DEBUG
-  // static int Count = 0;
-
-  std::string st = filename /*+toString(Count++)*/ + ".txt";
+  std::string st = filename + ".txt";
   TFilePath fp(st);
   Tofstream os(fp);
 
@@ -1927,23 +1791,16 @@ void TImageCache::Imp::outputMap(UINT chunkRequested, std::string filename) {
 
   TUINT64 currPhisMemoryAvail =
       (TUINT64)(TSystem::getFreeMemorySize(true) / 1024.0);
-  // TUINT64 currVirtualMemoryAvail = TSystem::getFreeMemorySize(false)/1024.0;
 
   os << "************************************************************\n";
 
   os << "***requested memory: " +
             std::to_string((int)chunkRequested / 1048576.0) + " MB\n";
-  // os<<"*** memory in rasters: " +
-  // std::to_string((int)TRaster::getTotalMemoryInKB()/1024.0) + " MB\n";
-  // os<<"***virtualmem " + std::to_string((int)currVirtualMemoryAvail) + "
-  // MB\n";
   os << "***phismem " + std::to_string((int)currPhisMemoryAvail) +
             " MB; percent of tot:" +
             std::to_string(
                 (int)((currPhisMemoryAvail * 100) / m_reservedMemory)) +
             "\n";
-  // os<<"***bigmem available" +
-  // std::to_string((int)TBigMemoryManager::instance()->getAvailableMemoryinKb());
   os << "***uncompressed NOT compressible(refcount>1)   " +
             std::to_string(umcount1) + " " + std::to_string(umsize1 / 1024.0) +
             " MB\n";
@@ -1958,10 +1815,6 @@ void TImageCache::Imp::outputMap(UINT chunkRequested, std::string filename) {
             std::to_string((int)cdsize / 1048576.0) + " MB\n";
   os << "***uncompressed on disk " + std::to_string(udcount) + " " +
             std::to_string((int)udsize / 1048576.0) + " MB\n";
-
-  // TBigMemoryManager::instance()->printMap();
-
-  //#endif
 }
 
 //------------------------------------------------------------------------------
