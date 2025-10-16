@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - master  # Specify branches where the workflow should run
+      - '*'  # Specify branches where the workflow should run
     paths:
       - '**/*'                                    # Include all files in the repository
       - '!appveyor.yml'                           # Ignore changes in AppVeyor
