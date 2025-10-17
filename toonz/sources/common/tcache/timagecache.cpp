@@ -528,7 +528,7 @@ CompressedOnDiskCacheItem::CompressedOnDiskCacheItem(
   Tofstream oss(m_fp);
   if (oss.fail()) {
     compressedRas->unlock();
-    throw std::runtime_error("Failed to open cache file: " + m_fp.getWideString());
+    throw std::runtime_error("Failed to open cache file: " + toString(m_fp.getWideString()));
   }
 
   assert(compressedRas->getLy() == 1 && compressedRas->getPixelSize() == 1);
@@ -538,7 +538,7 @@ CompressedOnDiskCacheItem::CompressedOnDiskCacheItem(
   
   if (oss.fail()) {
     compressedRas->unlock();
-    throw std::runtime_error("Failed to write cache data to file: " + m_fp.getWideString());
+    throw std::runtime_error("Failed to write cache data to file: " + toString(m_fp.getWideString()));
   }
 
   compressedRas->unlock();
@@ -556,7 +556,7 @@ CompressedOnDiskCacheItem::~CompressedOnDiskCacheItem() {
 TImageP CompressedOnDiskCacheItem::getImage() const {
   Tifstream is(m_fp);
   if (is.fail()) {
-    throw std::runtime_error("Failed to open cache file for reading: " + m_fp.getWideString());
+    throw std::runtime_error(std::string("Failed to open cache file for reading: ") + TSystem::to_string(m_fp.getWideString()));
   }
 
   TUINT32 dataSize;
@@ -647,7 +647,7 @@ UncompressedOnDiskCacheItem::UncompressedOnDiskCacheItem(const TFilePath &fp,
 
   Tofstream oss(m_fp);
   if (oss.fail()) {
-    throw std::runtime_error("Failed to open cache file for writing: " + m_fp.getWideString());
+    throw std::runtime_error("Failed to open cache file for writing: " + toString(m_fp.getWideString()));
   }
 
   ras->lock();
@@ -702,7 +702,7 @@ TImageP UncompressedOnDiskCacheItem::getImage() const {
     else if (m_pixelsize == 2)
       ras = (TRasterP)(TRasterGR16P(rii->m_size));
     else
-      throw std::runtime_error("Unsupported pixel size: " + std::to_string(m_pixelsize));
+      throw std::runtime_error(std::string("Unsupported pixel size: ") + std::to_string(m_pixelsize));
       
     ras->lock();
     char *data = (char *)ras->getRawData();
