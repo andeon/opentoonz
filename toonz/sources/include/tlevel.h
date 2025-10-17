@@ -16,11 +16,8 @@
 #define DVVAR DV_IMPORT_VAR
 #endif
 
-//-------------------------------------------------------------------
-
 class DVAPI TLevel final : public TSmartObject {
   DECLARE_CLASS_CODE
-
 public:
   typedef std::map<const TFrameId, TImageP> Table;
   typedef Table::iterator Iterator;
@@ -29,7 +26,7 @@ private:
   std::string m_name;
   Table *m_table;
   TPalette *m_palette;
-  bool m_partialLoad; // Added for partial loading
+  bool m_partialLoad = false; // Added for partial loading
 
 public:
   TLevel() : m_table(new Table()), m_palette(nullptr), m_partialLoad(false) {}
@@ -46,21 +43,15 @@ public:
   void setName(std::string name);
 
   // Frames
-  int getFrameCount() const { return (int)m_table->size(); };
+  int getFrameCount() const { return (int)m_table->size(); }
   const TImageP &frame(const TFrameId fid);
-  const TImageP &frame(int f) { return frame(TFrameId(f)); };
+  const TImageP &frame(int f) { return frame(TFrameId(f)); }
   void setFrame(const TFrameId &fid, const TImageP &img);
 
-  // Returns the position (0..getFrameCount()-1) of frame f
-  // If frame f does not exist, returns -1
-  // int getIndex(const TFrameId fid);
-  // int getIndex(int f) { return getIndex(TFrameId(f)); };
+  Iterator begin() { return m_table->begin(); }
+  Iterator end() { return m_table->end(); }
 
-  Iterator begin() { return m_table->begin(); };
-  Iterator end() { return m_table->end(); };
-
-  // uh - oh; used by tinytoonz/filmstrip.
-  // TEMPORARY !!
+  // Temporary: used by tinytoonz/filmstrip
   Table *getTable() { return m_table; }
 
   TPalette *getPalette();
