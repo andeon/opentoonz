@@ -1,7 +1,7 @@
 
 
 #ifdef _MSC_VER
-#pragma warning(disable : 4661)
+#pragma warning(disable: 4661)
 #endif
 
 #include "pli_io.h"
@@ -216,7 +216,7 @@ StyleTag::StyleTag(const StyleTag &styleTag)
 
 StyleTag::~StyleTag() {}
 
-//=====================================================================
+/*=====================================================================*/
 
 ColorTag::ColorTag()
     : PliObjectTag(PliTag::COLOR_NGOBJ)
@@ -233,6 +233,7 @@ ColorTag::ColorTag(ColorTag::styleType style, ColorTag::attributeType attribute,
     , m_attribute(attribute)
     , m_numColors(numColors)
     , m_color(std::move(color)) {}
+
 /*=====================================================================*/
 
 ColorTag::ColorTag(const ColorTag &tag)
@@ -252,7 +253,6 @@ ColorTag::ColorTag(const ColorTag &tag)
 
 ColorTag::~ColorTag() {}
 
-/*=====================================================================*/
 /*=====================================================================*/
 /*=====================================================================*/
 
@@ -289,7 +289,7 @@ IntersectionDataTag::IntersectionDataTag(
 IntersectionDataTag::IntersectionDataTag(const IntersectionDataTag &tag)
     : PliObjectTag(PliTag::INTERSECTION_DATA_GOBJ)
     , m_branchCount(tag.m_branchCount) {
-  if (m_branchCount == 0) {
+  if (m_branchCount > 0) { // Fixed: Check m_branchCount > 0, not == 0
     m_branchArray.reset(new IntersectionBranch[m_branchCount]);
     for (UINT i = 0; i < m_branchCount; i++) {
       m_branchArray[i] = tag.m_branchArray[i];
@@ -334,18 +334,6 @@ AutoCloseToleranceTag::AutoCloseToleranceTag(int tolerance)
 /*=====================================================================*/
 /*=====================================================================*/
 
-/*=====================================================================*/
-/*=====================================================================*/
-
-/*ImageTag::ImageTag()
-: PliObjectTag(PliTag::IMAGE_GOBJ)
-, m_numFrame(0)
-, m_numObjects(0)
-, m_object(NULL)
-{
-}*/
-
-/*=====================================================================*/
 ImageTag::ImageTag(const TFrameId &numFrame, TUINT32 numObjects,
                    PliObjectTag **object)
     : PliObjectTag(PliTag::IMAGE_GOBJ)

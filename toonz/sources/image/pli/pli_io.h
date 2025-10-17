@@ -25,6 +25,7 @@ described in the related paperless document.
 
 #include "traster.h"
 #include "tcurves.h"
+#include "texception.h"
 
 /*=====================================================================
 Utility macros for exporting classes from the DLL
@@ -43,7 +44,7 @@ Base class for PLI tags
 class PliTag {
 public:
   enum Type {
-    NONE      = -1,
+    NONE = -1,
     END_CNTRL = 0,
     SET_DATA_8_CNTRL,
     SET_DATA_16_CNTRL,
@@ -410,11 +411,37 @@ public:
 };
 
 /*=====================================================================
+ParsedPliImp class for opaque implementation details
+=====================================================================*/
+class ParsedPliImp {
+public:
+  virtual ~ParsedPliImp() = default;
+  virtual const TFrameId &getFrameNumber(int index) const = 0;
+  virtual int getFrameCount() const = 0;
+  virtual bool isFrameLoadable(const TFrameId &fid) const = 0;
+  virtual QString getCreator() const = 0;
+  virtual void setCreator(const QString &creator) = 0;
+  virtual void getVersion(UINT &majorVersionNumber, UINT &minorVersionNumber) const = 0;
+  virtual void setVersion(UINT majorVersionNumber, UINT minorVersionNumber) = 0;
+  virtual bool addTag(PliTag *tag, bool addFront = false) = 0;
+  virtual void loadInfo(bool readPalette, TPalette *&palette, TContentHistory *&history) = 0;
+  virtual ImageTag *loadFrame(const TFrameId &frameId) = 0;
+  virtual double getThickRatio() const = 0;
+  virtual double getMaxThickness() const = 0;
+  virtual void setMaxThickness(double maxThickness) = 0;
+  virtual double getAutocloseTolerance() const = 0;
+  virtual void setAutocloseTolerance(int tolerance) = 0;
+  virtual int &precisionScale() = 0;
+  virtual PliTag *getFirstTag() = 0;
+  virtual PliTag *getNextTag() = 0;
+  virtual bool writePli(const TFilePath &filename) = 0;
+};
+
+/*=====================================================================
 ParsedPli class for storing parsed PLI file information during reading
 (reading is performed via the constructor) and for writing (using writePli).
 The implementation is opaque at this level through the ParsedPliImp class.
 =====================================================================*/
-class ParsedPliImp;
 class TFilePath;
 class TContentHistory;
 
@@ -423,44 +450,134 @@ protected:
   ParsedPliImp *imp;
 
 public:
-  void setFrameCount(int);
+  void setFrameCount(int count);
 
   ParsedPli();
   ParsedPli(const TFilePath &filename, bool readInfo = false);
   ParsedPli(USHORT framesNumber, UCHAR precision, UCHAR maxThickness, double autocloseTolerance);
   ~ParsedPli();
 
-  QString getCreator() const;
-  void setCreator(const QString &creator);
+  QString getCreator() const {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    return imp->getCreator();
+  }
 
-  void getVersion(UINT &majorVersionNumber, UINT &minorVersionNumber) const;
-  void setVersion(UINT majorVersionNumber, UINT minorVersionNumber);
-  bool addTag(PliTag *tag, bool addFront = false);
+  void setCreator(const QString &creator) {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    imp->setCreator(creator);
+  }
 
-  void loadInfo(bool readPalette, TPalette *&palette, TContentHistory *&history);
-  ImageTag *loadFrame(const TFrameId &frameId);
-  const TFrameId &getFrameNumber(int index);
-  int getFrameCount() const;
+  void getVersion(UINT &majorVersionNumber, UINT &minorVersionNumber) const {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    imp->getVersion(majorVersionNumber, minorVersionNumber);
+  }
 
-  double getThickRatio() const;
-  double getMaxThickness() const;
-  void setMaxThickness(double maxThickness);
-  double getAutocloseTolerance() const;
-  void setAutocloseTolerance(int tolerance);
-  int &precisionScale();
+  void setVersion(UINT majorVersionNumber, UINT minorVersionNumber) {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    imp->setVersion(majorVersionNumber, minorVersionNumber);
+  }
+
+  bool addTag(PliTag *tag, bool addFront = false) {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    return imp->addTag(tag, addFront);
+  }
+
+  void loadInfo(bool readPalette, TPalette *&palette, TContentHistory *&history) {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    imp->loadInfo(readPalette, palette, history);
+  }
+
+  ImageTag *loadFrame(const TFrameId &frameId) {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    return imp->loadFrame(frameId);
+  }
+
+  const TFrameId &getFrameNumber(int index) const {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    return imp->getFrameNumber(index);
+  }
+
+  int getFrameCount() const {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    return imp->getFrameCount();
+  }
+
+  double getThickRatio() const {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    return imp->getThickRatio();
+  }
+
+  double getMaxThickness() const {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    return imp->getMaxThickness();
+  }
+
+  void setMaxThickness(double maxThickness) {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    imp->setMaxThickness(maxThickness);
+  }
+
+  double getAutocloseTolerance() const {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    return imp->getAutocloseTolerance();
+  }
+
+  void setAutocloseTolerance(int tolerance) {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    imp->setAutocloseTolerance(tolerance);
+  }
+
+  int &precisionScale() {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    return imp->precisionScale();
+  }
 
   // Stores the global palette tags
   std::vector<PliObjectTag *> m_palette_tags;
 
   // Iterates over the tag list
   // Example: for (PliTag *tag = getFirstTag(); tag; tag = getNextTag()) {}
-  PliTag *getFirstTag();
-  PliTag *getNextTag();
+  PliTag *getFirstTag() {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    return imp->getFirstTag();
+  }
 
-  bool writePli(const TFilePath &filename);
+  PliTag *getNextTag() {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    return imp->getNextTag();
+  }
+
+  bool writePli(const TFilePath &filename) {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    return imp->writePli(filename);
+  }
+
+  void setCreator(std::string creator) {
+    if (!imp)
+      throw TException("ParsedPli: null implementation");
+    imp->setCreator(QString::fromStdString(creator));
+  }
 
   // Checks if a specific frame can be loaded
-  bool isFrameLoadable(TFrameId frame) const {
+  bool isFrameLoadable(const TFrameId &frame) const {
     for (int i = 0; i < getFrameCount(); ++i) {
       if (getFrameNumber(i) == frame) return true;
     }
