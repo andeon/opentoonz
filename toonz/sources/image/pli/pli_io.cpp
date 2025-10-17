@@ -622,7 +622,7 @@ extern TPalette *readPalette(GroupTag *paletteTag, int majorVersion,
 
 /*=====================================================================*/
 
-const TFrameId &ParsedPli::getFrameNumber(int index) {
+const TFrameId &ParsedPli::getFrameNumber(int index) const {
   assert(imp->m_frameOffsInFile.size() == imp->m_framesNumber);
 
   std::map<TFrameId, int>::iterator it = imp->m_frameOffsInFile.begin();

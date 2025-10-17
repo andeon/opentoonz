@@ -1171,13 +1171,12 @@ TLevelP TLevelReaderPli::loadInfo() {
     try {
       m_pli->loadInfo(m_readPalette, palette, m_contentHistory);
     } catch (const TException& e) {
-      QString msg = QString::fromStdString(::to_string(e.getMessage()));
+      QString msg = QString::fromStdString(toString(e.getMessage()));
       if (msg.contains("Not all frames loaded")) {
         m_level->setPartialLoad(true);
-        TSystem::outputDebug("Partial load detected: " + msg.toStdString());
+        TSystem::outputDebug("Partial load detected: " + toString(msg));
       } else {
-        TSystem::outputDebug("Error loading palette info: " + 
-                            std::string(e.getMessage()));
+        TSystem::outputDebug("Error loading palette info: " + toString(e.getMessage()));
       }
       // Create default palette if loading failed
       palette = new TPalette();
@@ -1203,10 +1202,10 @@ TLevelP TLevelReaderPli::loadInfo() {
           m_level->setFrame(frameId, TVectorImageP());
           loadedFrames++;
         } else {
-          TSystem::outputDebug("Frame " + frameId.expand() + " is not loadable - skipping");
+          TSystem::outputDebug("Frame " + toString(frameId.expand()) + " is not loadable - skipping");
         }
       } catch (const std::exception& e) {
-        TSystem::outputDebug("Frame " + frameId.expand() + 
+        TSystem::outputDebug("Frame " + toString(frameId.expand()) + 
                             " may be corrupted: " + std::string(e.what()));
         // Add frame anyway for recovery attempt during individual load
         m_level->setFrame(frameId, TVectorImageP());
