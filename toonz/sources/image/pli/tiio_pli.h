@@ -4,6 +4,7 @@
 #define TTIO_PLI_INCLUDED
 
 #include <memory>
+#include <vector>
 
 #include "tlevel_io.h"
 
@@ -86,6 +87,38 @@ Return an image with Reader information
   TImageReaderP getFrameReader(TFrameId fid) override;
 
   QString getCreator() override;
+  
+  // ===== CORRUPTION RECOVERY METHODS =====
+  
+  /*!
+   * Check if the PLI file is likely recoverable despite corruption
+   * Returns true if basic file structure is intact enough for partial recovery
+   */
+  bool isFileLikelyRecoverable() const;
+  
+  /*!
+   * Get list of frames that can likely be recovered from a corrupted file
+   * Useful for partial loading when some frames are damaged
+   */
+  std::vector<TFrameId> getRecoverableFrames() const;
+  
+  /*!
+   * Enable/disable corruption recovery mode
+   * When enabled, the loader will attempt to salvage data from corrupted frames
+   */
+  void enableCorruptionRecovery(bool enable) { m_recoveryEnabled = enable; }
+  
+  /*!
+   * Check if corruption recovery is enabled
+   */
+  bool isCorruptionRecoveryEnabled() const { return m_recoveryEnabled; }
+  
+  /*!
+   * Get information about what parts of the file are corrupted
+   * Returns a human-readable string describing corruption issues
+   */
+  QString getCorruptionInfo() const;
+
   friend class TImageReaderPli;
 
 private:
@@ -105,6 +138,17 @@ private:
   //! object to manage a pli
   ParsedPli *m_pli;
   TLevelP m_level;
+  
+  // ===== CORRUPTION RECOVERY FIELDS =====
+  
+  //! Enable/disable recovery mode for corrupted files
+  bool m_recoveryEnabled;
+  
+  //! Track which frames were recovered vs normally loaded
+  mutable std::map<TFrameId, bool> m_recoveredFrames;
+  
+  //! Store corruption information for diagnostics
+  mutable QString m_corruptionInfo;
 
 public:
   static TLevelReader *create(const TFilePath &f) {
@@ -137,6 +181,26 @@ public:
 
   TImageP load() override;
   TImageP doLoad();
+  
+  // ===== CORRUPTION RECOVERY METHODS =====
+  
+  /*!
+   * Attempt to load image with recovery from corruption
+   * Skips corrupted objects and continues loading valid ones
+   * Returns partial image with recoverable data
+   */
+  TImageP doLoadWithRecovery();
+  
+  /*!
+   * Check if this frame was recovered from corruption
+   */
+  bool wasRecovered() const { return m_wasRecovered; }
+  
+  /*!
+   * Get information about what parts of the frame were corrupted
+   * Returns a human-readable string describing recovery actions
+   */
+  QString getRecoveryInfo() const;
 
   TDimension getSize() const;
 
@@ -148,10 +212,44 @@ private:
 
   //! Reference to level reader
   TLevelReaderPli *m_lrp;
+  
+  // ===== CORRUPTION RECOVERY FIELDS =====
+  
+  //! Track if this frame was recovered from corruption
+  bool m_wasRecovered;
+  
+  //! Store recovery information for diagnostics
+  mutable QString m_recoveryInfo;
 };
 
 // Functions
 
 TPalette *readPalette(GroupTag *paletteTag, int majorVersion, int minorVersion);
+
+// ===== CORRUPTION RECOVERY UTILITY FUNCTIONS =====
+
+namespace PLIRecoveryUtils {
+  /*!
+   * Validate PLI file structure for basic integrity
+   * Returns true if file has valid basic structure for recovery attempts
+   */
+  bool validatePliStructure(const TFilePath &filePath);
+  
+  /*!
+   * Extract salvageable frame information from corrupted PLI
+   * Returns list of frames that appear to have recoverable data
+   */
+  std::vector<TFrameId> extractRecoverableFrames(const TFilePath &filePath);
+  
+  /*!
+   * Create a default palette for use when palette data is corrupted
+   */
+  TPalette* createDefaultRecoveryPalette();
+  
+  /*!
+   * Log recovery actions for debugging and user information
+   */
+  void logRecoveryAction(const QString &action, const QString &details = "");
+}
 
 #endif  // TTIO_PLI_INCLUDED
