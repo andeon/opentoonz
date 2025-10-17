@@ -61,6 +61,36 @@
 #define DVVAR DV_IMPORT_VAR
 #endif
 
+// Add missing toString utility functions at global scope
+namespace {
+    template<typename T>
+    std::string toString(const T& value) {
+        std::ostringstream oss;
+        oss << value;
+        return oss.str();
+    }
+
+    // Specialization for std::wstring
+    std::string toString(const std::wstring& wstr) {
+        std::string result;
+        result.reserve(wstr.size());
+        for (wchar_t wc : wstr) {
+            // Simple conversion - adjust if UTF-8 handling is needed
+            if (wc < 128) {
+                result += static_cast<char>(wc);
+            } else {
+                result += '?'; // Replace non-ASCII characters
+            }
+        }
+        return result;
+    }
+
+    // Specialization for TFilePath
+    std::string toString(const TFilePath& fp) {
+        return toString(fp.getWideString());
+    }
+}
+
 class ImageBuilder;
 class ImageInfo;
 
@@ -528,7 +558,7 @@ CompressedOnDiskCacheItem::CompressedOnDiskCacheItem(
   Tofstream oss(m_fp);
   if (oss.fail()) {
     compressedRas->unlock();
-    throw std::runtime_error("Failed to open cache file: " + toString(m_fp.getWideString()));
+    throw std::runtime_error(std::string("Failed to open cache file: ") + toString(m_fp));
   }
 
   assert(compressedRas->getLy() == 1 && compressedRas->getPixelSize() == 1);
@@ -538,7 +568,7 @@ CompressedOnDiskCacheItem::CompressedOnDiskCacheItem(
   
   if (oss.fail()) {
     compressedRas->unlock();
-    throw std::runtime_error("Failed to write cache data to file: " + toString(m_fp.getWideString()));
+    throw std::runtime_error(std::string("Failed to write cache data to file: ") + toString(m_fp));
   }
 
   compressedRas->unlock();
@@ -556,7 +586,7 @@ CompressedOnDiskCacheItem::~CompressedOnDiskCacheItem() {
 TImageP CompressedOnDiskCacheItem::getImage() const {
   Tifstream is(m_fp);
   if (is.fail()) {
-    throw std::runtime_error(std::string("Failed to open cache file for reading: ") + TSystem::to_string(m_fp.getWideString()));
+    throw std::runtime_error(std::string("Failed to open cache file for reading: ") + toString(m_fp));
   }
 
   TUINT32 dataSize;
@@ -647,7 +677,7 @@ UncompressedOnDiskCacheItem::UncompressedOnDiskCacheItem(const TFilePath &fp,
 
   Tofstream oss(m_fp);
   if (oss.fail()) {
-    throw std::runtime_error("Failed to open cache file for writing: " + toString(m_fp.getWideString()));
+    throw std::runtime_error(std::string("Failed to open cache file for writing: ") + toString(m_fp));
   }
 
   ras->lock();
@@ -682,7 +712,7 @@ UncompressedOnDiskCacheItem::~UncompressedOnDiskCacheItem() {
 TImageP UncompressedOnDiskCacheItem::getImage() const {
   Tifstream is(m_fp);
   if (is.fail()) {
-    throw std::runtime_error("Failed to open cache file for reading: " + m_fp.getWideString());
+    throw std::runtime_error(std::string("Failed to open cache file for reading: ") + toString(m_fp));
   }
 
   TUINT32 dataSize =
