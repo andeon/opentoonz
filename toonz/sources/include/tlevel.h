@@ -29,46 +29,48 @@ private:
   std::string m_name;
   Table *m_table;
   TPalette *m_palette;
+  bool m_partialLoad; // Added for partial loading
 
 public:
-  TLevel();
-  ~TLevel();
+  TLevel() : m_table(new Table()), m_palette(nullptr), m_partialLoad(false) {}
+  ~TLevel() { delete m_table; }
 
 private:
-  // not implemented
+  // Not implemented
   TLevel(const TLevel &);
   TLevel &operator=(const TLevel &);
 
 public:
-  // nome
+  // Name
   std::string getName() const;
   void setName(std::string name);
 
-  // frames
+  // Frames
   int getFrameCount() const { return (int)m_table->size(); };
-
   const TImageP &frame(const TFrameId fid);
   const TImageP &frame(int f) { return frame(TFrameId(f)); };
-
   void setFrame(const TFrameId &fid, const TImageP &img);
 
-  // ritorna la posizione (0..getNFrames()-1) del frame f
-  // se il frame f non c'e' ritorna -1
+  // Returns the position (0..getFrameCount()-1) of frame f
+  // If frame f does not exist, returns -1
   // int getIndex(const TFrameId fid);
-  // int getIndex(int f) {return getIndex(TFrameId(f));};
+  // int getIndex(int f) { return getIndex(TFrameId(f)); };
 
   Iterator begin() { return m_table->begin(); };
   Iterator end() { return m_table->end(); };
 
-  // uh - oh; serve a tinytoonz/filmstrip.
-  // PROVVISORIO !!
+  // uh - oh; used by tinytoonz/filmstrip.
+  // TEMPORARY !!
   Table *getTable() { return m_table; }
 
   TPalette *getPalette();
   void setPalette(TPalette *);
-};
 
-//-------------------------------------------------------------------
+  // Enables or disables partial frame loading
+  void setPartialLoad(bool enable) { m_partialLoad = enable; }
+  // Checks if partial loading is enabled
+  bool isPartialLoadEnabled() const { return m_partialLoad; }
+};
 
 #ifdef _WIN32
 template class DVAPI TSmartPointerT<TLevel>;
@@ -79,7 +81,5 @@ public:
   TLevelP() : TSmartPointerT<TLevel>(new TLevel) {}
   TLevelP(TLevel *level) : TSmartPointerT<TLevel>(level) {}
 };
-
-//-------------------------------------------------------------------
 
 #endif
