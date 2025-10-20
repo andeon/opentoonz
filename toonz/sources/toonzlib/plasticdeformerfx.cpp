@@ -1,3 +1,5 @@
+
+
 #include "toonz/plasticdeformerfx.h"
 
 // TnzLib includes
@@ -92,41 +94,6 @@ std::string toString(const PlasticSkeletonDeformationP &sd, double sdFrame) {
   }
 
   return result;
-}
-
-// Safe pixel copy function that matches the working version
-void safePixelCopy(TRasterP targetRaster, const QImage &img, bool was64bit) {
-  if (!targetRaster || img.isNull()) return;
-
-  TDimension d = targetRaster->getSize();
-  int wrap     = targetRaster->getLx() * sizeof(TPixel32);
-
-  if (!was64bit) {
-    TRaster32P target32(targetRaster);
-    const uchar *srcPix = img.bits();
-    uchar *dstPix       = target32->getRawData() +
-                    wrap * (d.ly - 1);  // Start from bottom for flip
-
-    for (int y = 0; y < d.ly; y++) {
-      memcpy(dstPix, srcPix, wrap);
-      dstPix -= wrap;
-      srcPix += wrap;
-    }
-  } else {
-    TRaster64P target64(targetRaster);
-    TRaster32P tempRaster(d);
-
-    const uchar *srcPix = img.bits();
-    uchar *dstPix       = tempRaster->getRawData() + wrap * (d.ly - 1);
-
-    for (int y = 0; y < d.ly; y++) {
-      memcpy(dstPix, srcPix, wrap);
-      dstPix -= wrap;
-      srcPix += wrap;
-    }
-
-    TRop::convert(target64, tempRaster);
-  }
 }
 
 }  // namespace
