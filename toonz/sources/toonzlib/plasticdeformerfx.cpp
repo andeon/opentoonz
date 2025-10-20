@@ -1,5 +1,3 @@
-
-
 #include "toonz/plasticdeformerfx.h"
 
 // TnzLib includes
@@ -10,6 +8,7 @@
 #include "toonz/txshlevelcolumn.h"
 #include "toonz/dpiscale.h"
 #include "toonz/stage.h"
+#include "toonz/tlog.h"
 
 // TnzExt includes
 #include "ext/plasticskeleton.h"
@@ -33,6 +32,7 @@
 #include <QSurfaceFormat>
 #include <QOpenGLContext>
 #include <QImage>
+#include <algorithm>  // For std::min/std::max in bbox union
 
 FX_IDENTIFIER_IS_HIDDEN(PlasticDeformerFx, "plasticDeformerFx")
 
@@ -43,15 +43,14 @@ FX_IDENTIFIER_IS_HIDDEN(PlasticDeformerFx, "plasticDeformerFx")
 namespace {
 
 std::string toString(const TAffine &aff) {
-  return
-      // Observe that toString distinguishes + and - 0. That is a problem
-      // when comparing aliases - so near 0 values are explicitly rounded to 0.
-      (areAlmostEqual(aff.a11, 0.0) ? "0" : ::to_string(aff.a11, 5)) + "," +
-      (areAlmostEqual(aff.a12, 0.0) ? "0" : ::to_string(aff.a12, 5)) + "," +
-      (areAlmostEqual(aff.a13, 0.0) ? "0" : ::to_string(aff.a13, 5)) + "," +
-      (areAlmostEqual(aff.a21, 0.0) ? "0" : ::to_string(aff.a21, 5)) + "," +
-      (areAlmostEqual(aff.a22, 0.0) ? "0" : ::to_string(aff.a22, 5)) + "," +
-      (areAlmostEqual(aff.a23, 0.0) ? "0" : ::to_string(aff.a23, 5));
+  // Note: toString distinguishes + and - 0. This is a problem when comparing
+  // aliases, so near-zero values are explicitly rounded to 0.
+  return (areAlmostEqual(aff.a11, 0.0) ? "0" : ::to_string(aff.a11, 5)) + "," +
+         (areAlmostEqual(aff.a12, 0.0) ? "0" : ::to_string(aff.a12, 5)) + "," +
+         (areAlmostEqual(aff.a13, 0.0) ? "0" : ::to_string(aff.a13, 5)) + "," +
+         (areAlmostEqual(aff.a21, 0.0) ? "0" : ::to_string(aff.a21, 5)) + "," +
+         (areAlmostEqual(aff.a22, 0.0) ? "0" : ::to_string(aff.a22, 5)) + "," +
+         (areAlmostEqual(aff.a23, 0.0) ? "0" : ::to_string(aff.a23, 5));
 }
 
 //-----------------------------------------------------------------------------------
@@ -68,7 +67,7 @@ std::string toString(SkVD *vd, double sdFrame) {
 //-----------------------------------------------------------------------------------
 
 std::string toString(const PlasticSkeleton::vertex_type &vx) {
-  // TODO: Add z and rigidity
+  // TODO: Add z and rigidity support
   return ::to_string(vx.P().x, 5) + " " + ::to_string(vx.P().y, 5);
 }
 
@@ -98,6 +97,64 @@ std::string toString(const PlasticSkeletonDeformationP &sd, double sdFrame) {
 }  // namespace
 
 //***************************************************************************************************
+//    RAII OpenGL Context Management
+//***************************************************************************************************
+
+class OpenGLContextRAII {
+private:
+  QOpenGLContext *m_context;
+  bool m_isCurrent;
+
+public:
+  OpenGLContextRAII() : m_context(new QOpenGLContext()), m_isCurrent(false) {}
+
+  ~OpenGLContextRAII() {
+    if (m_context && m_isCurrent) {
+      m_context->doneCurrent();
+    }
+    if (m_context) {
+      m_context->moveToThread(
+          0);  // Ensure thread-safe deletion for multi-threaded rendering
+      delete m_context;
+    }
+  }
+
+  // Disable copy constructor and assignment to prevent resource sharing issues
+  OpenGLContextRAII(const OpenGLContextRAII &)            = delete;
+  OpenGLContextRAII &operator=(const OpenGLContextRAII &) = delete;
+
+  bool initialize(QOffscreenSurface *surface) {
+    if (!surface || !m_context) return false;
+
+    // Tenta reutilizar ATÉ SE EXISTIR UM CURRENT (mesmo se não for o ideal)
+    QOpenGLContext *existing = QOpenGLContext::currentContext();
+    if (existing && existing->isValid()) {
+      m_context   = existing;  // Reusa o atual (compartilhado implicitamente)
+      m_isCurrent = m_context->makeCurrent(surface);
+      return m_isCurrent;
+    }
+
+    // Share context if one is already current (e.g., for multi-thread
+    // compatibility)
+    if (QOpenGLContext::currentContext()) {
+      m_context->setShareContext(QOpenGLContext::currentContext());
+    }
+
+    m_context->setFormat(QSurfaceFormat::defaultFormat());
+
+    if (!m_context->create()) {
+      return false;
+    }
+
+    m_isCurrent = m_context->makeCurrent(surface);
+    return m_isCurrent;
+  }
+
+  QOpenGLContext *context() { return m_context; }
+  operator bool() const { return m_context && m_isCurrent; }
+};
+
+//***************************************************************************************************
 //    PlasticDeformerFx  implementation
 //***************************************************************************************************
 
@@ -121,10 +178,7 @@ TFx *PlasticDeformerFx::clone(bool recursive) const {
 //-----------------------------------------------------------------------------------
 
 bool PlasticDeformerFx::canHandle(const TRenderSettings &info, double frame) {
-  // Yep. Affines are handled. Well - it's easy, since OpenGL lets you do that
-  // directly
-  // with a glPushMatrix...
-
+  // Affines are handled directly via OpenGL matrix pushes
   return true;
 }
 
@@ -159,8 +213,8 @@ bool PlasticDeformerFx::doGetBBox(double frame, TRectD &bbox,
                                   const TRenderSettings &info) {
   if (!m_port.isConnected()) return false;
 
-  // It's hard work to calculate the bounding box of a plastic deformation.
-  // Decline.
+  // Bounding box computation for plastic deformation is complex; return
+  // infinite rect
   bbox = TConsts::infiniteRectD;
   return true;
 }
@@ -169,17 +223,12 @@ bool PlasticDeformerFx::doGetBBox(double frame, TRectD &bbox,
 
 void PlasticDeformerFx::buildRenderSettings(double frame,
                                             TRenderSettings &info) {
-  // As previously pointed out, this fx is able to handle affines. We can,
-  // actually, *decide*
-  // the input reference to work with.
-
-  // So, the best choice is to let the *input fx* decide the appropriate
-  // reference, by invoking
-  // its handledAffine() method.
+  // This FX handles affines, so defer to input FX's handledAffine() for optimal
+  // reference
   m_was64bit = false;
   if (info.m_bpp == 64) {
     m_was64bit = true;
-    info.m_bpp = 32;  // We need to fix the input to 32-bpp
+    info.m_bpp = 32;  // Force 32-bpp input for OpenGL compatibility
   }
   info.m_affine = m_port->handledAffine(info, frame);
 }
@@ -190,7 +239,7 @@ bool PlasticDeformerFx::buildTextureDataSl(double frame, TRenderSettings &info,
                                            TAffine &worldLevelToLevelAff) {
   int row = (int)frame;
 
-  // Initialize level vars
+  // Initialize level variables
   TLevelColumnFx *lcfx       = (TLevelColumnFx *)m_port.getFx();
   TXshLevelColumn *texColumn = lcfx->getColumn();
 
@@ -201,33 +250,19 @@ bool PlasticDeformerFx::buildTextureDataSl(double frame, TRenderSettings &info,
 
   if (!texSl || texSl->getType() == MESH_XSHLEVEL) return false;
 
-  // Build dpi data
+  // Build DPI data
   TPointD texDpi(texSl->getDpi(texFid, 0));
   if (texDpi.x == 0.0 || texDpi.y == 0.0 || texSl->getType() == PLI_XSHLEVEL)
     texDpi.x = texDpi.y = Stage::inch;
 
-  // Build reference transforms data
-
-  // NOTE: TAffine() corresponds to IMAGE coordinates here, not WORLD
-  // coordinates. This is achieved
-  // by removing the level's dpi affine during render-tree build-up (see
-  // scenefx.cpp).
-
+  // Build reference transforms (image coordinates, DPI affine removed during
+  // render-tree build)
   worldLevelToLevelAff = TScale(texDpi.x / Stage::inch, texDpi.y / Stage::inch);
 
   // Initialize input render settings
-
-  // In the case of vector images, in order to retain the image quality required
-  // by info.m_affine,
-  // the scale component is allowed too.
-
-  // In the raster image case, we'll use the original image reference IF the
-  // affine is a magnification
-  // (ie the scale is > 1.0) - OTHERWISE, the OpenGL minification filter is too
-  // crude since it renders
-  // a fragment using its 4 adjacent pixels ONLY; in this case, we'll pass the
-  // affine below.
-
+  // For vector images (PLI), allow full affine for quality
+  // For raster, use original reference if magnifying; otherwise apply scale to
+  // avoid crude minification
   const TAffine &handledAff = TRasterFx::handledAffine(info, frame);
 
   if (texSl->getType() == PLI_XSHLEVEL) {
@@ -237,7 +272,7 @@ bool PlasticDeformerFx::buildTextureDataSl(double frame, TRenderSettings &info,
     info.m_affine = TAffine();
     buildRenderSettings(frame, info);
 
-    // NOTE: scale = handledAff.a11 / worldLevelToLevelAff.a11
+    // Apply scale if handled affine is minifying (scale < 1.0)
     if (handledAff.a11 < worldLevelToLevelAff.a11)
       info.m_affine =
           TScale(handledAff.a11 / worldLevelToLevelAff.a11) * info.m_affine;
@@ -250,10 +285,9 @@ bool PlasticDeformerFx::buildTextureDataSl(double frame, TRenderSettings &info,
 
 bool PlasticDeformerFx::buildTextureData(double frame, TRenderSettings &info,
                                          TAffine &worldLevelToLevelAff) {
-  // Common case (typically happen with sub-xsheets)
-
-  buildRenderSettings(frame, info);  // Adjust the info
-  worldLevelToLevelAff = TAffine();  // Reference match
+  // Common case (e.g., sub-XSheets): adjust info and match reference
+  buildRenderSettings(frame, info);
+  worldLevelToLevelAff = TAffine();
 
   return true;
 }
@@ -275,11 +309,11 @@ void PlasticDeformerFx::doCompute(TTile &tile, double frame,
 
   if (dynamic_cast<TLevelColumnFx *>(m_port.getFx())) {
     if (!buildTextureDataSl(frame, texInfo, worldTexLevelToTexLevelAff)) return;
-  } else
+  } else {
     buildTextureData(frame, texInfo, worldTexLevelToTexLevelAff);
+  }
 
-  // Initialize mesh level vars
-
+  // Initialize mesh level variables
   const TXshCell &meshCell = m_xsh->getCell(row, m_col);
 
   TXshSimpleLevel *meshSl = meshCell.getSimpleLevel();
@@ -288,7 +322,6 @@ void PlasticDeformerFx::doCompute(TTile &tile, double frame,
   if (!meshSl || meshSl->getType() != MESH_XSHLEVEL) return;
 
   // Retrieve mesh image and deformation
-
   TStageObject *meshColumnObj =
       m_xsh->getStageObject(TStageObjectId::ColumnId(m_col));
 
@@ -296,22 +329,17 @@ void PlasticDeformerFx::doCompute(TTile &tile, double frame,
   if (!mi) return;
 
   // Retrieve deformation data
-
   const PlasticSkeletonDeformationP &sd =
       meshColumnObj->getPlasticSkeletonDeformation();
   assert(sd);
 
   double sdFrame = meshColumnObj->paramsTime(frame);
 
-  // Build dpi data
-
+  // Build DPI data
   TPointD meshDpi(meshSl->getDpi(meshFid, 0));
   assert(meshDpi.x != 0.0 && meshDpi.y != 0.0);
 
-  // Build reference transforms data
-
-  // Build affines
-
+  // Build reference transforms
   const TAffine &imageToTextureAff           = texInfo.m_affine;
   const TAffine &worldTexLevelToWorldMeshAff = m_texPlacement;
   const TAffine &meshToWorldMeshAff =
@@ -323,7 +351,6 @@ void PlasticDeformerFx::doCompute(TTile &tile, double frame,
   const TAffine &meshToTextureAff = imageToTextureAff * meshToTexLevelAff;
 
   // Retrieve deformer data
-
   TScale worldMeshToMeshAff(meshDpi.x / Stage::inch, meshDpi.y / Stage::inch);
 
   std::unique_ptr<const PlasticDeformerDataGroup> dataGroup(
@@ -331,18 +358,24 @@ void PlasticDeformerFx::doCompute(TTile &tile, double frame,
           sdFrame, mi.getPointer(), sd.getPointer(), sd->skeletonId(sdFrame),
           worldMeshToMeshAff));
 
-  // Build texture
-
   // Build the mesh's bounding box and map it to input reference
   TRectD meshBBox(meshToTextureAff * mi->getBBox());
 
-  // Now, build the tile's geometry
+  // Build the tile's geometry
   TRectD texBBox;
   m_port->getBBox(frame, texBBox, texInfo);
 
-  TRectD bbox = texBBox * meshBBox;
+  // Compute union of texBBox and meshBBox properly
+  TRectD bbox;
+  bbox.x0 = std::min(texBBox.x0, meshBBox.x0);
+  bbox.y0 = std::min(texBBox.y0, meshBBox.y0);
+  bbox.x1 = std::max(texBBox.x1, meshBBox.x1);
+  bbox.y1 = std::max(texBBox.y1, meshBBox.y1);
+
+  // If the resulting bbox is empty, skip rendering
   if (bbox.getLx() <= 0.0 || bbox.getLy() <= 0.0) return;
 
+  // Align to pixel boundaries
   bbox.x0 = tfloor(bbox.x0);
   bbox.y0 = tfloor(bbox.y0);
   bbox.x1 = tceil(bbox.x1);
@@ -350,103 +383,127 @@ void PlasticDeformerFx::doCompute(TTile &tile, double frame,
 
   TDimension tileSize(tround(bbox.getLx()), tround(bbox.getLy()));
 
-  // Then, compute the input image
+  // Compute the input image
   TTile inTile;
   m_port->allocateAndCompute(inTile, bbox.getP00(), tileSize, TRasterP(), frame,
                              texInfo);
-  QOpenGLContext *context;
-  // Draw the textured mesh
+
+  // Draw the textured mesh using RAII for resource management
   {
-    // Prepare texture
+    // Prepare texture (depremultiply for OpenGL texture upload)
     TRaster32P tex(inTile.getRaster());
-    TRop::depremultiply(tex);  // Textures must be stored depremultiplied.
-                               // See docs about the tglDraw() below.
+    TRop::depremultiply(tex);
     static TAtomicVar var;
     const std::string &texId = "render_tex " + std::to_string(++var);
 
-    // Prepare an OpenGL context
-    context = new QOpenGLContext();
-    if (QOpenGLContext::currentContext())
-      context->setShareContext(QOpenGLContext::currentContext());
-    context->setFormat(QSurfaceFormat::defaultFormat());
-    context->create();
-    context->makeCurrent(info.m_offScreenSurface.get());
+    OpenGLContextRAII contextRAII;
+    if (!contextRAII.initialize(info.m_offScreenSurface.get())) {
+      TSysLog::error("PlasticDeformerFx: Failed to initialize OpenGL context");
+      tile.getRaster()->clear();  // Fallback
+      return;
+    }
 
     TDimension d = tile.getRaster()->getSize();
     QOpenGLFramebufferObject fb(d.lx, d.ly);
 
-    fb.bind();
-
-    // Load texture into the context
-    TTexturesStorage *ts                = TTexturesStorage::instance();
-    const DrawableTextureDataP &texData = ts->loadTexture(texId, tex, bbox);
-
-    // Draw
-    glViewport(0, 0, d.lx, d.ly);
-    glClearColor(0, 0, 0, 0);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluOrtho2D(0, d.lx, 0, d.ly);
-
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    tglMultMatrix(TTranslation(-tile.m_pos) * info.m_affine *
-                  meshToWorldMeshAff);
-
-    glEnable(GL_BLEND);
-    glEnable(GL_TEXTURE_2D);
-
-    tglDraw(*mi, *texData, meshToTextureAff, *dataGroup);
-
-    // Retrieve drawing and copy to output tile
-
-    QImage img = fb.toImage().scaled(QSize(d.lx, d.ly), Qt::IgnoreAspectRatio,
-                                     Qt::SmoothTransformation);
-    int wrap   = tile.getRaster()->getLx() * sizeof(TPixel32);
-    if (!m_was64bit) {
-      uchar *srcPix = img.bits();
-      uchar *dstPix = tile.getRaster()->getRawData() + wrap * (d.ly - 1);
-      for (int y = 0; y < d.ly; y++) {
-        memcpy(dstPix, srcPix, wrap);
-        dstPix -= wrap;
-        srcPix += wrap;
-      }
-    } else if (m_was64bit) {
-      TRaster64P newRaster(tile.getRaster()->getSize());
-      TRaster32P tempRaster(tile.getRaster()->getSize());
-      uchar *srcPix = img.bits();
-      uchar *dstPix = tempRaster.getPointer()->getRawData() + wrap * (d.ly - 1);
-      for (int y = 0; y < d.ly; y++) {
-        memcpy(dstPix, srcPix, wrap);
-        dstPix -= wrap;
-        srcPix += wrap;
-      }
-      TRop::convert(newRaster, tempRaster);
-      int size = tile.getRaster()->getLx() * tile.getRaster()->getLy() *
-                 sizeof(TPixel64);
-      srcPix = newRaster.getPointer()->getRawData();
-      dstPix = tile.getRaster()->getRawData();
-      memcpy(dstPix, srcPix, size);
-      texInfo.m_bpp = 64;
+    if (!fb.isValid()) {
+      TSysLog::error("PlasticDeformerFx: Failed to create FBO");
+      tile.getRaster()->clear();  // Fallback
+      return;
     }
 
-    fb.release();
+    fb.bind();
 
-    // context->getRaster(tile.getRaster());
-    glFlush();
-    glFinish();
-    // Cleanup
+    TTexturesStorage *ts = TTexturesStorage::instance();
+    try {
+      const DrawableTextureDataP &texData = ts->loadTexture(texId, tex, bbox);
+      if (!texData) {
+        throw std::runtime_error("Failed to load texture data");
+      }
 
-    // No need to disable stuff - the context dies here
+      // OpenGL draw setup
+      glViewport(0, 0, d.lx, d.ly);
+      glClearColor(0, 0, 0, 0);
+      glClear(GL_COLOR_BUFFER_BIT);
 
-    // ts->unloadTexture(texId);                                // Auto-released
-    // due to display list destruction
-    context->deleteLater();
-    // context->doneCurrent();
+      glMatrixMode(GL_PROJECTION);
+      glLoadIdentity();
+      gluOrtho2D(0, d.lx, 0, d.ly);
+
+      glMatrixMode(GL_MODELVIEW);
+      glLoadIdentity();
+      tglMultMatrix(TTranslation(-tile.m_pos) * info.m_affine *
+                    meshToWorldMeshAff);
+
+      glEnable(GL_BLEND);
+      glEnable(GL_TEXTURE_2D);
+
+      tglDraw(*mi, *texData, meshToTextureAff, *dataGroup);
+
+      fb.release();
+      glFlush();
+      glFinish();  // Ensure draw completes before readback
+
+      // Retrieve and copy pixels (optimized: manual copy with flip and direct
+      // convert)
+      QImage img =
+          fb.toImage().mirrored(false, true);  // Flip Y in single operation
+      if (img.isNull()) {
+        throw std::runtime_error("Failed to read FBO image");
+      }
+
+      int wrap              = d.lx * sizeof(TPixel32);
+      TRasterP targetRaster = tile.getRaster();
+
+      if (m_was64bit) {
+        // 64-bit: Copy to temp 32-bit raster, convert, then copy to 64-bit
+        // target
+        TRaster64P convertedRaster(d);
+        TRaster32P tempRaster(d);
+        uchar *srcPix = img.bits();
+        uchar *dstPix = tempRaster->getRawData();
+        for (int y = 0; y < d.ly; ++y) {
+          memcpy(dstPix + y * wrap, srcPix + y * wrap, wrap);
+        }
+        TRop::convert(convertedRaster, tempRaster);
+        // Copy to tile (original is 64-bit allocated)
+        memcpy(targetRaster->getRawData(), convertedRaster->getRawData(),
+               convertedRaster->getLx() * convertedRaster->getLy() *
+                   sizeof(TPixel64));
+      } else {
+        // 32-bit: direct copy (no flip needed after mirrored)
+        uchar *srcPix = img.bits();
+        uchar *dstPix = targetRaster->getRawData();
+        for (int y = 0; y < d.ly; ++y) {
+          memcpy(dstPix + y * wrap, srcPix + y * wrap, wrap);
+        }
+      }
+
+      // Unload texture to prevent memory leaks
+      ts->unloadTexture(texId);
+
+    } catch (const std::exception &e) {
+      fb.release();
+      ts->unloadTexture(texId);
+      TSysLog::error(std::string("PlasticDeformerFx: OpenGL draw error - ") +
+                     e.what());
+      tile.getRaster()->clear();  // Fallback on error
+      throw;
+    } catch (...) {
+      fb.release();
+      ts->unloadTexture(texId);
+      TSysLog::error("PlasticDeformerFx: Unknown OpenGL error during draw");
+      tile.getRaster()->clear();  // Fallback on error
+      throw;
+    }
+
+    // Check and log any lingering OpenGL errors
+    GLenum err;
+    while ((err = glGetError()) != GL_NO_ERROR) {
+      TSysLog::warning("PlasticDeformerFx: GL error after draw - " +
+                       std::to_string(err));
+    }
   }
-  assert(glGetError() == GL_NO_ERROR);
 }
 
 //-----------------------------------------------------------------------------------
@@ -462,15 +519,16 @@ void PlasticDeformerFx::doDryCompute(TRectD &rect, double frame,
 
   if (dynamic_cast<TLevelColumnFx *>(m_port.getFx())) {
     if (!buildTextureDataSl(frame, texInfo, worldTexLevelToTexLevelAff)) return;
-  } else
+  } else {
     buildTextureData(frame, texInfo, worldTexLevelToTexLevelAff);
+  }
 
   const TXshCell &meshCell = m_xsh->getCell(row, m_col);
 
   TXshSimpleLevel *meshSl = meshCell.getSimpleLevel();
   const TFrameId &meshFid = meshCell.getFrameId();
 
-  if (!meshSl || meshSl->getType() == MESH_XSHLEVEL) return;
+  if (!meshSl || meshSl->getType() != MESH_XSHLEVEL) return;
 
   TStageObject *meshColumnObj =
       m_xsh->getStageObject(TStageObjectId::ColumnId(m_col));
@@ -497,13 +555,21 @@ void PlasticDeformerFx::doDryCompute(TRectD &rect, double frame,
   // Build the mesh's bounding box and map it to input reference
   TRectD meshBBox(meshToTextureAff * mi->getBBox());
 
-  // Now, build the tile's geometry
+  // Build the tile's geometry
   TRectD texBBox;
   m_port->getBBox(frame, texBBox, texInfo);
 
-  TRectD bbox = texBBox * meshBBox;
+  // Compute union of texBBox and meshBBox properly (mirrored from doCompute)
+  TRectD bbox;
+  bbox.x0 = std::min(texBBox.x0, meshBBox.x0);
+  bbox.y0 = std::min(texBBox.y0, meshBBox.y0);
+  bbox.x1 = std::max(texBBox.x1, meshBBox.x1);
+  bbox.y1 = std::max(texBBox.y1, meshBBox.y1);
+
+  // If the resulting bbox is empty, skip rendering
   if (bbox.getLx() <= 0.0 || bbox.getLy() <= 0.0) return;
 
+  // Align to pixel boundaries
   bbox.x0 = tfloor(bbox.x0);
   bbox.y0 = tfloor(bbox.y0);
   bbox.x1 = tceil(bbox.x1);

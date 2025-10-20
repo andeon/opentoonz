@@ -26,6 +26,8 @@
 #include <QCoreApplication>
 #include <QOffscreenSurface>
 
+#include <limits>
+
 // Glew include
 #include <GL/glew.h>
 
@@ -284,7 +286,12 @@ Suggestions are welcome as this is a tad beyond ridiculous...
     }
   }
 
-  ShadingContext::Support touchSupport() {
+  ShadingContext::Support touchSupport(
+      bool isDry = false) {  // Added: bool isDry = false
+    if (isDry) {
+      // In dry compute, skip the lock and return OK (bbox doesn't need full GL)
+      return ShadingContext::OK;
+    }
     struct {
       ShadingContextManager *m_this;
       ShadingContext::Support support() {
@@ -352,7 +359,7 @@ class SCMDelegate final : public TRenderResourceManager {
 
   void onRenderInstanceEnd(unsigned long id) override {
     if (!TThread::isMainThread()) {
-      /* tofflinegl のときとは逆で main thread に dispatch する */
+      /* Contrary to tofflinegl, dispatch to the main thread */
       MessageCreateContext(ShadingContextManager::instance()).sendBlocking();
     } else {
       ShadingContextManager::instance()->onRenderInstanceEnd();
@@ -607,7 +614,7 @@ bool ShaderFx::doGetBBox(double frame, TRectD &bbox,
   if (!sd.isValid()) return true;
 
   ShadingContextManager *manager = ShadingContextManager::instance();
-  if (manager->touchSupport() != ShadingContext::OK) return true;
+  if (manager->touchSupport(true) != ShadingContext::OK) return true;
 
   // Remember: info.m_affine MUST NOT BE CONSIDERED in doGetBBox's
   // implementation
@@ -874,8 +881,7 @@ void ShaderFx::getInputData(const TRectD &rect, double frame,
       locals::addNames(varyingStrings, varyingPrefixes[v], pCount);
 
 #if defined(__APPLE_CC__)
-    /* OSX10.8 の clang -stdlib=libc++ だと link 時 &std::string::c_str が
-     * undefined になってしまう */
+    /* On OSX10.8 with clang -stdlib=libc++, &std::string::c_str becomes undefined at link time */
     std::vector<const GLchar *> varyingNames(varyingStrings.size());
     auto conv = [](const std::string &i) { return i.c_str(); };
     std::transform(varyingStrings.begin(), varyingStrings.end(),
@@ -975,7 +981,7 @@ void ShaderFx::doCompute(TTile &tile, double frame,
   };  // locals
 
   ShadingContextManager *manager = ShadingContextManager::instance();
-  if (manager->touchSupport() != ShadingContext::OK) return;
+  if (manager->touchSupport(false) != ShadingContext::OK) return;
 
   QMutexLocker mLocker(
       manager->mutex());  // As GPU access can be considered sequential anyway,
@@ -1047,6 +1053,7 @@ void ShaderFx::doCompute(TTile &tile, double frame,
     // to prepare the associated sampler variable in the linkes program...
   }
 
+  if (!tile.getRaster()) return; // Prevent null raster access
   // Perform the actual fragment shading
   {
     locals::touchOutputSize(context, tile.getRaster()->getSize(), info.m_bpp);
@@ -1126,7 +1133,7 @@ void ShaderFx::doCompute(TTile &tile, double frame,
 void ShaderFx::doDryCompute(TRectD &rect, double frame,
                             const TRenderSettings &info) {
   ShadingContextManager *manager = ShadingContextManager::instance();
-  if (manager->touchSupport() != ShadingContext::OK) return;
+  if (manager->touchSupport(true) != ShadingContext::OK) return;
 
   QMutexLocker mLocker(manager->mutex());
 
