@@ -94,60 +94,135 @@ std::string toString(const PlasticSkeletonDeformationP &sd, double sdFrame) {
   return result;
 }
 
+// Safe pixel copy function with bounds checking
+void safePixelCopy(TRasterP targetRaster, const QImage &img, bool was64bit) {
+  if (!targetRaster) {
+    throw std::runtime_error("Target raster is null");
+  }
+
+  if (img.isNull()) {
+    throw std::runtime_error("Source image is null");
+  }
+
+  TDimension d = targetRaster->getSize();
+
+  // Validate dimensions
+  if (img.width() != d.lx || img.height() != d.ly) {
+    throw std::runtime_error("Image dimension mismatch");
+  }
+
+  int expectedBytesPerLine = d.lx * 4;  // RGBA
+  if (img.bytesPerLine() < expectedBytesPerLine) {
+    throw std::runtime_error("Invalid image stride");
+  }
+
+  if (was64bit) {
+    TRaster64P target64(targetRaster);
+    TRaster32P tempRaster(d);
+
+    if (!tempRaster) {
+      throw std::runtime_error("Failed to allocate temporary raster");
+    }
+
+    const uchar *srcPix = img.constBits();
+    uchar *tempPix      = tempRaster->getRawData();
+
+    // Safe line-by-line copy
+    for (int y = 0; y < d.ly; ++y) {
+      const uchar *srcRow = srcPix + (y * img.bytesPerLine());
+      uchar *dstRow       = tempPix + (y * tempRaster->getWrap());
+      memcpy(dstRow, srcRow, expectedBytesPerLine);
+    }
+
+    TRop::convert(target64, tempRaster);
+  } else {
+    TRaster32P target32(targetRaster);
+    const uchar *srcPix = img.constBits();
+    uchar *dstPix       = target32->getRawData();
+
+    for (int y = 0; y < d.ly; ++y) {
+      const uchar *srcRow = srcPix + (y * img.bytesPerLine());
+      uchar *dstRow       = dstPix + (y * target32->getWrap());
+      memcpy(dstRow, srcRow, expectedBytesPerLine);
+    }
+  }
+}
+
 }  // namespace
 
 //***************************************************************************************************
 //    RAII OpenGL Context Management
 //***************************************************************************************************
 
-class OpenGLContextRAII {
+class OpenGLContextRAIIS {
 private:
   QOpenGLContext *m_context;
   bool m_isCurrent;
+  bool m_ownsContext;
 
 public:
-  OpenGLContextRAII() : m_context(new QOpenGLContext()), m_isCurrent(false) {}
+  OpenGLContextRAIIS()
+      : m_context(new QOpenGLContext())
+      , m_isCurrent(false)
+      , m_ownsContext(true) {}
 
-  ~OpenGLContextRAII() {
+  ~OpenGLContextRAIIS() {
     if (m_context && m_isCurrent) {
       m_context->doneCurrent();
     }
-    if (m_context) {
-      m_context->moveToThread(
-          0);  // Ensure thread-safe deletion for multi-threaded rendering
+    if (m_context && m_ownsContext) {
+      m_context->moveToThread(0);
       delete m_context;
     }
   }
 
   // Disable copy constructor and assignment to prevent resource sharing issues
-  OpenGLContextRAII(const OpenGLContextRAII &)            = delete;
-  OpenGLContextRAII &operator=(const OpenGLContextRAII &) = delete;
+  OpenGLContextRAIIS(const OpenGLContextRAIIS &)            = delete;
+  OpenGLContextRAIIS &operator=(const OpenGLContextRAIIS &) = delete;
 
   bool initialize(QOffscreenSurface *surface) {
-    if (!surface || !m_context) return false;
-
-    // Tenta reutilizar ATÉ SE EXISTIR UM CURRENT (mesmo se não for o ideal)
-    QOpenGLContext *existing = QOpenGLContext::currentContext();
-    if (existing && existing->isValid()) {
-      m_context   = existing;  // Reusa o atual (compartilhado implicitamente)
-      m_isCurrent = m_context->makeCurrent(surface);
-      return m_isCurrent;
+    if (!surface) {
+      TSysLog::error("PlasticDeformerFx: Null surface provided");
+      return false;
     }
 
-    // Share context if one is already current (e.g., for multi-thread
-    // compatibility)
-    if (QOpenGLContext::currentContext()) {
-      m_context->setShareContext(QOpenGLContext::currentContext());
+    if (!m_context) {
+      TSysLog::error("PlasticDeformerFx: Failed to create OpenGL context");
+      return false;
+    }
+
+    QOpenGLContext *existing = QOpenGLContext::currentContext();
+    if (existing && existing->isValid() && existing->surface() == surface) {
+      // Safe reuse of existing context - don't take ownership
+      if (m_ownsContext) {
+        delete m_context;
+        m_ownsContext = false;
+      }
+      m_context   = existing;
+      m_isCurrent = true;  // Already current
+      return true;
+    }
+
+    // Create new context with sharing if possible
+    if (existing) {
+      m_context->setShareContext(existing);
     }
 
     m_context->setFormat(QSurfaceFormat::defaultFormat());
 
     if (!m_context->create()) {
+      TSysLog::error("PlasticDeformerFx: Failed to create OpenGL context");
       return false;
     }
 
     m_isCurrent = m_context->makeCurrent(surface);
-    return m_isCurrent;
+    if (!m_isCurrent) {
+      TSysLog::error("PlasticDeformerFx: Failed to make context current");
+      return false;
+    }
+
+    m_ownsContext = true;
+    return true;
   }
 
   QOpenGLContext *context() { return m_context; }
@@ -396,7 +471,7 @@ void PlasticDeformerFx::doCompute(TTile &tile, double frame,
     static TAtomicVar var;
     const std::string &texId = "render_tex " + std::to_string(++var);
 
-    OpenGLContextRAII contextRAII;
+    OpenGLContextRAIIS contextRAII;
     if (!contextRAII.initialize(info.m_offScreenSurface.get())) {
       TSysLog::error("PlasticDeformerFx: Failed to initialize OpenGL context");
       tile.getRaster()->clear();  // Fallback
@@ -412,7 +487,20 @@ void PlasticDeformerFx::doCompute(TTile &tile, double frame,
       return;
     }
 
+    // Save current OpenGL state
+    GLint prevViewport[4];
+    glGetIntegerv(GL_VIEWPORT, prevViewport);
+    GLboolean prevBlend   = glIsEnabled(GL_BLEND);
+    GLboolean prevTexture = glIsEnabled(GL_TEXTURE_2D);
+
+    GLint prevMatrixMode;
+    glGetIntegerv(GL_MATRIX_MODE, &prevMatrixMode);
+
     fb.bind();
+
+    // Check FBO status after binding using Qt's method
+    // Note: QOpenGLFramebufferObject already validates during creation
+    // We'll rely on fb.isValid() and check for GL errors instead
 
     TTexturesStorage *ts = TTexturesStorage::instance();
     try {
@@ -444,57 +532,73 @@ void PlasticDeformerFx::doCompute(TTile &tile, double frame,
       glFlush();
       glFinish();  // Ensure draw completes before readback
 
-      // Retrieve and copy pixels (optimized: manual copy with flip and direct
-      // convert)
+      // Restore OpenGL state
+      glViewport(prevViewport[0], prevViewport[1], prevViewport[2],
+                 prevViewport[3]);
+      if (prevBlend)
+        glEnable(GL_BLEND);
+      else
+        glDisable(GL_BLEND);
+      if (prevTexture)
+        glEnable(GL_TEXTURE_2D);
+      else
+        glDisable(GL_TEXTURE_2D);
+      glMatrixMode(prevMatrixMode);
+
+      // Retrieve and copy pixels using safe function
       QImage img =
           fb.toImage().mirrored(false, true);  // Flip Y in single operation
       if (img.isNull()) {
         throw std::runtime_error("Failed to read FBO image");
       }
 
-      int wrap              = d.lx * sizeof(TPixel32);
-      TRasterP targetRaster = tile.getRaster();
-
-      if (m_was64bit) {
-        // 64-bit: Copy to temp 32-bit raster, convert, then copy to 64-bit
-        // target
-        TRaster64P convertedRaster(d);
-        TRaster32P tempRaster(d);
-        uchar *srcPix = img.bits();
-        uchar *dstPix = tempRaster->getRawData();
-        for (int y = 0; y < d.ly; ++y) {
-          memcpy(dstPix + y * wrap, srcPix + y * wrap, wrap);
-        }
-        TRop::convert(convertedRaster, tempRaster);
-        // Copy to tile (original is 64-bit allocated)
-        memcpy(targetRaster->getRawData(), convertedRaster->getRawData(),
-               convertedRaster->getLx() * convertedRaster->getLy() *
-                   sizeof(TPixel64));
-      } else {
-        // 32-bit: direct copy (no flip needed after mirrored)
-        uchar *srcPix = img.bits();
-        uchar *dstPix = targetRaster->getRawData();
-        for (int y = 0; y < d.ly; ++y) {
-          memcpy(dstPix + y * wrap, srcPix + y * wrap, wrap);
-        }
-      }
+      // Use safe pixel copy with bounds checking
+      safePixelCopy(tile.getRaster(), img, m_was64bit);
 
       // Unload texture to prevent memory leaks
       ts->unloadTexture(texId);
 
     } catch (const std::exception &e) {
       fb.release();
+
+      // Restore OpenGL state on error
+      glViewport(prevViewport[0], prevViewport[1], prevViewport[2],
+                 prevViewport[3]);
+      if (prevBlend)
+        glEnable(GL_BLEND);
+      else
+        glDisable(GL_BLEND);
+      if (prevTexture)
+        glEnable(GL_TEXTURE_2D);
+      else
+        glDisable(GL_TEXTURE_2D);
+      glMatrixMode(prevMatrixMode);
+
       ts->unloadTexture(texId);
       TSysLog::error(std::string("PlasticDeformerFx: OpenGL draw error - ") +
                      e.what());
       tile.getRaster()->clear();  // Fallback on error
-      throw;
+      return;                     // Don't rethrow in production code
     } catch (...) {
       fb.release();
+
+      // Restore OpenGL state on error
+      glViewport(prevViewport[0], prevViewport[1], prevViewport[2],
+                 prevViewport[3]);
+      if (prevBlend)
+        glEnable(GL_BLEND);
+      else
+        glDisable(GL_BLEND);
+      if (prevTexture)
+        glEnable(GL_TEXTURE_2D);
+      else
+        glDisable(GL_TEXTURE_2D);
+      glMatrixMode(prevMatrixMode);
+
       ts->unloadTexture(texId);
       TSysLog::error("PlasticDeformerFx: Unknown OpenGL error during draw");
       tile.getRaster()->clear();  // Fallback on error
-      throw;
+      return;                     // Don't rethrow in production code
     }
 
     // Check and log any lingering OpenGL errors
