@@ -58,7 +58,7 @@ TDimension FilmstripIconSize(0, 0);
 
 // Access name-based storage
 std::set<std::string> iconsMap;
-QMutex iconsMapMutex; // ADDED: Mutex for thread safety
+QMutex iconsMapMutex;  // ADDED: Mutex for thread safety
 
 typedef std::set<std::string>::iterator IconIterator;
 
@@ -68,7 +68,7 @@ typedef std::set<std::string>::iterator IconIterator;
 bool getIcon(const std::string &iconName, QPixmap &pix,
              TXshSimpleLevel *simpleLevel = 0,
              TDimension standardSize      = TDimension(0, 0)) {
-  QMutexLocker locker(&iconsMapMutex); // ADDED: Thread safety
+  QMutexLocker locker(&iconsMapMutex);  // ADDED: Thread safety
   IconIterator it;
   it = iconsMap.find(iconName);
 
@@ -79,7 +79,7 @@ bool getIcon(const std::string &iconName, QPixmap &pix,
     } catch (...) {
       return false;
     }
-    
+
     if (!im) return false;
 
     TToonzImage *timgp = dynamic_cast<TToonzImage *>(im.getPointer());
@@ -89,8 +89,8 @@ bool getIcon(const std::string &iconName, QPixmap &pix,
           IconGenerator::instance()->getSettings();
 
       TRaster32P icon(timgp->getSize());
-      if (!icon || !icon->getBuffer()) return false;
-      
+      if (!icon || !icon->getRawData()) return false;
+
       icon->clear();
       icon->fill((settings.m_blackBgCheck) ? TPixel::Black : TPixel::White);
       if (settings.m_transparencyCheck || settings.m_inkIndex != -1 ||
@@ -119,16 +119,16 @@ bool getIcon(const std::string &iconName, QPixmap &pix,
       pix = QPixmap();
       return true;
     }
-    
+
     TRasterP ras = img->getRaster();
-    if (!ras || !ras->getBuffer()) {
+    if (!ras || !ras->getRawData()) {
       pix = QPixmap();
       return true;
     }
-    
+
     assert(!(TRasterGR8P)img->getRaster());
     const TRaster32P &ras32 = img->getRaster();
-    bool isHighDpi        = false;
+    bool isHighDpi          = false;
     if (standardSize != TDimension(0, 0) &&
         ras32->getSize().lx > standardSize.lx &&
         ras32->getSize().ly > standardSize.ly)
@@ -144,15 +144,16 @@ bool getIcon(const std::string &iconName, QPixmap &pix,
 
 void setIcon(const std::string &iconName, const TRaster32P &icon) {
   if (iconName.empty()) return;
-  
-  QMutexLocker locker(&iconsMapMutex); // ADDED: Thread safety
-  
+
+  QMutexLocker locker(&iconsMapMutex);  // ADDED: Thread safety
+
   if (iconsMap.find(iconName) != iconsMap.end()) {
     // ADDED: Validate raster before caching
-    if (!icon || !icon->getBuffer() || icon->getLx() <= 0 || icon->getLy() <= 0) {
+    if (!icon || !icon->getRawData() || icon->getLx() <= 0 ||
+        icon->getLy() <= 0) {
       return;
     }
-    
+
     try {
       TImageCache::instance()->add(iconName, TRasterImageP(icon), true);
     } catch (...) {
@@ -167,15 +168,16 @@ void setIcon(const std::string &iconName, const TRaster32P &icon) {
  */
 void setIcon_TnzImg(const std::string &iconName, const TRasterCM32P &icon) {
   if (iconName.empty()) return;
-  
-  QMutexLocker locker(&iconsMapMutex); // ADDED: Thread safety
-  
+
+  QMutexLocker locker(&iconsMapMutex);  // ADDED: Thread safety
+
   if (iconsMap.find(iconName) != iconsMap.end()) {
     // ADDED: Validate raster before caching
-    if (!icon || !icon->getBuffer() || icon->getLx() <= 0 || icon->getLy() <= 0) {
+    if (!icon || !icon->getRawData() || icon->getLx() <= 0 ||
+        icon->getLy() <= 0) {
       return;
     }
-    
+
     try {
       TImageCache::instance()->add(
           iconName, TToonzImageP(icon, TRect(icon->getSize())), true);
@@ -188,8 +190,8 @@ void setIcon_TnzImg(const std::string &iconName, const TRasterCM32P &icon) {
 //-----------------------------------------------------------------------------
 
 void removeIcon(const std::string &iconName) {
-  QMutexLocker locker(&iconsMapMutex); // ADDED: Thread safety
-  
+  QMutexLocker locker(&iconsMapMutex);  // ADDED: Thread safety
+
   IconIterator it;
   it = iconsMap.find(iconName);
   if (it != iconsMap.end()) {
@@ -205,8 +207,8 @@ void removeIcon(const std::string &iconName) {
 //-----------------------------------------------------------------------------
 
 bool isUnpremultiplied(const TRaster32P &r) {
-  if (!r || !r->getBuffer()) return false;
-  
+  if (!r || !r->getRawData()) return false;
+
   int lx = r->getLx();
   int y  = r->getLy();
   r->lock();
@@ -228,8 +230,8 @@ bool isUnpremultiplied(const TRaster32P &r) {
 //-----------------------------------------------------------------------------
 
 void makeChessBackground(const TRaster32P &ras) {
-  if (!ras || !ras->getBuffer()) return;
-  
+  if (!ras || !ras->getRawData()) return;
+
   ras->lock();
 
   const TPixel32 gray1(230, 230, 230, 255), gray2(180, 180, 180, 255);
@@ -265,12 +267,12 @@ TRaster32P convertToIcon(TVectorImageP vimage, int frame,
 
   // ADDED: Validate vector image data
   if (vimage->getStrokeCount() == 0 && vimage->getRegionCount() == 0) {
-    return TRaster32P(); // Empty image
+    return TRaster32P();  // Empty image
   }
 
   TPalette *plt = vimage->getPalette();
   if (!plt) return TRaster32P();
-  
+
   // ADDED: Use smart pointer for automatic cleanup
   std::unique_ptr<TPalette> pltGuard(plt->clone());
   if (!pltGuard) return TRaster32P();
@@ -279,11 +281,6 @@ TRaster32P convertToIcon(TVectorImageP vimage, int frame,
   TOfflineGL *glContext = IconGenerator::instance()->getOfflineGLContext();
   if (!glContext) return TRaster32P();
 
-  // ADDED: Validate OpenGL context
-  if (!glContext->isValid()) {
-    return TRaster32P();
-  }
-
   // The image and contained within Imagebox
   // (add a small margin also to prevent problems with empty images)
   TRectD imageBox;
@@ -291,12 +288,12 @@ TRaster32P convertToIcon(TVectorImageP vimage, int frame,
     QMutexLocker sl(vimage->getMutex());
     imageBox = vimage->getBBox().enlarge(.1);
   }
-  
+
   // ADDED: Check for valid bounding box
   if (imageBox.getLx() <= 0 || imageBox.getLy() <= 0) {
     return TRaster32P();
   }
-  
+
   TPointD imageCenter = (imageBox.getP00() + imageBox.getP11()) * 0.5;
 
   // Calculate a transformation matrix that moves the image inside the icon.
@@ -330,11 +327,11 @@ TRaster32P convertToIcon(TVectorImageP vimage, int frame,
     glContext->draw(vimage, rd);
 
     TRaster32P ras(iconSize);
-    if (!ras || !ras->getBuffer()) {
+    if (!ras || !ras->getRawData()) {
       glContext->doneCurrent();
       return TRaster32P();
     }
-    
+
     glContext->getRaster(ras);
     glContext->doneCurrent();
 
@@ -358,7 +355,7 @@ TRaster32P convertToIcon(TToonzImageP timage, int frame,
   plt->setFrame(frame);
 
   TRasterCM32P rasCM32 = timage->getRaster();
-  if (!rasCM32.getPointer() || !rasCM32->getBuffer()) return TRaster32P();
+  if (!rasCM32.getPointer() || !rasCM32->getRawData()) return TRaster32P();
 
   int lx     = rasCM32->getSize().lx;
   int ly     = rasCM32->getSize().ly;
@@ -373,16 +370,16 @@ TRaster32P convertToIcon(TToonzImageP timage, int frame,
   TDimension iconSize2 = TDimension(iconLx, iconLy);
 
   TRaster32P icon(iconSize2);
-  if (!icon || !icon->getBuffer()) return TRaster32P();
-  
+  if (!icon || !icon->getRawData()) return TRaster32P();
+
   icon->clear();
   icon->fill(settings.m_blackBgCheck ? TPixel::Black : TPixel::White);
 
   TDimension dim = rasCM32->getSize();
   if (dim != iconSize2) {
     TRasterCM32P auxCM32(icon->getSize());
-    if (!auxCM32 || !auxCM32->getBuffer()) return TRaster32P();
-    
+    if (!auxCM32 || !auxCM32->getRawData()) return TRaster32P();
+
     auxCM32->clear();
     TRop::makeIcon(auxCM32, rasCM32);
     rasCM32 = auxCM32;
@@ -406,8 +403,8 @@ TRaster32P convertToIcon(TToonzImageP timage, int frame,
 
   assert(iconSize2.lx <= iconSize.lx && iconSize2.ly <= iconSize.ly);
   TRaster32P outIcon(iconSize);
-  if (!outIcon || !outIcon->getBuffer()) return TRaster32P();
-  
+  if (!outIcon || !outIcon->getRawData()) return TRaster32P();
+
   outIcon->clear();
   int dx = (outIcon->getLx() - icon->getLx()) / 2;
   int dy = (outIcon->getLy() - icon->getLy()) / 2;
@@ -424,15 +421,15 @@ TRaster32P convertToIcon(TRasterImageP rimage, const TDimension &iconSize) {
   if (!rimage) return TRaster32P();
 
   TRasterP ras = rimage->getRaster();
-  if (!ras || !ras->getBuffer()) return TRaster32P();
+  if (!ras || !ras->getRawData()) return TRaster32P();
 
   if (!(TRaster32P)ras && !(TRasterGR8P)ras) return TRaster32P();
 
   if (ras->getSize() == iconSize) return ras;
 
   TRaster32P icon(iconSize);
-  if (!icon || !icon->getBuffer()) return TRaster32P();
-  
+  if (!icon || !icon->getRawData()) return TRaster32P();
+
   icon->fill(TPixel32(235, 235, 235));
 
   double sx = (double)icon->getLx() / ras->getLx();
@@ -502,11 +499,11 @@ TRaster32P convertToIcon(TMeshImageP mi, int frame, const TDimension &iconSize,
     glPopAttrib();
 
     TRaster32P ras(iconSize);
-    if (!ras || !ras->getBuffer()) {
+    if (!ras || !ras->getRawData()) {
       glContext->doneCurrent();
       return TRaster32P();
     }
-    
+
     glContext->getRaster(ras);
     glContext->doneCurrent();
 
@@ -522,7 +519,7 @@ TRaster32P convertToIcon(TMeshImageP mi, int frame, const TDimension &iconSize,
 TRaster32P convertToIcon(TImageP image, int frame, const TDimension &iconSize,
                          const IconGenerator::Settings &settings) {
   if (!image) return TRaster32P();
-  
+
   TRasterImageP ri(image);
   if (ri) return convertToIcon(ri, iconSize);
 
@@ -616,7 +613,7 @@ public:
   void run() override {
     try {
       TRaster32P ras(getIconSize());
-      if (ras && ras->getBuffer()) {
+      if (ras && ras->getRawData()) {
         ras->fill(TPixel32::Gray);
         setIcon(ras);
       }
@@ -690,7 +687,7 @@ void VectorImageIconRenderer::run() {
   try {
     TRaster32P ras(generateRaster(getIconSize()));
 
-    if (ras && ras->getBuffer() && ras->getLx() > 0 && ras->getLy() > 0) {
+    if (ras && ras->getRawData() && ras->getLx() > 0 && ras->getLy() > 0) {
       setIcon(ras);
     }
   } catch (...) {
@@ -722,7 +719,7 @@ TRaster32P SplineIconRenderer::generateRaster(
   // get the glContext
   TOfflineGL *glContext = IconGenerator::instance()->getOfflineGLContext();
   if (!glContext) return TRaster32P();
-  
+
   try {
     glContext->makeCurrent();
     glContext->clear(TPixel32::White);
@@ -752,11 +749,11 @@ TRaster32P SplineIconRenderer::generateRaster(
     glPopMatrix();
 
     TRaster32P ras(iconSize);
-    if (!ras || !ras->getBuffer()) {
+    if (!ras || !ras->getRawData()) {
       glContext->doneCurrent();
       return TRaster32P();
     }
-    
+
     glContext->getRaster(ras);
     glContext->doneCurrent();
     return ras;
@@ -770,7 +767,8 @@ TRaster32P SplineIconRenderer::generateRaster(
 
 void SplineIconRenderer::run() {
   TRaster32P raster = generateRaster(getIconSize());
-  if (raster && raster->getBuffer() && raster->getLx() > 0 && raster->getLy() > 0) {
+  if (raster && raster->getRawData() && raster->getLx() > 0 &&
+      raster->getLy() > 0) {
     setIcon(raster);
   }
 }
@@ -806,7 +804,7 @@ void RasterImageIconRenderer::run() {
 
   TRaster32P icon(convertToIcon(rimage, getIconSize()));
 
-  if (icon && icon->getBuffer() && icon->getLx() > 0 && icon->getLy() > 0) {
+  if (icon && icon->getRawData() && icon->getLx() > 0 && icon->getLy() > 0) {
     setIcon(icon);
   }
 }
@@ -851,7 +849,7 @@ void ToonzImageIconRenderer::run() {
   TRasterImageP rimage(image);
   if (rimage) {
     TRaster32P icon(convertToIcon(rimage, getIconSize()));
-    if (icon && icon->getBuffer() && icon->getLx() > 0 && icon->getLy() > 0) {
+    if (icon && icon->getRawData() && icon->getLx() > 0 && icon->getLy() > 0) {
       setIcon(icon);
     }
     return;
@@ -862,7 +860,7 @@ void ToonzImageIconRenderer::run() {
   TDimension iconSize(getIconSize());
   if (!timage) {
     TRaster32P p(iconSize.lx, iconSize.ly);
-    if (p && p->getBuffer()) {
+    if (p && p->getRawData()) {
       p->fill(TPixelRGBM32::Yellow);
       setIcon(p);
     }
@@ -870,14 +868,14 @@ void ToonzImageIconRenderer::run() {
   }
 
   TRasterCM32P rasCM32 = timage->getRaster();
-  if (!rasCM32.getPointer() || !rasCM32->getBuffer()) return;
+  if (!rasCM32.getPointer() || !rasCM32->getRawData()) return;
 
   int lx     = rasCM32->getSize().lx;
   int ly     = rasCM32->getSize().ly;
   int iconLx = iconSize.lx, iconLy = iconSize.ly;
 
   TRaster32P icon(iconSize);
-  if (!icon || !icon->getBuffer()) return;
+  if (!icon || !icon->getRawData()) return;
 
   icon->fill(m_settings.m_blackBgCheck ? TPixel::Black : TPixel::White);
 
@@ -892,7 +890,7 @@ void ToonzImageIconRenderer::run() {
     timage = (TToonzImageP)image;
     if (!timage) {
       TRaster32P p(iconSize.lx, iconSize.ly);
-      if (p && p->getBuffer()) {
+      if (p && p->getRawData()) {
         p->fill(TPixelRGBM32::Yellow);
         setIcon(p);
       }
@@ -900,11 +898,11 @@ void ToonzImageIconRenderer::run() {
     }
 
     rasCM32 = timage->getRaster();
-    if (!rasCM32.getPointer() || !rasCM32->getBuffer()) return;
+    if (!rasCM32.getPointer() || !rasCM32->getRawData()) return;
 
     TRasterCM32P auxCM32(icon->getSize());
-    if (!auxCM32 || !auxCM32->getBuffer()) return;
-    
+    if (!auxCM32 || !auxCM32->getRawData()) return;
+
     auxCM32->clear();
     TRop::makeIcon(auxCM32, rasCM32);
     rasCM32 = auxCM32;
@@ -988,7 +986,7 @@ void MeshImageIconRenderer::run() {
   try {
     TRaster32P ras(generateRaster(getIconSize()));
 
-    if (ras && ras->getBuffer() && ras->getLx() > 0 && ras->getLy() > 0) {
+    if (ras && ras->getRawData() && ras->getLx() > 0 && ras->getLy() > 0) {
       setIcon(ras);
     }
   } catch (...) {
@@ -1035,7 +1033,7 @@ TRaster32P XsheetIconRenderer::generateRaster(
   if (!scene) return TRaster32P();
 
   TRaster32P ras(iconSize);
-  if (!ras || !ras->getBuffer()) return TRaster32P();
+  if (!ras || !ras->getRawData()) return TRaster32P();
 
   TPixel32 bgColor = scene->getProperties()->getBgColor();
   bgColor.m        = 255;
@@ -1064,7 +1062,7 @@ TRaster32P XsheetIconRenderer::generateRaster(
 
 void XsheetIconRenderer::run() {
   TRaster32P ras = generateRaster(getIconSize());
-  if (ras && ras->getBuffer() && ras->getLx() > 0 && ras->getLy() > 0) {
+  if (ras && ras->getRawData() && ras->getLx() > 0 && ras->getLy() > 0) {
     setIcon(ras);
   }
 }
@@ -1137,7 +1135,7 @@ TRaster32P IconGenerator::generateVectorFileIcon(const TFilePath &path,
                                                  const TFrameId &fid) {
   TLevelReaderP lr(path);
   if (!lr) return TRaster32P();
-  
+
   TLevelP level = lr->loadInfo();
   if (level->begin() == level->end()) return TRaster32P();
   TFrameId frameId = fid;
@@ -1162,7 +1160,7 @@ TRaster32P IconGenerator::generateRasterFileIcon(const TFilePath &path,
     // Attempt image reading
     TLevelReaderP lr(path);
     if (!lr) return TRaster32P();
-    
+
     TLevelP level = lr->loadInfo();
 
     if (level->begin() == level->end()) return TRaster32P();
@@ -1196,7 +1194,7 @@ TRaster32P IconGenerator::generateRasterFileIcon(const TFilePath &path,
     if (!ras32) {
       if (TRasterGR8P rasGR8 = ri->getRaster()) {
         TRaster32P raux(rasGR8->getSize());
-        if (raux && raux->getBuffer()) {
+        if (raux && raux->getRawData()) {
           TRop::convert(raux, rasGR8);
           ras32 = raux;
         }
@@ -1204,10 +1202,10 @@ TRaster32P IconGenerator::generateRasterFileIcon(const TFilePath &path,
     }
   } else if (TToonzImageP ti = img) {
     TRasterCM32P auxRaster = ti->getRaster();
-    if (!auxRaster || !auxRaster->getBuffer()) return TRaster32P();
-    
+    if (!auxRaster || !auxRaster->getRawData()) return TRaster32P();
+
     TRaster32P dstRaster(auxRaster->getSize());
-    if (!dstRaster || !dstRaster->getBuffer()) return TRaster32P();
+    if (!dstRaster || !dstRaster->getRawData()) return TRaster32P();
 
     if (TPaletteP plt = ti->getPalette())
       TRop::convert(dstRaster, auxRaster, plt, false);
@@ -1217,10 +1215,10 @@ TRaster32P IconGenerator::generateRasterFileIcon(const TFilePath &path,
     ras32 = dstRaster;
   }
 
-  if (!ras32 || !ras32->getBuffer()) return TRaster32P();
+  if (!ras32 || !ras32->getRawData()) return TRaster32P();
 
   TRaster32P icon(iconSize);
-  if (!icon || !icon->getBuffer()) return TRaster32P();
+  if (!icon || !icon->getRawData()) return TRaster32P();
 
   double sx = double(iconSize.lx) / ras32->getLx();
   double sy = double(iconSize.ly) / ras32->getLy();
@@ -1231,10 +1229,9 @@ TRaster32P IconGenerator::generateRasterFileIcon(const TFilePath &path,
   icon->fill(TPixel32(255, 0, 0));  // "bands" color
   TRop::resample(icon, ras32, aff, TRop::Triangle);
 
-  if (icon && icon->getBuffer()) {
-    if (::isUnpremultiplied(icon))
-      TRop::premultiply(icon);
-      
+  if (icon && icon->getRawData()) {
+    if (::isUnpremultiplied(icon)) TRop::premultiply(icon);
+
     TRectI srcBBoxI = ras32->getBounds();
     TRectD srcBBoxD = aff * TRectD(srcBBoxI.x0, srcBBoxI.y0, srcBBoxI.x1 + 1,
                                    srcBBoxI.y1 + 1);
@@ -1242,10 +1239,9 @@ TRaster32P IconGenerator::generateRasterFileIcon(const TFilePath &path,
     TRect bbox = TRect(tfloor(srcBBoxD.x0), tceil(srcBBoxD.y0) - 1,
                        tfloor(srcBBoxD.x1), tceil(srcBBoxD.y1) - 1);
 
-    bbox = (bbox * icon->getBounds())
-               .enlarge(-1);
+    bbox = (bbox * icon->getBounds()).enlarge(-1);
   } else {
-    if (icon && icon->getBuffer()) {
+    if (icon && icon->getRawData()) {
       icon->fill(TPixel32(255, 0, 0));
     }
   }
@@ -1273,7 +1269,7 @@ TRaster32P IconGenerator::generateMeshFileIcon(const TFilePath &path,
                                                const TFrameId &fid) {
   TLevelReaderP lr(path);
   if (!lr) return TRaster32P();
-  
+
   TLevelP level = lr->loadInfo();
   if (level->begin() == level->end()) return TRaster32P();
 
@@ -1392,7 +1388,7 @@ void FileIconRenderer::run() {
       setIcon(rasterFromQImage(unknown));
       return;
     }
-    if (!iconRaster || !iconRaster->getBuffer()) {
+    if (!iconRaster || !iconRaster->getRawData()) {
       QImage broken(getIconPath("broken_icon"));
       setIcon(rasterFromQImage(broken));
       return;
@@ -1430,7 +1426,7 @@ public:
 
 TRaster32P SceneIconRenderer::generateIcon(const TDimension &iconSize) const {
   TRaster32P ras(iconSize);
-  if (!ras || !ras->getBuffer()) return TRaster32P();
+  if (!ras || !ras->getRawData()) return TRaster32P();
 
   TPixel32 bgColor = m_toonzScene->getProperties()->getBgColor();
   bgColor.m        = 255;
@@ -1447,9 +1443,9 @@ TRaster32P SceneIconRenderer::generateIcon(const TDimension &iconSize) const {
 
 //-----------------------------------------------------------------------------
 
-void SceneIconRenderer::run() { 
+void SceneIconRenderer::run() {
   TRaster32P icon = generateIcon(getIconSize());
-  if (icon && icon->getBuffer() && icon->getLx() > 0 && icon->getLy() > 0) {
+  if (icon && icon->getRawData() && icon->getLx() > 0 && icon->getLy() > 0) {
     setIcon(icon);
   }
 }
@@ -1495,22 +1491,18 @@ TOfflineGL *IconGenerator::getOfflineGLContext() {
   if (!m_contexts.hasLocalData()) {
     TDimension contextSize(std::max(FilmstripIconSize.lx, IconSize.lx),
                            std::max(FilmstripIconSize.ly, IconSize.ly));
-    
+
     // ADDED: Retry logic for context creation
-    TOfflineGL* context = nullptr;
+    TOfflineGL *context = nullptr;
     for (int retry = 0; retry < 3 && !context; ++retry) {
       try {
         context = new TOfflineGL(contextSize);
-        if (!context->isValid()) {
-          delete context;
-          context = nullptr;
-          if (retry < 2) QThread::msleep(10);
-        }
+        if (retry < 2) QThread::msleep(10);
       } catch (...) {
         context = nullptr;
       }
     }
-    
+
     if (context) {
       m_contexts.setLocalData(context);
     }
@@ -1523,7 +1515,7 @@ TOfflineGL *IconGenerator::getOfflineGLContext() {
 void IconGenerator::addTask(const std::string &id,
                             TThread::RunnableP iconRenderer) {
   {
-    QMutexLocker locker(&iconsMapMutex); // ADDED: Thread safety
+    QMutexLocker locker(&iconsMapMutex);  // ADDED: Thread safety
     iconsMap.insert(id);
   }
   m_executor.addTask(iconRenderer);
@@ -1874,7 +1866,7 @@ void IconGenerator::invalidateSceneIcon() {
 
 void IconGenerator::remap(const std::string &newIconId,
                           const std::string &oldIconId) {
-  QMutexLocker locker(&iconsMapMutex); // ADDED: Thread safety
+  QMutexLocker locker(&iconsMapMutex);  // ADDED: Thread safety
   IconIterator it = iconsMap.find(oldIconId);
   if (it == iconsMap.end()) return;
 
@@ -1895,7 +1887,7 @@ void IconGenerator::clearRequests() { m_executor.cancelAll(); }
 //-----------------------------------------------------------------------------
 
 void IconGenerator::clearSceneIcons() {
-  QMutexLocker locker(&iconsMapMutex); // ADDED: Thread safety
+  QMutexLocker locker(&iconsMapMutex);  // ADDED: Thread safety
   // Eliminate all icons whose prefix is not "$:" (that is, scene-independent
   // images).
   // The abovementioned prefix is internally recognized by the image cache when
@@ -1915,7 +1907,7 @@ void IconGenerator::clearSceneIcons() {
 
 void IconGenerator::onStarted(TThread::RunnableP iconRenderer) {
   if (!iconRenderer) return;
-  
+
   IconRenderer *ir = static_cast<IconRenderer *>(iconRenderer.getPointer());
   if (ir) {
     ir->hasStarted() = true;
@@ -1926,7 +1918,7 @@ void IconGenerator::onStarted(TThread::RunnableP iconRenderer) {
 
 void IconGenerator::onCanceled(TThread::RunnableP iconRenderer) {
   if (!iconRenderer) return;
-  
+
   IconRenderer *ir = static_cast<IconRenderer *>(iconRenderer.getPointer());
   if (ir && !ir->hasStarted()) {
     removeIcon(ir->getId());
@@ -1937,7 +1929,7 @@ void IconGenerator::onCanceled(TThread::RunnableP iconRenderer) {
 
 void IconGenerator::onFinished(TThread::RunnableP iconRenderer) {
   if (!iconRenderer) return;
-  
+
   IconRenderer *ir = static_cast<IconRenderer *>(iconRenderer.getPointer());
   if (!ir) return;
 
@@ -1946,7 +1938,8 @@ void IconGenerator::onFinished(TThread::RunnableP iconRenderer) {
     ToonzImageIconRenderer *tir = dynamic_cast<ToonzImageIconRenderer *>(ir);
     if (tir) {
       TRasterCM32P timgp = tir->getIcon_TnzImg();
-      if (timgp && timgp->getBuffer() && timgp->getLx() > 0 && timgp->getLy() > 0) {
+      if (timgp && timgp->getRawData() && timgp->getLx() > 0 &&
+          timgp->getLy() > 0) {
         ::setIcon_TnzImg(ir->getId(), timgp);
         emit iconGenerated();
         if (ir->wasTerminated()) m_iconsTerminationLoop.quit();
@@ -1956,12 +1949,12 @@ void IconGenerator::onFinished(TThread::RunnableP iconRenderer) {
 
     // Update the icons map with proper validation
     TRaster32P iconRaster = ir->getIcon();
-    if (iconRaster && iconRaster->getBuffer() && 
-        iconRaster->getLx() > 0 && iconRaster->getLy() > 0) {
+    if (iconRaster && iconRaster->getRawData() && iconRaster->getLx() > 0 &&
+        iconRaster->getLy() > 0) {
       ::setIcon(ir->getId(), iconRaster);
       emit iconGenerated();
     }
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     // Log error if needed
   } catch (...) {
     // Handle unknown exceptions
@@ -1974,7 +1967,7 @@ void IconGenerator::onFinished(TThread::RunnableP iconRenderer) {
 
 void IconGenerator::onException(TThread::RunnableP iconRenderer) {
   if (!iconRenderer) return;
-  
+
   IconRenderer *ir = static_cast<IconRenderer *>(iconRenderer.getPointer());
   if (ir && ir->wasTerminated()) {
     m_iconsTerminationLoop.quit();
@@ -1985,7 +1978,7 @@ void IconGenerator::onException(TThread::RunnableP iconRenderer) {
 
 void IconGenerator::onTerminated(TThread::RunnableP iconRenderer) {
   if (!iconRenderer) return;
-  
+
   IconRenderer *ir = static_cast<IconRenderer *>(iconRenderer.getPointer());
   if (ir) {
     ir->wasTerminated() = true;
