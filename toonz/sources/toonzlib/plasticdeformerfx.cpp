@@ -426,13 +426,36 @@ void PlasticDeformerFx::doCompute(TTile &tile, double frame,
     // Draw the mesh
     tglDraw(*mi, *texData, meshToTextureAff, *dataGroup);
 
-    // Read back using the working approach
-    QImage img = fb.toImage();
-    if (!img.isNull()) {
-      safePixelCopy(tile.getRaster(), img, m_was64bit);
-    } else {
-      TSysLog::error("PlasticDeformerFx: Failed to read FBO image");
-      tile.getRaster()->clear();
+    // Retrieve drawing and copy to output tile
+
+    QImage img = fb.toImage().scaled(QSize(d.lx, d.ly), Qt::IgnoreAspectRatio,
+                                     Qt::SmoothTransformation);
+    int wrap   = tile.getRaster()->getLx() * sizeof(TPixel32);
+    if (!m_was64bit) {
+      uchar *srcPix = img.bits();
+      uchar *dstPix = tile.getRaster()->getRawData() + wrap * (d.ly - 1);
+      for (int y = 0; y < d.ly; y++) {
+        memcpy(dstPix, srcPix, wrap);
+        dstPix -= wrap;
+        srcPix += wrap;
+      }
+    } else if (m_was64bit) {
+      TRaster64P newRaster(tile.getRaster()->getSize());
+      TRaster32P tempRaster(tile.getRaster()->getSize());
+      uchar *srcPix = img.bits();
+      uchar *dstPix = tempRaster.getPointer()->getRawData() + wrap * (d.ly - 1);
+      for (int y = 0; y < d.ly; y++) {
+        memcpy(dstPix, srcPix, wrap);
+        dstPix -= wrap;
+        srcPix += wrap;
+      }
+      TRop::convert(newRaster, tempRaster);
+      int size = tile.getRaster()->getLx() * tile.getRaster()->getLy() *
+                 sizeof(TPixel64);
+      srcPix = newRaster.getPointer()->getRawData();
+      dstPix = tile.getRaster()->getRawData();
+      memcpy(dstPix, srcPix, size);
+      texInfo.m_bpp = 64;
     }
 
     fb.release();
