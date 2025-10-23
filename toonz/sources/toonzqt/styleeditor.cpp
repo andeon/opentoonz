@@ -3811,8 +3811,8 @@ void StyleEditor::setPage(int index) {
     return;
   }
 
-  // Se sono nel caso first and last page enable e index == 1 la pagina che
-  // voglio settare e' l'ultima!
+  // If both the first and last pages are enabled and index == 1,
+  // the page I need to set is the last one.
   if (index == 1)
     index = m_styleChooser->count() -
             2;  // 2 perche' alla fine c'e' una pagina vuota
