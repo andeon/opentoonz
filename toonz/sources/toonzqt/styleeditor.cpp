@@ -3202,7 +3202,7 @@ QFrame *StyleEditor::createTexturePage() {
 
   /* ------ layout ------ */
   QVBoxLayout *outsideLayout = new QVBoxLayout();
-  outsideLayout->setContentsMargins(0, 0, 0, 0);
+  outsideLayout->setContentsMargins(0, 0, 0, 0); 
   outsideLayout->setSpacing(0);
   outsideLayout->setSizeConstraint(QLayout::SetNoConstraint);
   {
@@ -3524,67 +3524,30 @@ void StyleEditor::updateStylePages() {
 void StyleEditor::onStyleSwitched() {
   TPalette *palette = getPalette();
 
-  // Check if palette is null
   if (!palette) {
+    // set the current page to empty
     m_styleChooser->setCurrentIndex(m_styleChooser->count() - 1);
-    enable(false, false, false);
+    enable(false);
     m_colorParameterSelector->clear();
     m_oldStyle    = TColorStyleP();
     m_editedStyle = TColorStyleP();
 
-    if (m_parent) {
-      m_parent->setWindowTitle(tr("No Style Selected"));
-    }
+    m_parent->setWindowTitle(tr("No Style Selected"));
     return;
   }
 
   int styleIndex = getStyleIndex();
+  setEditedStyleToStyle(palette->getStyle(styleIndex));
 
-  // Check if styleIndex is valid
-  if (styleIndex < 0 || styleIndex >= palette->getStyleCount()) {
-    m_styleChooser->setCurrentIndex(m_styleChooser->count() - 1);
-    enable(false, false, false);
-    m_colorParameterSelector->clear();
-    m_oldStyle    = TColorStyleP();
-    m_editedStyle = TColorStyleP();
-
-    if (m_parent) {
-      m_parent->setWindowTitle(tr("Style Editor - No Valid Style Selected"));
-    }
-    return;
-  }
-
-  // Set the edited style
-  TColorStyle *style = palette->getStyle(styleIndex);
-  if (!style) {
-    m_styleChooser->setCurrentIndex(m_styleChooser->count() - 1);
-    enable(false, false, false);
-    m_colorParameterSelector->clear();
-    m_oldStyle    = TColorStyleP();
-    m_editedStyle = TColorStyleP();
-
-    if (m_parent) {
-      m_parent->setWindowTitle(tr("Style Editor - No Valid Style Selected"));
-    }
-    return;
-  }
-
-  setEditedStyleToStyle(style);
-
-  bool isStyleNull = false;
-  QString gname    = QString::fromStdWString(style->getGlobalName());
-  if (!gname.isEmpty() && gname[0] != L'-') {
-    isStyleNull = true;
-  }
-
+  bool isStyleNull    = setStyle(m_editedStyle.getPointer());
   bool isColorInField = palette->getPaletteName() == L"EmptyColorFieldPalette";
   bool isValidIndex   = styleIndex > 0 || isColorInField;
   bool isCleanUpPalette = palette->isCleanupPalette();
 
-  // Update the status text
-  if (!isStyleNull && isValidIndex && m_parent) {
+  /* ------ update the status text ------ */
+  if (!isStyleNull && isValidIndex) {
     QString statusText;
-    // Palette type
+    // palette type
     if (isCleanUpPalette)
       statusText = tr("Cleanup ");
     else if (palette->getGlobalName() != L"")
@@ -3592,11 +3555,11 @@ void StyleEditor::onStyleSwitched() {
     else
       statusText = tr("Level ");
 
-    // Palette name
+    // palette name
     statusText += tr("Palette") + " : " +
                   QString::fromStdWString(palette->getPaletteName());
 
-    // Style name
+    // style name
     statusText += QString::fromStdWString(L" | #");
     statusText += QString::number(styleIndex);
     statusText += QString::fromStdWString(L" : " + m_editedStyle->getName());
@@ -3606,16 +3569,14 @@ void StyleEditor::onStyleSwitched() {
           QString(" (Picked from %1,%2)").arg(pickedPos.x).arg(pickedPos.y);
 
     m_parent->setWindowTitle(statusText);
-  } else if (m_parent) {
+  } else {
     m_parent->setWindowTitle(tr("Style Editor - No Valid Style Selected"));
   }
-
-  // Enable the editor with appropriate settings
   enable(!isStyleNull && isValidIndex, isColorInField, isCleanUpPalette);
 
-  // Update style pages
   updateStylePages();
 }
+
 //-----------------------------------------------------------------------------
 
 void StyleEditor::onStyleChanged(bool isDragging) {
@@ -3811,8 +3772,8 @@ void StyleEditor::setPage(int index) {
     return;
   }
 
-  // If both the first and last pages are enabled and index == 1,
-  // the page I need to set is the last one.
+  // Se sono nel caso first and last page enable e index == 1 la pagina che
+  // voglio settare e' l'ultima!
   if (index == 1)
     index = m_styleChooser->count() -
             2;  // 2 perche' alla fine c'e' una pagina vuota
