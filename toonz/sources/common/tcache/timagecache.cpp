@@ -22,6 +22,7 @@
 #ifndef TNZCORE_LIGHT
 #include "tvectorimage.h"
 #include "trastercm.h"
+#include "tmeshimage.h"
 #include "tropcm.h"
 #endif
 
@@ -71,47 +72,13 @@ TUINT32 HistoryCount = 0;
 class TheCodec final : public TRasterCodecLz4 {
 public:
   static TheCodec *instance() {
-    if (!_instance) {
-      try {
-        _instance = new TheCodec();
-      } catch (...) {
-        return nullptr;  // Handle allocation failure
-      }
-    }
+    if (!_instance) _instance = new TheCodec();
+
     return _instance;
   }
 
   void reset() {
     if (_instance) _instance->TRasterCodecLz4::reset();
-  }
-
-  // ADDED: Safe compress method with validation
-  TRasterP safeCompress(const TRasterP &ras, int compressionLevel,
-                        TINT32 &buffSize) {
-    if (!ras || !ras->getRawData() || ras->getLx() <= 0 || ras->getLy() <= 0) {
-      return TRasterP();  // Return empty on invalid input
-    }
-
-    try {
-      return TRasterCodecLz4::compress(ras, compressionLevel, buffSize);
-    } catch (...) {
-      return TRasterP();  // Return empty on compression failure
-    }
-  }
-
-  // ADDED: Safe decompress method with validation
-  bool safeDecompress(const TRasterP &compressedRas,
-                      TRasterP &decompressedRas) {
-    if (!compressedRas || !compressedRas->getRawData()) {
-      return false;
-    }
-
-    try {
-      TRasterCodecLz4::decompress(compressedRas, decompressedRas);
-      return decompressedRas && decompressedRas->getRawData();
-    } catch (...) {
-      return false;
-    }
   }
 
 private:
@@ -289,14 +256,8 @@ public:
 
 TImageP RasterImageBuilder::build(ImageInfo *info, const TRasterP &ras,
                                   TPalette *palette) {
-  // ADDED: Validate inputs
-  if (!info || !ras || !ras->getRawData() || ras->getLx() <= 0 ||
-      ras->getLy() <= 0) {
-    return TImageP();
-  }
-
   RasterImageInfo *riInfo = dynamic_cast<RasterImageInfo *>(info);
-  if (!riInfo) return TImageP();
+  assert(riInfo);
 
   int rcount       = ras->getRefCount();
   TRasterImageP ri = new TRasterImage();
@@ -324,28 +285,18 @@ public:
 
 TImageP ToonzImageBuilder::build(ImageInfo *info, const TRasterP &ras,
                                  TPalette *palette) {
-  // ADDED: Validate inputs
-  if (!info || !ras || !ras->getRawData() || ras->getLx() <= 0 ||
-      ras->getLy() <= 0) {
-    return TImageP();
-  }
-
   ToonzImageInfo *tiInfo = dynamic_cast<ToonzImageInfo *>(info);
-  if (!tiInfo) return TImageP();
+  assert(tiInfo);
 
   TRasterCM32P rasCM32 = ras;
-  if (!rasCM32) return TImageP();
+  assert(rasCM32);
 
   TRasterCM32P imgRasCM32;
 
-  if (!TRect(tiInfo->m_size).contains(tiInfo->m_savebox)) {
-    return TImageP();  // Invalid savebox
-  }
+  assert(TRect(tiInfo->m_size).contains(tiInfo->m_savebox));
 
   if (ras->getSize() != tiInfo->m_size) {
     TRasterCM32P fullRas(tiInfo->m_size);
-    if (!fullRas || !fullRas->getRawData()) return TImageP();
-
     TRect rectToExtract(tiInfo->m_savebox);
     TPixelCM32 bgColor;
     fullRas->fillOutside(tiInfo->m_savebox, bgColor);
@@ -354,7 +305,6 @@ TImageP ToonzImageBuilder::build(ImageInfo *info, const TRasterP &ras,
     imgRasCM32 = fullRas;
   } else
     imgRasCM32 = rasCM32;
-
 #ifdef _DEBUG
   imgRasCM32->m_cashed = true;
 #endif
@@ -370,40 +320,20 @@ TImageP ToonzImageBuilder::build(ImageInfo *info, const TRasterP &ras,
 class UncompressedOnMemoryCacheItem final : public CacheItem {
 public:
   UncompressedOnMemoryCacheItem(const TImageP &image) : m_image(image) {
-    // ADDED: Validate image and raster before creating info
-    if (!m_image) {
-      m_imageInfo = 0;
-      return;
-    }
-
     TRasterImageP ri = m_image;
-    if (ri) {
-      // Validate raster before creating info
-      TRasterP ras = ri->getRaster();
-      if (ras && ras->getRawData() && ras->getLx() > 0 && ras->getLy() > 0) {
-        m_imageInfo = new RasterImageInfo(ri);
-      } else {
-        m_imageInfo = 0;
-      }
-    }
+
+    if (ri) m_imageInfo = new RasterImageInfo(ri);
 #ifndef TNZCORE_LIGHT
     else {
       TToonzImageP ti = m_image;
-      if (ti) {
-        TRasterCM32P ras = ti->getRaster();
-        if (ras && ras->getRawData() && ras->getLx() > 0 && ras->getLy() > 0) {
-          m_imageInfo = new ToonzImageInfo(ti);
-        } else {
-          m_imageInfo = 0;
-        }
-      } else {
+      if (ti)
+        m_imageInfo = new ToonzImageInfo(ti);
+      else
         m_imageInfo = 0;
-      }
     }
 #else
-    else {
+    else
       m_imageInfo = 0;
-    }
 #endif
   }
 
@@ -428,12 +358,10 @@ typedef TDerivedSmartPointerT<UncompressedOnMemoryCacheItem, CacheItem>
 //------------------------------------------------------------------------------
 
 TUINT32 UncompressedOnMemoryCacheItem::getSize() const {
-  if (!m_image) return 0;
-
   TRasterImageP ri = m_image;
   if (ri) {
     TRasterP ras = ri->getRaster();
-    if (ras && ras->getRawData())
+    if (ras)
       return ras->getLy() * ras->getRowSize();
     else
       return 0;
@@ -480,55 +408,31 @@ typedef TDerivedSmartPointerT<CompressedOnMemoryCacheItem, CacheItem>
 
 CompressedOnMemoryCacheItem::CompressedOnMemoryCacheItem(const TImageP &img)
     : m_compressedRas() {
-  // ADDED: Validate input image
-  if (!img) return;
-
   TRasterImageP ri = img;
   if (ri) {
-    // ADDED: Validate raster before compression
-    TRasterP ras = ri->getRaster();
-    if (!ras || !ras->getRawData() || ras->getLx() <= 0 || ras->getLy() <= 0) {
-      return;  // Skip compression for invalid raster
-    }
-
     m_imageInfo     = new RasterImageInfo(ri);
     m_builder       = new RasterImageBuilder();
     TINT32 buffSize = 0;
-
-    // ADDED: Check if codec is available and valid
-    if (TheCodec::instance()) {
-      m_compressedRas =
-          TheCodec::instance()->safeCompress(ri->getRaster(), 1, buffSize);
-    }
+    m_compressedRas =
+        TheCodec::instance()->compress(ri->getRaster(), 1, buffSize);
     m_palette = img->getPalette();
   }
 #ifndef TNZCORE_LIGHT
   else {
     TToonzImageP ti = img;
     if (ti) {
-      // ADDED: Validate raster before compression
+      m_imageInfo          = new ToonzImageInfo(ti);
+      m_builder            = new ToonzImageBuilder();
       TRasterCM32P rasCM32 = ti->getRaster();
-      if (!rasCM32 || !rasCM32->getRawData() || rasCM32->getLx() <= 0 ||
-          rasCM32->getLy() <= 0) {
-        return;  // Skip compression for invalid raster
-      }
-
-      m_imageInfo     = new ToonzImageInfo(ti);
-      m_builder       = new ToonzImageBuilder();
-      TINT32 buffSize = 0;
-      if (TheCodec::instance()) {
-        m_compressedRas =
-            TheCodec::instance()->safeCompress(rasCM32, 1, buffSize);
-      }
-      m_palette = ti->getPalette();
-    } else {
-      return;  // Invalid image type
-    }
+      TINT32 buffSize      = 0;
+      m_compressedRas = TheCodec::instance()->compress(rasCM32, 1, buffSize);
+      m_palette       = ti->getPalette();
+    } else
+      assert(false);
   }
 #else
-  else {
-    return;  // Invalid image type
-  }
+  else
+    assert(false);
 #endif
 }
 
@@ -549,7 +453,7 @@ CompressedOnMemoryCacheItem::~CompressedOnMemoryCacheItem() {
 //------------------------------------------------------------------------------
 
 TUINT32 CompressedOnMemoryCacheItem::getSize() const {
-  if (m_compressedRas && m_compressedRas->getRawData())
+  if (m_compressedRas && m_compressedRas.getPointer())
     return m_compressedRas->getLx();
   else
     return 0;
@@ -558,22 +462,15 @@ TUINT32 CompressedOnMemoryCacheItem::getSize() const {
 //------------------------------------------------------------------------------
 
 TImageP CompressedOnMemoryCacheItem::getImage() const {
-  if (!m_compressedRas || !m_compressedRas->getRawData()) {
-    return TImageP();
-  }
+  assert(m_compressedRas);
 
   // PER IL MOMENTO DISCRIMINO: DA ELIMINARE
   TRasterP ras;
 
-  if (!TheCodec::instance() ||
-      !TheCodec::instance()->safeDecompress(m_compressedRas, ras)) {
-    return TImageP();
-  }
-
+  TheCodec::instance()->decompress(m_compressedRas, ras);
 #ifdef _DEBUGTOONZ
-  if (ras) ras->m_cashed = true;
+  ras->m_cashed = true;
 #endif
-
 #ifndef TNZCORE_LIGHT
   ToonzImageBuilder *tibuilder = dynamic_cast<ToonzImageBuilder *>(m_builder);
   if (tibuilder)
@@ -612,16 +509,9 @@ CompressedOnDiskCacheItem::CompressedOnDiskCacheItem(
     const TFilePath &fp, const TRasterP &compressedRas, ImageBuilder *builder,
     ImageInfo *info, TPalette *palette)
     : CacheItem(builder, info, palette), m_fp(fp) {
-  if (!compressedRas || !compressedRas->getRawData()) return;
-
   compressedRas->lock();
 
   Tofstream oss(m_fp);
-  if (!oss) {
-    compressedRas->unlock();
-    return;
-  }
-
   assert(compressedRas->getLy() == 1 && compressedRas->getPixelSize() == 1);
   TUINT32 size = compressedRas->getLx();
   oss.write((char *)&size, sizeof(TUINT32));
@@ -642,24 +532,14 @@ CompressedOnDiskCacheItem::~CompressedOnDiskCacheItem() {
 
 TImageP CompressedOnDiskCacheItem::getImage() const {
   Tifstream is(m_fp);
-  if (!is) return TImageP();
-
   TUINT32 dataSize;
   is.read((char *)&dataSize, sizeof(TUINT32));
-  if (is.fail()) return TImageP();
-
   TRasterGR8P ras(dataSize, 1);
-  if (!ras || !ras->getRawData()) return TImageP();
-
   ras->lock();
   UCHAR *data = ras->getRawData();
   is.read((char *)data, dataSize);
-  if (is.fail()) {
-    ras->unlock();
-    return TImageP();
-  }
+  assert(!is.fail());
   ras->unlock();
-
   CompressedOnMemoryCacheItem item(ras, m_builder->clone(),
                                    m_imageInfo->clone(), m_palette);
   return item.getImage();
@@ -696,41 +576,27 @@ UncompressedOnDiskCacheItem::UncompressedOnDiskCacheItem(const TFilePath &fp,
                                                          const TImageP &image,
                                                          TPalette *palette)
     : CacheItem(0, 0, 0), m_fp(fp) {
-  // ADDED: Validate input image
-  if (!image) return;
-
   TRasterImageP ri = image;
 
   TRasterP ras;
   if (ri) {
-    ras = ri->getRaster();
-    // ADDED: Validate raster
-    if (!ras || !ras->getRawData() || ras->getLx() <= 0 || ras->getLy() <= 0) {
-      return;
-    }
     m_imageInfo = new RasterImageInfo(ri);
+    ras         = ri->getRaster();
     m_palette   = palette;
   }
 #ifndef TNZCORE_LIGHT
   else {
     TToonzImageP ti = image;
     if (ti) {
-      ras = ti->getRaster();
-      // ADDED: Validate raster
-      if (!ras || !ras->getRawData() || ras->getLx() <= 0 ||
-          ras->getLy() <= 0) {
-        return;
-      }
       m_imageInfo = new ToonzImageInfo(ti);
+      ras         = ti->getRaster();
       m_palette   = palette;
-    } else {
-      return;  // Invalid image type
-    }
+    } else
+      assert(false);
   }
 #else
-  else {
-    return;  // Invalid image type
-  }
+  else
+    assert(false);
 #endif
 
   m_builder = 0;
@@ -743,8 +609,8 @@ UncompressedOnDiskCacheItem::UncompressedOnDiskCacheItem(const TFilePath &fp,
   m_pixelsize = ras->getPixelSize();
 
   Tofstream oss(m_fp);
-  if (!oss) return;
-
+  // oss.write((char*)&dataSize, sizeof(TUINT32));
+  // assert(!oss.fail());
   ras->lock();
   if (lx == wrap) {
     oss.write((char *)ras->getRawData(), dataSize);
@@ -770,10 +636,11 @@ UncompressedOnDiskCacheItem::~UncompressedOnDiskCacheItem() {
 
 TImageP UncompressedOnDiskCacheItem::getImage() const {
   Tifstream is(m_fp);
-  if (!is || !m_imageInfo) return TImageP();
-
   TUINT32 dataSize =
       m_imageInfo->m_size.lx * m_imageInfo->m_size.ly * m_pixelsize;
+
+  // is.read((char*)&dataSize, sizeof(TUINT32));
+  // assert(unsigned(m_lx*m_ly*m_pixelsize)==dataSize);
 
   TRasterP ras;
 
@@ -789,10 +656,7 @@ TImageP UncompressedOnDiskCacheItem::getImage() const {
     else if (m_pixelsize == 2)
       ras = (TRasterP)(TRasterGR16P(rii->m_size));
     else
-      return TImageP();  // Invalid pixel size
-
-    if (!ras || !ras->getRawData()) return TImageP();
-
+      assert(false);
     ras->lock();
     char *data = (char *)ras->getRawData();
     is.read(data, dataSize);
@@ -808,8 +672,6 @@ TImageP UncompressedOnDiskCacheItem::getImage() const {
     ToonzImageInfo *tii = dynamic_cast<ToonzImageInfo *>(m_imageInfo);
     if (tii) {
       ras = (TRasterP)(TRasterCM32P(tii->m_size));
-      if (!ras || !ras->getRawData()) return TImageP();
-
       ras->lock();
       char *data = (char *)ras->getRawData();
       is.read(data, dataSize);
@@ -820,12 +682,14 @@ TImageP UncompressedOnDiskCacheItem::getImage() const {
 
       return ToonzImageBuilder().build(m_imageInfo, ras, m_palette);
     } else {
-      return TImageP();  // Invalid image info type
+      assert(false);
+      return 0;
     }
   }
 #else
   else {
-    return TImageP();  // Invalid image info type
+    assert(false);
+    return 0;
   }
 #endif
 }
@@ -902,46 +766,38 @@ int TImageCache::Imp::m_fileid;
 
 //------------------------------------------------------------------------------
 namespace {
-// FIXED: Safe getPointer function with null checks
 inline void *getPointer(const TImageP &img) {
-  if (!img) return nullptr;  // ADD: Null check
-
   TRasterImageP rimg = img;
-  if (rimg) {
-    TRasterP ras = rimg->getRaster();
-    return ras ? ras.getPointer() : nullptr;  // ADD: Null check
-  }
+  if (rimg) return rimg->getRaster().getPointer();
 #ifndef TNZCORE_LIGHT
   TToonzImageP timg = img;
-  if (timg) {
-    TRasterCM32P ras = timg->getRaster();
-    return ras ? ras.getPointer() : nullptr;  // ADD: Null check
-  }
+  if (timg) return timg->getRaster().getPointer();
 #endif
+
   return img.getPointer();
 }
 
-// FIXED: Safe external reference counting
+// Returns true or false whether the image or its eventual raster are
+// referenced by someone other than Toonz cache.
 inline TINT32 hasExternalReferences(const TImageP &img) {
-  if (!img) return 0;  // ADD: Null check
+  int refCount;
 
-  int refCount       = 0;
-  TRasterImageP rimg = img;
-  if (rimg) {
-    TRasterP ras = rimg->getRaster();
-    if (ras) refCount = ras->getRefCount();
+  {
+    TRasterImageP rimg = img;
+    if (rimg) refCount = rimg->getRaster()->getRefCount();
   }
+
 #ifndef TNZCORE_LIGHT
-  TToonzImageP timg = img;
-  if (timg) {
-    TRasterCM32P ras = timg->getRaster();
-    // FIXED: Safer reference counting logic
-    if (ras) {
-      refCount = std::max(ras->getRefCount(), img->getRefCount());
-    }
+  {
+    TToonzImageP timg = img;
+    if (timg)
+      refCount = timg->getRaster()->getRefCount() -
+                 1;  //!!! the TToonzImage::getRaster method increments raster
+                     //! refCount!(the TRasterImage::getRaster don't)
   }
 #endif
-  return refCount > 1;  // Simplified and safer
+
+  return std::max(refCount, img->getRefCount()) > 1;
 }
 }  // namespace
 //------------------------------------------------------------------------------
@@ -961,16 +817,8 @@ void TImageCache::Imp::doCompress() {
   for (; itu != m_itemHistory.end() && notEnoughMemory();) {
     std::map<std::string, CacheItemP>::iterator it =
         m_uncompressedItems.find(itu->second);
-    if (it == m_uncompressedItems.end()) {
-      ++itu;
-      continue;
-    }
-
+    assert(it != m_uncompressedItems.end());
     CacheItemP item = it->second;
-    if (!item) {
-      ++itu;
-      continue;
-    }
 
     UncompressedOnMemoryCacheItemP uitem = item;
     if (item->m_cantCompress ||
@@ -989,7 +837,7 @@ void TImageCache::Imp::doCompress() {
     std::map<TUINT32, std::string>::iterator itu2 = itu;
     itu++;
     m_itemHistory.erase(itu2);
-    m_itemsByImagePointer.erase(getPointer(item->getImage()));
+    m_itemsByImagePointer.erase(item->getImage().getPointer());
     m_uncompressedItems.erase(it);
 #endif
 
@@ -1000,9 +848,8 @@ void TImageCache::Imp::doCompress() {
           item->getImage());  // WARNING the codec buffer allocation can CHANGE
                                 // the cache.
       item->m_cantCompress = false;
-      if (!newItem ||
-          newItem->getSize() ==
-              0)  /// non c'era memoria sufficiente per il buffer compresso....
+      if (newItem->getSize() ==
+          0)  /// non c'era memoria sufficiente per il buffer compresso....
       {
         assert(m_rootDir != TFilePath());
         TFilePath fp =
@@ -1010,11 +857,9 @@ void TImageCache::Imp::doCompress() {
         newItem = new UncompressedOnDiskCacheItem(
             fp, item->getImage(), item->getImage()->getPalette());
       }
-      if (newItem) {
-        m_compressedItems[id] = newItem;
-      }
-      item  = CacheItemP();
-      uitem = UncompressedOnMemoryCacheItemP();
+      m_compressedItems[id] = newItem;
+      item                  = CacheItemP();
+      uitem                 = UncompressedOnMemoryCacheItemP();
       // doCompress();//restart, since iterators could have been changed (see
       // comment above)
       // return;
@@ -1032,7 +877,7 @@ void TImageCache::Imp::doCompress() {
   std::map<std::string, CacheItemP>::iterator itc = m_compressedItems.begin();
   for (; itc != m_compressedItems.end() && notEnoughMemory(); ++itc) {
     CacheItemP item = itc->second;
-    if (!item || item->m_cantCompress) continue;
+    if (item->m_cantCompress) continue;
 
     CompressedOnMemoryCacheItemP citem = itc->second;
     if (citem) {
@@ -1044,10 +889,8 @@ void TImageCache::Imp::doCompress() {
           fp, citem->m_compressedRas, citem->m_builder->clone(),
           citem->m_imageInfo->clone(), citem->m_palette);
 
-      itc->second = 0;
-      if (newItem) {
-        m_compressedItems[itc->first] = newItem;
-      }
+      itc->second                   = 0;
+      m_compressedItems[itc->first] = newItem;
     }
   }
 }
@@ -1062,9 +905,7 @@ void TImageCache::Imp::doCompress(std::string id) {
   if (it == m_uncompressedItems.end()) return;  // id not found: return
 
   // is item suitable for compression ?
-  CacheItemP item = it->second;
-  if (!item) return;
-
+  CacheItemP item                      = it->second;
   UncompressedOnMemoryCacheItemP uitem = item;
   if (item->m_cantCompress ||
       (uitem && (!uitem->m_image || hasExternalReferences(uitem->m_image))))
@@ -1084,7 +925,7 @@ void TImageCache::Imp::doCompress(std::string id) {
   std::map<TUINT32, std::string>::iterator itu2 = itu;
   itu++;
   m_itemHistory.erase(itu2);
-  m_itemsByImagePointer.erase(getPointer(item->getImage()));
+  m_itemsByImagePointer.erase(item->getImage().getPointer());
 #endif
 
   // delete item from m_uncompressedItems
@@ -1099,9 +940,8 @@ void TImageCache::Imp::doCompress(std::string id) {
       item->getImage());  // WARNING the codec buffer  allocation can CHANGE the
                             // cache.
   item->m_cantCompress = false;  // ??
-  if (!newItem ||
-      newItem->getSize() ==
-          0)  /// non c'era memoria sufficiente per il buffer compresso....
+  if (newItem->getSize() ==
+      0)  /// non c'era memoria sufficiente per il buffer compresso....
   {
     assert(m_rootDir != TFilePath());
     TFilePath fp =
@@ -1109,29 +949,56 @@ void TImageCache::Imp::doCompress(std::string id) {
     newItem = new UncompressedOnDiskCacheItem(fp, item->getImage(),
                                               item->getImage()->getPalette());
   }
-  if (newItem) {
-    m_compressedItems[id] = newItem;
-  }
-  item  = CacheItemP();
-  uitem = UncompressedOnMemoryCacheItemP();
+  m_compressedItems[id] = newItem;
+  item                  = CacheItemP();
+  uitem                 = UncompressedOnMemoryCacheItemP();
 }
+
+/*
+  // se il quantitativo di memoria utilizzata e' superiore a un dato valore,
+  sposto
+  // su disco alcune immagini compresse in modo da liberare memoria
+
+  if (itu != m_itemHistory.end()) //memory is enough!
+    return;
+
+  std::map<std::string, CacheItemP>::iterator itc = m_compressedItems.begin();
+  for ( ; itc != m_compressedItems.end() && notEnoughMemory(); ++itc)
+        {
+          CacheItemP item = itc->second;
+          if (item->m_cantCompress)
+                  continue;
+
+          CompressedOnMemoryCacheItemP citem = itc->second;
+          if (citem)
+                {
+                  assert(m_rootDir!=TFilePath());
+                  TFilePath fp = m_rootDir +
+  TFilePath(toString(TImageCache::Imp::m_fileid++));
+
+                  CacheItemP newItem = new CompressedOnDiskCacheItem(fp,
+  citem->m_compressedRas,
+                                                                                                                                                                                                                           citem->m_builder->clone(), citem->m_imageInfo->clone());
+
+                  itc->second = 0;
+                  m_compressedItems[itc->first] = newItem;
+                }
+        }
+  */
 
 //------------------------------------------------------------------------------
 
 UCHAR *TImageCache::Imp::compressAndMalloc(TUINT32 size) {
-  // ADDED: Validate size
-  if (size == 0) return nullptr;
-
   UCHAR *buf = 0;
 
   TThread::MutexLocker sl(&m_mutex);
 
-  // ADDED: Check if BigMemoryManager is available
-  if (!TBigMemoryManager::instance()) {
-    return nullptr;
-  }
-
   TheCodec::instance()->reset();
+
+  // if (size!=0)
+  //  size = size>>10;
+
+  // assert(size==0 || TBigMemoryManager::instance()->isActive());
 
   std::map<TUINT32, std::string>::iterator itu = m_itemHistory.begin();
   while (
@@ -1142,16 +1009,8 @@ UCHAR *TImageCache::Imp::compressAndMalloc(TUINT32 size) {
   {
     std::map<std::string, CacheItemP>::iterator it =
         m_uncompressedItems.find(itu->second);
-    if (it == m_uncompressedItems.end()) {
-      ++itu;
-      continue;
-    }
-
+    assert(it != m_uncompressedItems.end());
     CacheItemP item = it->second;
-    if (!item) {
-      ++itu;
-      continue;
-    }
 
     UncompressedOnMemoryCacheItemP uitem = item;
     if (item->m_cantCompress ||
@@ -1173,9 +1032,7 @@ UCHAR *TImageCache::Imp::compressAndMalloc(TUINT32 size) {
                                                 item->getImage()->getPalette());
       //  }
 
-      if (newItem) {
-        m_compressedItems[it->first] = newItem;
-      }
+      m_compressedItems[it->first] = newItem;
     }
 
 #ifdef _WIN32
@@ -1187,7 +1044,7 @@ UCHAR *TImageCache::Imp::compressAndMalloc(TUINT32 size) {
     std::map<TUINT32, std::string>::iterator itu2 = itu;
     itu++;
     m_itemHistory.erase(itu2);
-    m_itemsByImagePointer.erase(getPointer(item->getImage()));
+    m_itemsByImagePointer.erase(item->getImage().getPointer());
     m_uncompressedItems.erase(it);
 #endif
   }
@@ -1199,7 +1056,7 @@ UCHAR *TImageCache::Imp::compressAndMalloc(TUINT32 size) {
          (buf = TBigMemoryManager::instance()->getBuffer(size)) == 0;
        ++itc) {
     CacheItemP item = itc->second;
-    if (!item || item->m_cantCompress) continue;
+    if (item->m_cantCompress) continue;
 
     CompressedOnMemoryCacheItemP citem = itc->second;
     if (citem) {
@@ -1211,10 +1068,8 @@ UCHAR *TImageCache::Imp::compressAndMalloc(TUINT32 size) {
           fp, citem->m_compressedRas, citem->m_builder->clone(),
           citem->m_imageInfo->clone(), citem->m_palette);
 
-      itc->second = 0;
-      if (newItem) {
-        m_compressedItems[itc->first] = newItem;
-      }
+      itc->second                   = 0;
+      m_compressedItems[itc->first] = newItem;
     }
   }
 
@@ -1331,24 +1186,6 @@ void TImageCache::Imp::add(const std::string &id, const TImageP &img,
                            bool overwrite) {
   TThread::MutexLocker sl(&m_mutex);
 
-  // ADDED: Validate input image
-  if (!img) {
-    return;  // Early return for null images
-  }
-
-  // ADDED: Validate image data before processing
-  TRasterImageP ri = img;
-  TToonzImageP ti  = img;
-  TVectorImageP vi = img;
-
-  if (ri && (!ri->getRaster() || !ri->getRaster()->getRawData())) {
-    return;  // Invalid raster image
-  }
-
-  if (ti && (!ti->getRaster() || !ti->getRaster()->getRawData())) {
-    return;  // Invalid toonz image
-  }
-
 #ifdef LEVO
   std::map<std::string, CacheItemP>::iterator it1 = m_uncompressedItems.begin();
 
@@ -1423,12 +1260,11 @@ void TImageCache::Imp::add(const std::string &id, const TImageP &img,
 #endif
 
   item = new UncompressedOnMemoryCacheItem(img);
-  if (!item) return;
-
 #ifdef TNZCORE_LIGHT
   item->m_cantCompress = false;
 #else
-  item->m_cantCompress = (TVectorImageP(img) ? true : false);
+  item->m_cantCompress =
+      (TVectorImageP(img) || TMeshImageP(img) ? true : false);
 #endif
   item->m_id                             = id;
   m_uncompressedItems[id]                = item;
@@ -1859,9 +1695,6 @@ bool TImageCache::hasBeenModified(const std::string &id, bool reset) const {
 //------------------------------------------------------------------------------
 
 TImageP TImageCache::get(const std::string &id, bool toBeModified) const {
-  // ADDED: Validate input
-  if (id.empty()) return TImageP();
-
   return m_imp->get(id, toBeModified);
 }
 
@@ -1869,9 +1702,6 @@ TImageP TImageCache::get(const std::string &id, bool toBeModified) const {
 
 TImageP TImageCache::Imp::get(const std::string &id, bool toBeModified) {
   TThread::MutexLocker sl(&m_mutex);
-
-  // ADDED: Validate input
-  if (id.empty()) return TImageP();
 
   std::map<std::string, std::string>::const_iterator it;
   if ((it = m_duplicatedItems.find(id)) != m_duplicatedItems.end()) {
@@ -1909,16 +1739,12 @@ TImageP TImageCache::Imp::get(const std::string &id, bool toBeModified) {
   if (itc == m_compressedItems.end()) return 0;
 
   CacheItemP cacheItem = itc->second;
-  if (!cacheItem) return TImageP();
 
   img = cacheItem->getImage();
-  if (!img) return TImageP();
 
   CacheItemP uncompressed;
-  uncompressed = new UncompressedOnMemoryCacheItem(img);
-  if (!uncompressed) return img;
-
-  m_uncompressedItems[itc->first]        = uncompressed;
+  uncompressed                    = new UncompressedOnMemoryCacheItem(img);
+  m_uncompressedItems[itc->first] = uncompressed;
   m_itemsByImagePointer[getPointer(img)] = itc->first;
 
   m_itemHistory[HistoryCount]  = itc->first;
@@ -1963,7 +1789,7 @@ namespace {
 class AccumulateMemUsage {
 public:
   int operator()(int oldValue, std::pair<std::string, CacheItemP> item) {
-    return oldValue + (item.second ? item.second->getSize() : 0);
+    return oldValue + item.second->getSize();
   }
 };
 }  // namespace
@@ -1989,13 +1815,10 @@ UINT TImageCache::getDiskUsage() const { return 0; }
 UINT TImageCache::getMemUsage(const std::string &id) const {
   std::map<std::string, CacheItemP>::iterator it =
       m_imp->m_uncompressedItems.find(id);
-  if (it != m_imp->m_uncompressedItems.end())
-    return it->second ? it->second->getSize() : 0;
+  if (it != m_imp->m_uncompressedItems.end()) return it->second->getSize();
 
   it = m_imp->m_compressedItems.find(id);
-  if (it != m_imp->m_compressedItems.end())
-    return it->second ? it->second->getSize() : 0;
-
+  if (it != m_imp->m_compressedItems.end()) return it->second->getSize();
   return 0;
 }
 
@@ -2006,12 +1829,10 @@ UINT TImageCache::getMemUsage(const std::string &id) const {
 UINT TImageCache::getUncompressedMemUsage(const std::string &id) const {
   std::map<std::string, CacheItemP>::iterator it =
       m_imp->m_uncompressedItems.find(id);
-  if (it != m_imp->m_uncompressedItems.end())
-    return it->second ? it->second->getSize() : 0;
+  if (it != m_imp->m_uncompressedItems.end()) return it->second->getSize();
 
   it = m_imp->m_compressedItems.find(id);
-  if (it != m_imp->m_compressedItems.end())
-    return it->second ? it->second->getSize() : 0;
+  if (it != m_imp->m_compressedItems.end()) return it->second->getSize();
 
   return 0;
 }
@@ -2075,8 +1896,6 @@ void TImageCache::Imp::outputMap(UINT chunkRequested, std::string filename) {
   std::map<std::string, CacheItemP>::iterator itu = m_uncompressedItems.begin();
 
   for (; itu != m_uncompressedItems.end(); ++itu) {
-    if (!itu->second) continue;
-
     UncompressedOnMemoryCacheItemP uitem = itu->second;
     if (uitem->m_image && hasExternalReferences(uitem->m_image)) {
       umcount1++;
@@ -2091,8 +1910,6 @@ void TImageCache::Imp::outputMap(UINT chunkRequested, std::string filename) {
   }
   std::map<std::string, CacheItemP>::iterator itc = m_compressedItems.begin();
   for (; itc != m_compressedItems.end(); ++itc) {
-    if (!itc->second) continue;
-
     CacheItemP boh                      = itc->second;
     CompressedOnMemoryCacheItemP cmitem = itc->second;
     CompressedOnDiskCacheItemP cditem   = itc->second;

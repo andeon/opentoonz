@@ -90,8 +90,26 @@ void PaletteController::setCurrentPalette(TPaletteHandle *paletteHandle) {
 //-----------------------------------------------------------------------------
 
 void PaletteController::editLevelPalette() {
-    setCurrentPalette(m_currentLevelPalette);
-  emit(checkPaletteLock());
+  // Check if m_currentLevelPalette is null
+  if (!m_currentLevelPalette) {
+    setCurrentPalette(nullptr);
+    emit checkPaletteLock();
+    return;
+  }
+
+  // Get the palette from m_currentLevelPalette
+  TPalette *palette = m_currentLevelPalette->getPalette();
+
+  // Check if the palette is null or invalid
+  if (!palette || palette->getStyleCount() == 0) {
+    setCurrentPalette(nullptr);
+    emit checkPaletteLock();
+    return;
+  }
+
+  // If all checks pass, set the current palette
+  setCurrentPalette(m_currentLevelPalette);
+  emit checkPaletteLock();
 }
 
 //-----------------------------------------------------------------------------
