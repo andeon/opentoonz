@@ -71,6 +71,7 @@
 #endif
 
 // Qt includes
+#include <QMenuBar> // Added for QMenuBar definition
 #include <QApplication>
 #include <QGuiApplication>  // For setHighDpiScaleFactorRoundingPolicy
 #include <QAbstractEventDispatcher>
