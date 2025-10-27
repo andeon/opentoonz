@@ -72,6 +72,7 @@
 
 // Qt includes
 #include <QApplication>
+#include <QGuiApplication>
 #include <QAbstractEventDispatcher>
 #include <QAbstractNativeEventFilter>
 #include <QSplashScreen>
@@ -81,6 +82,7 @@
 #include <QSettings>
 #include <QLibraryInfo>
 #include <QHash>
+#include <QScopeGuard>
 
 #ifdef _WIN32
 #ifndef x64
@@ -93,7 +95,7 @@ using namespace DVGui;
 
 TEnv::IntVar EnvSoftwareCurrentFontSize("SoftwareCurrentFontSize", 12);
 
-// These are the same as the default values. See tenv.cpp and tversion.h
+// Default values defined in tenv.cpp and tversion.h
 const char *rootVarName     = "TOONZROOT";
 const char *systemVarPrefix = "TOONZ";
 
@@ -103,7 +105,7 @@ void postThreadMsg(TThread::Message *) {}
 void qt_mac_set_menubar_merge(bool enable);
 #endif
 
-// Modifica per toonz (non servono questo tipo di licenze)
+// Modification for Toonz: No license types are needed
 #define NO_LICENSE
 //-----------------------------------------------------------------------------
 
@@ -119,7 +121,6 @@ static void fatalError(QString msg) {
 
 static void lastWarningError(QString msg) {
   DVGui::error(msg);
-  // exit(0);
 }
 //-----------------------------------------------------------------------------
 
@@ -128,7 +129,7 @@ static void toonzRunOutOfContMemHandler(unsigned long size) {
   static bool firstTime = true;
   if (firstTime) {
     MessageBox(NULL, (LPCWSTR)L"Run out of contiguous physical memory: please save all and restart Toonz!",
-				   (LPCWSTR)L"Warning", MB_OK | MB_SYSTEMMODAL);
+               (LPCWSTR)L"Warning", MB_OK | MB_SYSTEMMODAL);
     firstTime = false;
   }
 #endif
@@ -136,29 +137,24 @@ static void toonzRunOutOfContMemHandler(unsigned long size) {
 
 //-----------------------------------------------------------------------------
 
-// todo.. da mettere in qualche .h
+// TODO: Move to a header file
 DV_IMPORT_API void initStdFx();
 DV_IMPORT_API void initColorFx();
 
 //-----------------------------------------------------------------------------
 
-//! Inizializzaza l'Environment di Toonz
-/*! In particolare imposta la projectRoot e
-    la stuffDir, controlla se la directory di outputs esiste (e provvede a
-    crearla in caso contrario) verifica inoltre che stuffDir esista.
-*/
+// Initializes the Toonz environment
+// Sets the project root and stuff directory, ensures the output directory exists
+// (creates it if it doesn't), and verifies that the stuff directory exists
 static void initToonzEnv(QHash<QString, QString> &argPathValues) {
   StudioPalette::enable(true);
   TEnv::setRootVarName(rootVarName);
   TEnv::setSystemVarPrefix(systemVarPrefix);
 
-  QHash<QString, QString>::const_iterator i = argPathValues.constBegin();
-  while (i != argPathValues.constEnd()) {
-    if (!TEnv::setArgPathValue(i.key().toStdString(), i.value().toStdString()))
-      DVGui::error(
-          QObject::tr("The qualifier %1 is not a valid key name. Skipping.")
-              .arg(i.key()));
-    ++i;
+  for (const auto &[key, value] : argPathValues) {
+    if (!TEnv::setArgPathValue(key.toStdString(), value.toStdString()))
+      fatalError(
+          QObject::tr("The qualifier %1 is not a valid key name.").arg(key));
   }
 
   QCoreApplication::setOrganizationName("OpenToonz");
@@ -166,13 +162,8 @@ static void initToonzEnv(QHash<QString, QString> &argPathValues) {
   QCoreApplication::setApplicationName(
       QString::fromStdString(TEnv::getApplicationName()));
 
-  /*-- TOONZROOTのPathの確認 --*/
-  // controllo se la xxxroot e' definita e corrisponde ad un folder esistente
-
-  /*-- ENGLISH: Confirm TOONZROOT Path
-        Check if the xxxroot is defined and corresponds to an existing folder
-  --*/
-
+  // Verify TOONZROOT path
+  // Check if TOONZROOT is defined and corresponds to an existing folder
   TFilePath stuffDir = TEnv::getStuffDir();
   if (stuffDir == TFilePath())
     fatalError("Undefined or empty: \"" + toQString(TEnv::getRootVarPath()) +
@@ -187,8 +178,6 @@ static void initToonzEnv(QHash<QString, QString> &argPathValues) {
   initStdFx();
   initColorFx();
 
-  // TPluginManager::instance()->loadStandardPlugins();
-
   TFilePath library = ToonzFolder::getLibraryFolder();
 
   TRasterImagePatternStrokeStyle::setRootDir(library);
@@ -197,36 +186,22 @@ static void initToonzEnv(QHash<QString, QString> &argPathValues) {
 
   CustomStyleManager::setRootPath(library);
 
-  // sembra indispensabile nella lettura dei .tab 2.2:
+  // Necessary for reading .tab 2.2 files
   TPalette::setRootDir(library);
   TImageStyle::setLibraryDir(library);
 
-  // TProjectManager::instance()->enableTabMode(true);
-
   TProjectManager *projectManager = TProjectManager::instance();
 
-  /*--
-   * TOONZPROJECTSのパスセットを取得する。（TOONZPROJECTSはセミコロンで区切って複数設定可能）
-   * --*/
+  // Retrieve the TOONZPROJECTS path set (TOONZPROJECTS can be multiple paths separated by semicolons)
   TFilePathSet projectsRoots = ToonzFolder::getProjectsFolders();
-  TFilePathSet::iterator it;
-  for (it = projectsRoots.begin(); it != projectsRoots.end(); ++it)
-    projectManager->addProjectsRoot(*it);
+  for (const auto &path : projectsRoots)
+    projectManager->addProjectsRoot(path);
 
-  /*-- もしまだ無ければ、TOONZROOT/sandboxにsandboxプロジェクトを作る --*/
+  // If not already present, create a sandbox project in TOONZROOT/sandbox
   projectManager->createSandboxIfNeeded();
 
-  /*
-TProjectP project = projectManager->getCurrentProject();
-Non dovrebbe servire per Tab:
-project->setFolder(TProject::Drawings, TFilePath("$scenepath"));
-project->setFolder(TProject::Extras, TFilePath("$scenepath"));
-project->setUseScenePath(TProject::Drawings, false);
-project->setUseScenePath(TProject::Extras, false);
-*/
-  // Imposto la rootDir per ImageCache
-
-  /*-- TOONZCACHEROOTの設定  --*/
+  // Set the root directory for ImageCache
+  // Configure TOONZCACHEROOT
   TFilePath cacheDir = ToonzFolder::getCacheRootFolder();
   if (cacheDir.isEmpty()) cacheDir = TEnv::getStuffDir() + "cache";
   TImageCache::instance()->setRootDir(cacheDir);
@@ -248,7 +223,7 @@ static void script_output(int type, const QString &value) {
 
 int main(int argc, char *argv[]) {
 #ifdef Q_OS_WIN
-  // Enable standard input/output on Windows Platform for debug
+  // Enable standard input/output on Windows for debugging
   if (::AttachConsole(ATTACH_PARENT_PROCESS)) {
     freopen("CON", "r", stdin);
     freopen("CON", "w", stdout);
@@ -260,7 +235,7 @@ int main(int argc, char *argv[]) {
   // Install signal handlers to catch crashes
   CrashHandler::install();
 
-  // parsing arguments and qualifiers
+  // Parse arguments and qualifiers
   TFilePath loadFilePath;
   QString argumentLayoutFileName = "";
   QHash<QString, QString> argumentPathValues;
@@ -276,7 +251,6 @@ int main(int argc, char *argv[]) {
         "layouts.txt is used by default.");
     usageLine = usageLine + layoutFileQual;
 
-    // system path qualifiers
     std::map<QString, std::unique_ptr<TCli::QualifierT<TFilePath>>>
         systemPathQualMap;
     QString qualKey  = QString("%1ROOT").arg(systemVarPrefix);
@@ -291,10 +265,8 @@ int main(int argc, char *argv[]) {
     usageLine = usageLine + *systemPathQualMap[qualKey];
 
     const std::map<std::string, std::string> &spm = TEnv::getSystemPathMap();
-    for (auto itr = spm.begin(); itr != spm.end(); ++itr) {
-      qualKey = QString("%1%2")
-                    .arg(systemVarPrefix)
-                    .arg(QString::fromStdString((*itr).first));
+    for (const auto &[key, value] : spm) {
+      qualKey = QString("%1%2").arg(systemVarPrefix).arg(QString::fromStdString(value));
       qualName = QString("-%1 folderpath").arg(qualKey);
       qualHelp = QString("%1 path.").arg(qualKey);
       systemPathQualMap[qualKey].reset(new TCli::QualifierT<TFilePath>(
@@ -310,28 +282,38 @@ int main(int argc, char *argv[]) {
     if (layoutFileQual.isSelected())
       argumentLayoutFileName =
           QString::fromStdString(layoutFileQual.getValue());
-    for (auto q_itr = systemPathQualMap.begin();
-         q_itr != systemPathQualMap.end(); ++q_itr) {
-      if (q_itr->second->isSelected())
-        argumentPathValues.insert(q_itr->first,
-                                  q_itr->second->getValue().getQString());
+    for (const auto &[key, qual] : systemPathQualMap) {
+      if (qual->isSelected())
+        argumentPathValues.insert(key, qual->getValue().getQString());
     }
 
     argc = 1;
   }
 
-  // Enables high-DPI scaling. This attribute must be set before QApplication is
-  // constructed. Available from Qt 5.6.
+  // High-DPI settings for proper scaling on modern displays
+  // Enable high-DPI scaling to support automatic scaling based on display DPI (Qt 5.6+)
+  // Use PassThrough rounding policy (Qt 5.15) to allow fractional scaling (e.g., 1.25, 1.5)
+  // to prevent raster/vector misalignment when QT_SCALE_FACTOR is set
+  // Enable high-DPI pixmaps for smooth icon rendering
+  // Removed Qt::AA_Use96Dpi (workaround #20230627) as it forces 96 DPI, causing scaling issues
+  // Menu bar icon size is set explicitly later to maintain workaround behavior
+  QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
+      Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
   QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+  QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 
+  // Construct QApplication after setting DPI attributes
   QApplication a(argc, argv);
 
-#ifdef MACOSX
-  // This workaround is to avoid missing left button problem on Qt5.6.0.
-  // To invalidate m_rightButtonClicked in Qt/qnsview.mm, sending
-  // NSLeftButtonDown event before NSLeftMouseDragged event propagated to
-  // QApplication. See more details in ../mousedragfilter/mousedragfilter.mm.
+  // Use QScopeGuard for RAII cleanup instead of unique_ptr<QObject>
+  auto mainScope = qScopeGuard([] {
+    qApp->setObjectName("mainScope"); // Optional naming for debugging
+  });
 
+#ifdef MACOSX
+  // Workaround for Qt 5.6.0 on macOS to avoid missing left button issue
+  // Sends NSLeftButtonDown event before NSLeftMouseDragged to invalidate
+  // m_rightButtonClicked in Qt/qnsview.mm
 #include "mousedragfilter.h"
 
   class OSXMouseDragFilter final : public QAbstractNativeEventFilter {
@@ -362,72 +344,24 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef Q_OS_WIN
-  //	Since currently OpenToonz does not work with OpenGL of software or
-  // angle,	force Qt to use desktop OpenGL
-  // FIXME: This options should be called before constructing the application.
-  // Thus, ANGLE seems to be enabled as of now.
+  // Force Qt to use desktop OpenGL, as OpenToonz does not work with software or ANGLE OpenGL
   a.setAttribute(Qt::AA_UseDesktopOpenGL, true);
 #endif
 
-  // Some Qt objects are destroyed badly without a living qApp. So, we must
-  // enforce a way to either
-  // postpone the application destruction until the very end, OR ensure that
-  // sensible objects are
-  // destroyed before.
-
-  // Using a static QApplication only worked on Windows, and in any case C++
-  // respects the statics destruction
-  // order ONLY within the same library. On MAC, it made the app crash on exit
-  // o_o. So, nope.
-
-  std::unique_ptr<QObject> mainScope(new QObject(
-      &a));  // A QObject destroyed before the qApp is therefore explicitly
-  mainScope->setObjectName("mainScope");  // provided. It can be accessed by
-                                          // looking in the qApp's children.
-
 #ifdef _WIN32
-#ifndef x64
-  // Store the floating point control word. It will be re-set before Toonz
-  // initialization
-  // has ended.
-  unsigned int fpWord = 0;
-  _controlfp_s(&fpWord, 0, 0);
-#endif
-#endif
-
-#ifdef _WIN32
-  // At least on windows, Qt's 4.5.2 native windows feature tend to create
-  // weird flickering effects when dragging panel separators.
+  // Prevent flickering when dragging panel separators on Windows (Qt 4.5.2 issue)
   a.setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
-#endif
 
-  // Enable to render smooth icons on high dpi monitors
-  a.setAttribute(Qt::AA_UseHighDpiPixmaps);
-#if defined(_WIN32)
-  // Compress tablet events with application attributes instead of implementing
-  // the delay-timer by ourselves
+  // Compress high-frequency and tablet events to optimize event handling
   a.setAttribute(Qt::AA_CompressHighFrequencyEvents);
   a.setAttribute(Qt::AA_CompressTabletEvents);
 #endif
 
-#ifdef _WIN32
-  // BUG_WORKAROUND: #20230627
-  // This attribute is set to make menubar icon to be always (16 x devPixRatio).
-  // Without this attribute the menu bar icon size becomes the same as tool bar
-  // when Windows scale is in 125%. Currently hiding the menu bar icon is done
-  // by setting transparent pixmap only in menu bar icon size. So the size must
-  // be different between for menu bar and for tool bar.
-  a.setAttribute(Qt::AA_Use96Dpi);
-#endif
-
-  // Set the app's locale for numeric stuff to standard C. This is important for
-  // atof() and similar
-  // calls that are locale-dependent.
+  // Set locale for numeric operations to standard C for consistent atof() behavior
   setlocale(LC_NUMERIC, "C");
 
-// Set current directory to the bundle/application path - this is needed to have
-// correct relative paths
 #ifdef MACOSX
+  // Set current directory to the bundle/application path for correct relative paths
   {
     QDir appDir(QApplication::applicationDirPath());
     appDir.cdUp(), appDir.cdUp(), appDir.cdUp();
@@ -437,13 +371,14 @@ int main(int argc, char *argv[]) {
   }
 #endif
 
-  // Set show icons in menus flag (use iconVisibleInMenu to disable selectively)
+  // Enable icons in menus (can be disabled selectively with iconVisibleInMenu)
   QApplication::instance()->setAttribute(Qt::AA_DontShowIconsInMenus, false);
 
   TEnv::setApplicationFileName(argv[0]);
 
-  // splash screen
-  QPixmap splashPixmap = QIcon(":Resources/splash.svg").pixmap(QSize(610, 344));
+  // Splash screen
+  const QSize SplashSize(610, 344);
+  QPixmap splashPixmap = QIcon(":Resources/splash.svg").pixmap(SplashSize);
 
 #ifdef _WIN32
   QFont font("Segoe UI", -1);
@@ -466,8 +401,8 @@ int main(int argc, char *argv[]) {
   if (!isRunScript) splash.show();
   a.processEvents();
 
-  splash.showMessage(offsetStr + "Initializing QGLFormat...", Qt::AlignCenter,
-                     Qt::white);
+  splash.showMessage(offsetStr + QStringLiteral("Initializing QGLFormat..."),
+                     Qt::AlignCenter, Qt::white);
   a.processEvents();
 
   // OpenGL
@@ -480,21 +415,21 @@ int main(int argc, char *argv[]) {
   glutInit(&argc, argv);
 #endif
 
-  splash.showMessage(offsetStr + "Initializing Toonz environment ...",
+  splash.showMessage(offsetStr + QStringLiteral("Initializing Toonz environment ..."),
                      Qt::AlignCenter, Qt::white);
   a.processEvents();
 
-  // Install run out of contiguous memory callback
+  // Install callback for running out of contiguous memory
   TBigMemoryManager::instance()->setRunOutOfContiguousMemoryHandler(
       &toonzRunOutOfContMemHandler);
 
-  // Toonz environment
+  // Initialize Toonz environment
   initToonzEnv(argumentPathValues);
 
-  // Setup third party
+  // Setup third-party components
   ThirdParty::initialize();
 
-  // prepare for 30bit display
+  // Prepare for 30-bit display if enabled
   if (Preferences::instance()->is30bitDisplayEnabled()) {
     QSurfaceFormat sFmt = QSurfaceFormat::defaultFormat();
     sFmt.setRedBufferSize(10);
@@ -509,15 +444,12 @@ int main(int argc, char *argv[]) {
 
   TProjectManager *projectManager = TProjectManager::instance();
   if (Preferences::instance()->isSVNEnabled()) {
-    // Read Version Control repositories and add it to project manager as
-    // "special" svn project root
+    // Read Version Control repositories and add them to project manager as
+    // special SVN project roots
     VersionControl::instance()->init();
     QList<SVNRepository> repositories =
         VersionControl::instance()->getRepositories();
-    int count = repositories.size();
-    for (int i = 0; i < count; i++) {
-      SVNRepository r = repositories.at(i);
-
+    for (const auto &r : repositories) {
       TFilePath localPath(r.m_localPath.toStdWString());
       if (!TFileStatus(localPath).doesExist()) {
         try {
@@ -531,106 +463,73 @@ int main(int argc, char *argv[]) {
   }
 
 #if defined(MACOSX) && defined(__LP64__)
-
-  // Load the shared memory settings
+  // Load shared memory settings
   int shmmax = Preferences::instance()->getShmMax();
   int shmseg = Preferences::instance()->getShmSeg();
   int shmall = Preferences::instance()->getShmAll();
   int shmmni = Preferences::instance()->getShmMni();
 
-  if (shmall <
-      0)  // Make sure that at least 100 MB of shared memory are available
-    shmall = (tipc::shm_maxSharedPages() < (100 << 8)) ? (100 << 8) : -1;
+  const int MinSharedMemoryPages = 100 << 8;
+  if (shmall < 0)
+    shmall = (tipc::shm_maxSharedPages() < MinSharedMemoryPages) ? MinSharedMemoryPages : -1;
 
   tipc::shm_set(shmmax, shmseg, shmall, shmmni);
-
 #endif
 
-  // DVDirModel must be instantiated after Version Control initialization...
+  // DVDirModel must be instantiated after Version Control initialization
   FolderListenerManager::instance()->addListener(DvDirModel::instance());
 
-  splash.showMessage(offsetStr + "Loading Translator ...", Qt::AlignCenter,
-                     Qt::white);
+  splash.showMessage(offsetStr + QStringLiteral("Loading Translator ..."),
+                     Qt::AlignCenter, Qt::white);
   a.processEvents();
 
-  // Carico la traduzione contenuta in toonz.qm (se ï¿½ presente)
+  // Load translations
   QString languagePathString =
       QString::fromStdString(::to_string(TEnv::getConfigDir() + "loc"));
 #ifndef WIN32
-  // the merge of menu on osx can cause problems with different languages with
-  // the Preferences menu
-  // qt_mac_set_menubar_merge(false);
   languagePathString += "/" + Preferences::instance()->getCurrentLanguage();
 #else
   languagePathString += "\\" + Preferences::instance()->getCurrentLanguage();
 #endif
-  QTranslator translator;
-  translator.load("toonz", languagePathString);
-
-  // La installo
-  a.installTranslator(&translator);
-
-  // Carico la traduzione contenuta in toonzqt.qm (se e' presente)
-  QTranslator translator2;
-  translator2.load("toonzqt", languagePathString);
-  a.installTranslator(&translator2);
-
-  // Carico la traduzione contenuta in tnzcore.qm (se e' presente)
-  QTranslator tnzcoreTranslator;
-  tnzcoreTranslator.load("tnzcore", languagePathString);
-  qApp->installTranslator(&tnzcoreTranslator);
-
-  // Carico la traduzione contenuta in toonzlib.qm (se e' presente)
-  QTranslator toonzlibTranslator;
-  toonzlibTranslator.load("toonzlib", languagePathString);
-  qApp->installTranslator(&toonzlibTranslator);
-
-  // Carico la traduzione contenuta in colorfx.qm (se e' presente)
-  QTranslator colorfxTranslator;
-  colorfxTranslator.load("colorfx", languagePathString);
-  qApp->installTranslator(&colorfxTranslator);
-
-  // Carico la traduzione contenuta in tools.qm
-  QTranslator toolTranslator;
-  toolTranslator.load("tnztools", languagePathString);
-  qApp->installTranslator(&toolTranslator);
-
-  // load translation for file writers properties
-  QTranslator imageTranslator;
-  imageTranslator.load("image", languagePathString);
-  qApp->installTranslator(&imageTranslator);
+  std::vector<QString> translatorFiles = {
+      "toonz", "toonzqt", "tnzcore", "toonzlib", "colorfx", "tnztools", "image"};
+  for (const auto &file : translatorFiles) {
+    QTranslator *translator = new QTranslator(&a);
+    if (translator->load(file, languagePathString))
+      a.installTranslator(translator);
+    else
+      delete translator;
+  }
 
   QTranslator qtTranslator;
   qtTranslator.load("qt_" + QLocale::system().name(),
-                    QLibraryInfo::location(QLibraryInfo::TranslationsPath));
+                    QLibraryInfo::path(QLibraryInfo::TranslationsPath));
   a.installTranslator(&qtTranslator);
 
-  // Aggiorno la traduzione delle properties di tutti i tools
+  // Update translation of tool and file writer properties
   TTool::updateToolsPropertiesTranslation();
-  // Apply translation to file writers properties
   Tiio::updateFileWritersPropertiesTranslation();
 
-  // Force to have left-to-right layout direction in any language environment.
-  // This function has to be called after installTranslator().
+  // Force left-to-right layout direction
   a.setLayoutDirection(Qt::LeftToRight);
 
-  splash.showMessage(offsetStr + "Loading styles ...", Qt::AlignCenter,
-                     Qt::white);
+  splash.showMessage(offsetStr + QStringLiteral("Loading styles ..."),
+                     Qt::AlignCenter, Qt::white);
   a.processEvents();
 
-  // stile
-  QApplication::setStyle("windows");
+  // Set application style to Fusion to avoid Windows native style glitches
+  QApplication::setStyle("fusion");
 
   IconGenerator::setFilmstripIconSize(Preferences::instance()->getIconSize());
 
-  splash.showMessage(offsetStr + "Loading shaders ...", Qt::AlignCenter,
-                     Qt::white);
+  splash.showMessage(offsetStr + QStringLiteral("Loading shaders ..."),
+                     Qt::AlignCenter, Qt::white);
   a.processEvents();
 
   loadShaderInterfaces(ToonzFolder::getLibraryFolder() + TFilePath("shaders"));
 
-  splash.showMessage(offsetStr + "Initializing OpenToonz ...", Qt::AlignCenter,
-                     Qt::white);
+  splash.showMessage(offsetStr + QStringLiteral("Initializing OpenToonz ..."),
+                     Qt::AlignCenter, Qt::white);
   a.processEvents();
 
   // Initialize ThemeManager before TApp
@@ -640,40 +539,35 @@ int main(int argc, char *argv[]) {
   TTool::setApplication(TApp::instance());
   TApp::instance()->init();
 
-  splash.showMessage(offsetStr + "Loading Plugins...", Qt::AlignCenter,
-                     Qt::white);
+  splash.showMessage(offsetStr + QStringLiteral("Loading Plugins..."),
+                     Qt::AlignCenter, Qt::white);
   a.processEvents();
-  /* poll the thread ends:
-   絶対に必要なわけではないが PluginLoader は中で setup
-   ハンドラが常に固有のスレッドで呼ばれるよう main thread queue の blocking
-   をしているので
-   processEvents を行う必要がある
-*/
+  // Poll until plugin loading completes
   while (!PluginLoader::load_entries("")) {
     a.processEvents();
   }
 
-  splash.showMessage(offsetStr + "Creating main window ...", Qt::AlignCenter,
-                     Qt::white);
+  splash.showMessage(offsetStr + QStringLiteral("Creating main window ..."),
+                     Qt::AlignCenter, Qt::white);
   a.processEvents();
 
-  /*-- Layoutファイル名をMainWindowのctorに渡す --*/
+  // Pass layout file name to MainWindow constructor
   MainWindow w(argumentLayoutFileName);
+  // Set menu bar icon size dynamically to maintain workaround #20230627 behavior
+  w.menuBar()->setIconSize(QSize(16 * qApp->devicePixelRatioF(), 16 * qApp->devicePixelRatioF()));
   CrashHandler::attachParentWindow(&w);
   CrashHandler::reportProjectInfo(true);
 
   if (isRunScript) {
-    // load script
     if (TFileStatus(loadFilePath).doesExist()) {
-      // find project for this script file
+      // Find project for this script file
       TProjectManager *pm = TProjectManager::instance();
       auto sceneProject   = pm->loadSceneProject(loadFilePath);
       TFilePath oldProjectPath;
       if (!sceneProject) {
         std::cerr << QObject::tr(
                          "It is not possible to load the scene %1 because it "
-                         "does not "
-                         "belong to any project.")
+                         "does not belong to any project.")
                          .arg(loadFilePath.getQString())
                          .toStdString()
                   << std::endl;
@@ -694,7 +588,7 @@ int main(int argc, char *argv[]) {
       if (!oldProjectPath.isEmpty()) pm->setCurrentProjectPath(oldProjectPath);
       return 1;
     } else {
-      std::cerr << QObject::tr("Script file %1 does not exists.")
+      std::cerr << QObject::tr("Script file %1 does not exist.")
                        .arg(loadFilePath.getQString())
                        .toStdString()
                 << std::endl;
@@ -703,43 +597,35 @@ int main(int argc, char *argv[]) {
   }
 
 #ifdef _WIN32
-  // http://doc.qt.io/qt-5/windows-issues.html#fullscreen-opengl-based-windows
+  // Ensure border in fullscreen OpenGL-based windows
   if (w.windowHandle())
     QWindowsWindowFunctions::setHasBorderInFullScreen(w.windowHandle(), true);
 #endif
 
-  // Qt have started to support Windows Ink from 5.12.
-  // Unlike WinTab API used in Qt 5.9 the tablet behaviors are different and
-  // are (at least, for OT) problematic. The customized Qt5.15.2 are made with
-  // cherry-picking the WinTab feature to be officially introduced from 6.0.
-  // See https://github.com/shun-iwasawa/qt5/releases/tag/v5.15.2_wintab for
-  // details. The following feature can only be used with the customized Qt,
-  // with WITH_WINTAB build option, and in Windows-x64 build.
-
 #ifdef WITH_WINTAB
+  // Enable WinTab for tablet support in customized Qt 5.15.2 (Windows x64)
   bool useQtNativeWinInk = Preferences::instance()->isQtNativeWinInkEnabled();
   QWindowsWindowFunctions::setWinTabEnabled(!useQtNativeWinInk);
 #endif
 
-  splash.showMessage(offsetStr + "Loading style sheet ...", Qt::AlignCenter,
-                     Qt::white);
+  splash.showMessage(offsetStr + QStringLiteral("Loading style sheet ..."),
+                     Qt::AlignCenter, Qt::white);
   a.processEvents();
 
-  // Carico lo styleSheet
+  // Load stylesheet
   QString currentStyle = Preferences::instance()->getCurrentStyleSheet();
   a.setStyleSheet(currentStyle);
 
-  // Parse inital stylesheet in ThemeManager
+  // Parse initial stylesheet in ThemeManager
   themeManager.parseCustomPropertiesFromStylesheet(currentStyle);
 
-  // w.setWindowTitle(QString::fromStdString(TEnv::getApplicationFullName()));
   w.changeWindowTitle();
   if (TEnv::getIsPortable()) {
-    splash.showMessage(offsetStr + "Starting OpenToonz Portable ...",
+    splash.showMessage(offsetStr + QStringLiteral("Starting OpenToonz Portable ..."),
                        Qt::AlignCenter, Qt::white);
   } else {
-    splash.showMessage(offsetStr + "Starting main window ...", Qt::AlignCenter,
-                       Qt::white);
+    splash.showMessage(offsetStr + QStringLiteral("Starting main window ..."),
+                       Qt::AlignCenter, Qt::white);
   }
   a.processEvents();
 
@@ -747,21 +633,13 @@ int main(int argc, char *argv[]) {
   QSettings settings(toQString(fp), QSettings::IniFormat);
   if (settings.contains("MainWindowGeometry"))
     w.restoreGeometry(settings.value("MainWindowGeometry").toByteArray());
-  else  // maximize window on the first launch
+  else
     w.setWindowState(w.windowState() | Qt::WindowMaximized);
 
   ExpressionReferenceManager::instance()->init();
 
 #ifndef MACOSX
-  // Workaround for the maximized window case: Qt delivers two resize events,
-  // one in the normal geometry, before
-  // maximizing (why!?), the second afterwards - all inside the following show()
-  // call. This makes troublesome for
-  // the docking system to correctly restore the saved geometry. Fortunately,
-  // MainWindow::showEvent(..) gets called
-  // just between the two, so we can disable the currentRoom layout right before
-  // showing and re-enable it after
-  // the normal resize has happened.
+  // Workaround for maximized window case: Qt delivers two resize events
   if (w.isMaximized()) w.getCurrentRoom()->layout()->setEnabled(false);
 #endif
 
@@ -769,19 +647,16 @@ int main(int argc, char *argv[]) {
   splash.finish(&w);
 
   a.setQuitOnLastWindowClosed(false);
-  // a.connect(&a, SIGNAL(lastWindowClosed()), &a, SLOT(quit()));
   if (Preferences::instance()->isLatestVersionCheckEnabled())
     w.checkForUpdates();
 
   w.show();
-
-  // Show floating panels only after the main window has been shown
   w.startupFloatingPanels();
 
   CommandManager::instance()->execute(T_Hand);
   if (!loadFilePath.isEmpty()) {
     splash.showMessage(
-        QString("Loading file '") + loadFilePath.getQString() + "'...",
+        QStringLiteral("Loading file '") + loadFilePath.getQString() + "'...",
         Qt::AlignCenter, Qt::white);
     if (TFileStatus(loadFilePath).doesExist()) IoCmd::loadScene(loadFilePath);
   }
@@ -801,7 +676,7 @@ int main(int argc, char *argv[]) {
     isItalic   = fontMgr->isItalic(fontName, fontStyle);
     hasKerning = fontMgr->hasKerning();
   } catch (TFontCreationError &) {
-    // Do nothing. A default font should load
+    // Default font will load
   }
 
   myFont = new QFont(fontName);
@@ -815,30 +690,20 @@ int main(int argc, char *argv[]) {
   QAction *action = CommandManager::instance()->getAction("MI_OpenTMessage");
   if (action)
     QObject::connect(TMessageRepository::instance(),
-                     SIGNAL(openMessageCenter()), action, SLOT(trigger()));
+                     &TMessageRepository::openMessageCenter,
+                     action, &QAction::trigger);
 
-  QObject::connect(TUndoManager::manager(), SIGNAL(somethingChanged()),
-                   TApp::instance()->getCurrentScene(), SLOT(setDirtyFlag()));
+  QObject::connect(TUndoManager::manager(), &TUndoManager::somethingChanged,
+                   TApp::instance()->getCurrentScene(), &TSceneHandle::setDirtyFlag);
 
 #ifdef _WIN32
 #ifndef x64
-  // On 32-bit architecture, there could be cases in which initialization could
-  // alter the
-  // FPU floating point control word. I've seen this happen when loading some
-  // AVI coded (VFAPI),
-  // where 80-bit internal precision was used instead of the standard 64-bit
-  // (much faster and
-  // sufficient - especially considering that x86 truncates to 64-bit
-  // representation anyway).
-  // IN ANY CASE, revert to the original control word.
-  // In the x64 case these precision changes simply should not take place up to
-  // _controlfp_s
-  // documentation.
+  // Restore floating point control word on 32-bit Windows
+  unsigned int fpWord = 0;
+  _controlfp_s(&fpWord, 0, 0);
   _controlfp_s(0, fpWord, -1);
 #endif
-#endif
 
-#ifdef _WIN32
   if (Preferences::instance()->isWinInkEnabled()) {
     KisTabletSupportWin8 *penFilter = new KisTabletSupportWin8();
     if (penFilter->init()) {
