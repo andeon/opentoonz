@@ -635,7 +635,7 @@ int main(int argc, char* argv[]) {
   MainWindow w(argumentLayoutFileName);
   // Set menu bar icon size explicitly to maintain workaround #20230627 behavior
   // Maintain 16px icons in menus (since QMenuBar doesn't support setIconSize)
-  QApplication::setStyleSheet("QMenu::icon { width: 16px; height: 16px; }");
+  a.setStyleSheet("QMenu::icon { width: 16px; height: 16px; }");
   CrashHandler::attachParentWindow(&w);
 
   if (isRunScript) {
