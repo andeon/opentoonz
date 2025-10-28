@@ -71,7 +71,6 @@
 #endif
 
 // Qt includes
-#include <QMenuBar> // Added for QMenuBar definition
 #include <QApplication>
 #include <QGuiApplication>  // For setHighDpiScaleFactorRoundingPolicy
 #include <QAbstractEventDispatcher>
@@ -635,10 +634,9 @@ int main(int argc, char* argv[]) {
   // Pass layout file name to MainWindow constructor
   MainWindow w(argumentLayoutFileName);
   // Set menu bar icon size explicitly to maintain workaround #20230627 behavior
-  // Ensures icons are 16 x devicePixelRatio for transparent pixmap hiding
-  w.menuBar()->setIconSize(QSize(16, 16));
+  // Maintain 16px icons in menus (since QMenuBar doesn't support setIconSize)
+  QApplication::setStyleSheet("QMenu::icon { width: 16px; height: 16px; }");
   CrashHandler::attachParentWindow(&w);
-  CrashHandler::reportProjectInfo(true);
 
   if (isRunScript) {
     // Load script
