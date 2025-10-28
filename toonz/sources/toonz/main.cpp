@@ -637,11 +637,8 @@ int main(int argc, char* argv[]) {
   // Maintain 16px icons in menus (since QMenuBar doesn't support setIconSize)
   const qreal dpr = a.devicePixelRatio();
   const int iconSize = qRound(16 * dpr);
-  
-  // Prepend to preserve priority over main stylesheet
-  QString menuIconRule = QString("QMenu::icon { width: %1px; height: %1px; }").arg(iconSize);
-  QString currentStyle = a.styleSheet();
-  a.setStyleSheet(menuIconRule + "\n" + currentStyle);
+  QString menuIconStyle = QString("QMenu::icon { width: %1px; height: %1px; }").arg(iconSize);
+  a.setStyleSheet(menuIconStyle);
   
   CrashHandler::attachParentWindow(&w);
   CrashHandler::reportProjectInfo(true);
