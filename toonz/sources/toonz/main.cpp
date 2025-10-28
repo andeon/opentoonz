@@ -635,10 +635,25 @@ int main(int argc, char* argv[]) {
   MainWindow w(argumentLayoutFileName);
   // Set menu bar icon size explicitly to maintain workaround #20230627 behavior
   // Maintain 16px icons in menus (since QMenuBar doesn't support setIconSize)
-  const qreal dpr = a.devicePixelRatio();
-  const int iconSize = qRound(16 * dpr);
-  QString menuIconStyle = QString("QMenu::icon { width: %1px; height: %1px; }").arg(iconSize);
-  a.setStyleSheet(menuIconStyle);
+  // === WORKAROUND #20230627: Logical 16px icons in menu (HiDPI-safe) ===
+  QMenuBar* menuBar = w.menuBar();
+  if (menuBar) {
+      menuBar->setIconSize(QSize(16, 16));  // 16 logical px → Qt scales automatically
+  }
+  
+  // === FIX BRUSH AT 125% DPI ===
+  QSurfaceFormat fmt = QSurfaceFormat::defaultFormat();
+  fmt.setSamples(0);  // Prevents OpenGL glitch with fractional scaling
+  QSurfaceFormat::setDefaultFormat(fmt);
+  
+  // Force the viewer to recalculate coordinates
+  QTimer::singleShot(100, [&w]() {
+      if (auto viewer = w.getCurrentRoom()->getViewer()) {
+          viewer->update();
+          viewer->setIgnoreTabletEvent(true);
+          viewer->setIgnoreTabletEvent(false);
+      }
+  });
   
   CrashHandler::attachParentWindow(&w);
   CrashHandler::reportProjectInfo(true);
