@@ -329,10 +329,19 @@ public:
     else
       erasedRas = TRasterP(selection->getOriginalFloatingSelection());
     TImageP erasedImage;
-    if (TRasterCM32P toonzRas = (TRasterCM32P)(erasedRas))
-      erasedImage = TToonzImageP(toonzRas->clone(), toonzRas->getBounds());
-    else if (TRaster32P fullColorRas = (TRaster32P)(erasedRas))
-      erasedImage = TRasterImageP(fullColorRas->clone());
+
+    // Clone based on original image type (not raster type!)
+    if (TToonzImageP ti = image) {
+      if (TRasterCM32P cm = erasedRas)
+        erasedImage = TToonzImageP(cm->clone(), cm->getSize());
+    } else if (TRasterImageP ri = image) {
+      if (TRaster32P r32 = erasedRas)
+        erasedImage = TRasterImageP(r32->clone());
+      else if (TRasterGR8P r8 = erasedRas)
+        erasedImage = TRasterImageP(r8->clone());
+    }
+
+    assert(erasedImage);
     TImageCache::instance()->add(m_erasedImageId, erasedImage, false);
     m_erasePoint = selection->getStartPosition();
     m_tool       = TTool::getApplication()->getCurrentTool()->getTool();
