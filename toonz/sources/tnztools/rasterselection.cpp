@@ -330,18 +330,18 @@ public:
       erasedRas = TRasterP(selection->getOriginalFloatingSelection());
     TImageP erasedImage;
 
-    // CRITICAL FIX: Clone the raster to take ownership and prevent
-    // use-after-free
+    // FIXED: Use proper image creation and cloneImage()
     if (erasedRas) {
-      TRasterP clonedRaster = erasedRas->clone();
-
-      // Handle all raster types to avoid null images in cache
-      if (TRasterCM32P toonzRas = (TRasterCM32P)(clonedRaster))
-        erasedImage = TToonzImageP(toonzRas, toonzRas->getBounds());
-      else if (TRaster32P fullColorRas = (TRaster32P)(clonedRaster))
-        erasedImage = TRasterImageP(fullColorRas);
-      else if (TRasterGR8P grRas = (TRasterGR8P)(clonedRaster))
-        erasedImage = TRasterImageP(grRas);
+      TImageP tempImage;
+      if (TRasterCM32P toonzRas = (TRasterCM32P)(erasedRas))
+        tempImage = TToonzImageP(toonzRas, toonzRas->getBounds());
+      else if (TRaster32P fullColorRas = (TRaster32P)(erasedRas))
+        tempImage = TRasterImageP(fullColorRas);
+      else if (TRasterGR8P grRas = (TRasterGR8P)(erasedRas))
+        tempImage = TRasterImageP(grRas);
+      
+      if (tempImage)
+        erasedImage = tempImage->cloneImage();
     }
 
     // Only add to cache if we have a valid image
@@ -476,31 +476,26 @@ public:
     if (!image) return;
 
     m_imageId = "UndoPasteImage_" + std::to_string(m_id);
-    // FIX: Store a clone of the image to avoid modifying the original
-    // Use dynamic casting to call the appropriate clone method
-    if (TToonzImageP ti = (TToonzImageP)image) {
-      TImageCache::instance()->add(m_imageId, ti->clone(), false);
-    } else if (TRasterImageP ri = (TRasterImageP)image) {
-      TImageCache::instance()->add(m_imageId, ri->clone(), false);
-    } else {
-      // Handle other image types or log an error
-      TImageCache::instance()->add(m_imageId, image, false);
-    }
+    // FIXED: Use cloneImage() instead of clone()
+    TImageCache::instance()->add(m_imageId, image->cloneImage(), false);
 
     m_floatingImageId =
         "UndoPasteFloatingSelection_floating_" + std::to_string(m_id);
     TRasterP floatingRas = currentSelection->getFloatingSelection();
     TImageP floatingImage;
 
-    // CRITICAL FIX: Clone the floating raster to take ownership
+    // FIXED: Create image from raster and use cloneImage()
     if (floatingRas) {
-      TRasterP clonedFloatingRas = floatingRas->clone();
-      if (TRasterCM32P toonzRas = (TRasterCM32P)(clonedFloatingRas))
-        floatingImage = TToonzImageP(toonzRas, toonzRas->getBounds());
-      else if (TRaster32P fullColorRas = (TRaster32P)(clonedFloatingRas))
-        floatingImage = TRasterImageP(fullColorRas);
-      else if (TRasterGR8P grRas = (TRasterGR8P)(clonedFloatingRas))
-        floatingImage = TRasterImageP(grRas);
+      TImageP tempImage;
+      if (TRasterCM32P toonzRas = (TRasterCM32P)(floatingRas))
+        tempImage = TToonzImageP(toonzRas, toonzRas->getBounds());
+      else if (TRaster32P fullColorRas = (TRaster32P)(floatingRas))
+        tempImage = TRasterImageP(fullColorRas);
+      else if (TRasterGR8P grRas = (TRasterGR8P)(floatingRas))
+        tempImage = TRasterImageP(grRas);
+      
+      if (tempImage)
+        floatingImage = tempImage->cloneImage();
     }
 
     if (floatingImage) {
@@ -512,15 +507,18 @@ public:
     TRasterP oldFloatingRas = currentSelection->getOriginalFloatingSelection();
     TImageP olfFloatingImage;
 
-    // CRITICAL FIX: Clone the old floating raster to take ownership
+    // FIXED: Create image from raster and use cloneImage()
     if (oldFloatingRas) {
-      TRasterP clonedOldFloatingRas = oldFloatingRas->clone();
-      if (TRasterCM32P toonzRas = (TRasterCM32P)(clonedOldFloatingRas))
-        olfFloatingImage = TToonzImageP(toonzRas, toonzRas->getBounds());
-      else if (TRaster32P fullColorRas = (TRaster32P)(clonedOldFloatingRas))
-        olfFloatingImage = TRasterImageP(fullColorRas);
-      else if (TRasterGR8P grRas = (TRasterGR8P)(clonedOldFloatingRas))
-        olfFloatingImage = TRasterImageP(grRas);
+      TImageP tempImage;
+      if (TRasterCM32P toonzRas = (TRasterCM32P)(oldFloatingRas))
+        tempImage = TToonzImageP(toonzRas, toonzRas->getBounds());
+      else if (TRaster32P fullColorRas = (TRaster32P)(oldFloatingRas))
+        tempImage = TRasterImageP(fullColorRas);
+      else if (TRasterGR8P grRas = (TRasterGR8P)(oldFloatingRas))
+        tempImage = TRasterImageP(grRas);
+      
+      if (tempImage)
+        olfFloatingImage = tempImage->cloneImage();
     }
 
     if (olfFloatingImage) {
@@ -1135,7 +1133,7 @@ void RasterSelection::pasteFloatingSelection() {
   ToolUtils::updateSaveBox(m_currentImageCell.getSimpleLevel(),
                            m_currentImageCell.getFrameId());
 
-  // FIX: Correct typo in function name
+  // FIXED: Method name corrected
   setFloatingSelection(TRasterP());
   selectNone();
 
