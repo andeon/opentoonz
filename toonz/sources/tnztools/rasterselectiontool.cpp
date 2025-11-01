@@ -153,7 +153,7 @@ void DragSelectionTool::UndoRasterDeform::undo() const {
   TRasterP ras;
   if (TToonzImageP ti = (TToonzImageP)(img)) ras = ti->getRaster();
   if (TRasterImageP ri = (TRasterImageP)(img)) ras = ri->getRaster();
-  selection->setFloatingSeletion(ras);
+  selection->setFloatingSelection(ras);
   selection->setStrokes(m_oldStrokes);
   m_tool->setBBox(m_oldBBox);
   m_tool->setCenter(m_oldCenter);
@@ -263,7 +263,7 @@ void DragSelectionTool::RasterDeformTool::applyTransform(FourPoints bbox,
   freeDeformer->setPoints(realBbox.getP00(), realBbox.getP10(),
                           realBbox.getP11(), realBbox.getP01());
   freeDeformer->deformImage();
-  selection->setFloatingSeletion(freeDeformer->getImage());
+  selection->setFloatingSelection(freeDeformer->getImage());
   VectorFreeDeformer *vectorFreeDeformer = tool->getSelectionFreeDeformer();
   if (vectorFreeDeformer) {
     vectorFreeDeformer->setPoints(realBbox.getP00(), realBbox.getP10(),
