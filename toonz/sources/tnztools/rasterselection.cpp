@@ -477,7 +477,15 @@ public:
 
     m_imageId = "UndoPasteImage_" + std::to_string(m_id);
     // FIX: Store a clone of the image to avoid modifying the original
-    TImageCache::instance()->add(m_imageId, image->clone(), false);
+    // Use dynamic casting to call the appropriate clone method
+    if (TToonzImageP ti = (TToonzImageP)image) {
+      TImageCache::instance()->add(m_imageId, ti->clone(), false);
+    } else if (TRasterImageP ri = (TRasterImageP)image) {
+      TImageCache::instance()->add(m_imageId, ri->clone(), false);
+    } else {
+      // Handle other image types or log an error
+      TImageCache::instance()->add(m_imageId, image, false);
+    }
 
     m_floatingImageId =
         "UndoPasteFloatingSelection_floating_" + std::to_string(m_id);

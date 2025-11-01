@@ -85,7 +85,7 @@ public:
   void setStartPosition(const TPoint &position) { m_startPosition = position; }
   TPoint getStartPosition() const { return m_startPosition; }
 
-  void setFloatingSeletion(const TRasterP &floatingSelection) {
+  void setFloatingSelection(const TRasterP &floatingSelection) { 
     m_floatingSelection = floatingSelection;
   }
   TRasterP getFloatingSelection() const { return m_floatingSelection; }
