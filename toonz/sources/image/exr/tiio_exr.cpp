@@ -114,7 +114,7 @@ void ExrReader::open(FILE* file) {
 
   m_info.m_samplePerPixel = m_exr_header->num_channels;
 
-  // Determine bits per sample (always return float raster → 32-bit)
+  // EXR is HDR float → always 32-bit in OpenToonz
   m_info.m_bitsPerSample = 32;
 }
 
@@ -179,7 +179,7 @@ void ExrReader::readLine(char* buffer, int x0, int x1, int shrink) {
 }
 
 // ---------------------------------------------------------------------
-// readLine 16-bit (LDR) – convert linear EXR float → 16-bit
+// readLine 16-bit (LDR) – convert linear EXR float → 16-bit integer
 // ---------------------------------------------------------------------
 void ExrReader::readLine(short* buffer, int x0, int x1, int shrink) {
   const int pixelSize = 8;
@@ -417,58 +417,58 @@ void ExrWriter::open(FILE* file, const TImageInfo& info) {
 }
 
 // ---------------------------------------------------------------------
-// writeLine 8-bit → convert sRGB 8-bit → linear float
+// writeLine 8-bit → convert sRGB 8-bit → linear float (SAFE: no conditional ptr)
 // ---------------------------------------------------------------------
 void ExrWriter::writeLine(char* buffer) {
   TPixel32* pix = (TPixel32*)buffer;
-  float* r_p = &m_imageBuf[0][m_row * m_info.m_lx];
-  float* g_p = &m_imageBuf[1][m_row * m_info.m_lx];
-  float* b_p = &m_imageBuf[2][m_row * m_info.m_lx];
-  float* a_p = (m_bpp == 128) ? &m_imageBuf[3][m_row * m_info.m_lx] : nullptr;
+  int base_idx = m_row * m_info.m_lx;
 
   for (int x = 0; x < m_info.m_lx; ++x) {
-    *r_p++ = uchar_to_float(pix[x].r);
-    *g_p++ = uchar_to_float(pix[x].g);
-    *b_p++ = uchar_to_float(pix[x].b);
-    if (m_bpp == 128) *a_p++ = uchar_to_float(pix[x].m);
+    int idx = base_idx + x;
+    m_imageBuf[0][idx] = uchar_to_float(pix[x].r);
+    m_imageBuf[1][idx] = uchar_to_float(pix[x].g);
+    m_imageBuf[2][idx] = uchar_to_float(pix[x].b);
+    if (m_bpp == 128) {
+      m_imageBuf[3][idx] = uchar_to_float(pix[x].m);
+    }
   }
   m_row++;
 }
 
 // ---------------------------------------------------------------------
-// writeLine 16-bit → convert 16-bit → linear float
+// writeLine 16-bit → convert 16-bit integer → linear float (SAFE)
 // ---------------------------------------------------------------------
 void ExrWriter::writeLine(short* buffer) {
   TPixel64* pix = (TPixel64*)buffer;
-  float* r_p = &m_imageBuf[0][m_row * m_info.m_lx];
-  float* g_p = &m_imageBuf[1][m_row * m_info.m_lx];
-  float* b_p = &m_imageBuf[2][m_row * m_info.m_lx];
-  float* a_p = (m_bpp == 128) ? &m_imageBuf[3][m_row * m_info.m_lx] : nullptr;
+  int base_idx = m_row * m_info.m_lx;
 
   for (int x = 0; x < m_info.m_lx; ++x) {
-    *r_p++ = ushort_to_float(pix[x].r);
-    *g_p++ = ushort_to_float(pix[x].g);
-    *b_p++ = ushort_to_float(pix[x].b);
-    if (m_bpp == 128) *a_p++ = ushort_to_float(pix[x].m);
+    int idx = base_idx + x;
+    m_imageBuf[0][idx] = ushort_to_float(pix[x].r);
+    m_imageBuf[1][idx] = ushort_to_float(pix[x].g);
+    m_imageBuf[2][idx] = ushort_to_float(pix[x].b);
+    if (m_bpp == 128) {
+      m_imageBuf[3][idx] = ushort_to_float(pix[x].m);
+    }
   }
   m_row++;
 }
 
 // ---------------------------------------------------------------------
-// writeLine float → input is already linear (HDR)
+// writeLine float → input is already linear (HDR) (SAFE)
 // ---------------------------------------------------------------------
 void ExrWriter::writeLine(float* buffer) {
   TPixelF* pix = (TPixelF*)buffer;
-  float* r_p = &m_imageBuf[0][m_row * m_info.m_lx];
-  float* g_p = &m_imageBuf[1][m_row * m_info.m_lx];
-  float* b_p = &m_imageBuf[2][m_row * m_info.m_lx];
-  float* a_p = (m_bpp == 128) ? &m_imageBuf[3][m_row * m_info.m_lx] : nullptr;
+  int base_idx = m_row * m_info.m_lx;
 
   for (int x = 0; x < m_info.m_lx; ++x) {
-    *r_p++ = pix[x].r;
-    *g_p++ = pix[x].g;
-    *b_p++ = pix[x].b;
-    if (m_bpp == 128) *a_p++ = pix[x].m;
+    int idx = base_idx + x;
+    m_imageBuf[0][idx] = pix[x].r;
+    m_imageBuf[1][idx] = pix[x].g;
+    m_imageBuf[2][idx] = pix[x].b;
+    if (m_bpp == 128) {
+      m_imageBuf[3][idx] = pix[x].m;
+    }
   }
   m_row++;
 }
