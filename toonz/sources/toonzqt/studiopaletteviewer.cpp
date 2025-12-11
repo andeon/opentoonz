@@ -131,37 +131,33 @@ StudioPaletteTreeViewer::StudioPaletteTreeViewer(
 
   insertTopLevelItems(0, paletteItems);
 
-  bool ret = connect(this, SIGNAL(itemChanged(QTreeWidgetItem *, int)),
-                     SLOT(onItemChanged(QTreeWidgetItem *, int)));
-  ret      = ret && connect(this, SIGNAL(itemClicked(QTreeWidgetItem *, int)),
-                       SLOT(onItemClicked(QTreeWidgetItem *, int)));
-  ret =
-      ret &&
-      connect(this,
-              SIGNAL(currentItemChanged(QTreeWidgetItem *, QTreeWidgetItem *)),
-              SLOT(onCurrentItemChanged(QTreeWidgetItem *, QTreeWidgetItem *)));
-  ret = ret && connect(this, SIGNAL(itemClicked(QTreeWidgetItem *, int)), this,
-                       SLOT(onTreeItemExpanded(QTreeWidgetItem *)));
+  connect(this, SIGNAL(itemChanged(QTreeWidgetItem *, int)),
+          SLOT(onItemChanged(QTreeWidgetItem *, int)));
+  connect(this, SIGNAL(itemClicked(QTreeWidgetItem *, int)),
+          SLOT(onItemClicked(QTreeWidgetItem *, int)));
+  connect(this,
+          SIGNAL(currentItemChanged(QTreeWidgetItem *, QTreeWidgetItem *)),
+          SLOT(onCurrentItemChanged(QTreeWidgetItem *, QTreeWidgetItem *)));
+  connect(this, SIGNAL(itemClicked(QTreeWidgetItem *, int)), this,
+          SLOT(onTreeItemExpanded(QTreeWidgetItem *)));
 
   // refresh tree with shortcut key
   QAction *refreshAct = CommandManager::instance()->getAction(MI_RefreshTree);
-  ret                 = ret && connect(refreshAct, SIGNAL(triggered()), this,
-                       SLOT(onRefreshTreeShortcutTriggered()));
+  connect(refreshAct, SIGNAL(triggered()), this,
+          SLOT(onRefreshTreeShortcutTriggered()));
   addAction(refreshAct);
 
   m_palettesScanPopup = new PalettesScanPopup();
 
   setAcceptDrops(true);
 
-  // Per la selezione multipla
+  // For multiple selection
   setSelectionMode(QAbstractItemView::ExtendedSelection);
 
   StudioPalette::instance()->addListener(this);
   TProjectManager::instance()->addListener(this);
 
   refresh();
-
-  assert(ret);
 }
 
 //-----------------------------------------------------------------------------
@@ -328,7 +324,7 @@ void StudioPaletteTreeViewer::refresh() {
 }
 
 //-----------------------------------------------------------------------------
-/*!When expand a tree, prepare the child items of it
+/*! When expand a tree, prepare the child items of it
  */
 void StudioPaletteTreeViewer::onTreeItemExpanded(QTreeWidgetItem *item) {
   if (!item) return;
@@ -409,24 +405,23 @@ void StudioPaletteTreeViewer::resetProjectPaletteFolder() {
   int projectPaletteIndex = 1;
   TFilePath projectPalettePath =
       StudioPalette::instance()->getProjectPalettesRoot();
-  // Prendo l'item del project palette.
+  // Get the project palette item
   QTreeWidgetItem *projectPaletteItem = topLevelItem(projectPaletteIndex);
   if (projectPaletteItem) {
-    // Se il path dell'item e' uguale a quello del project palette corrente
-    // ritorno.
+    // If the item's path equals the current project palette path, return
     if (getItemPath(projectPaletteItem) == projectPalettePath) return;
-    // Altrimenti lo rimuovo.
+    // Otherwise remove it
     removeItemWidget(projectPaletteItem, 0);
     delete projectPaletteItem;
-    // clear the item list in order to search the folder from scratch
+    // clear the item list to search the folder from scratch
     m_openedItems.clear();
     // Toonz Palette is not changed, so resurrect the ToonzPaletteRoot
     m_openedItems.insert(topLevelItem(0));
   }
   if (!TSystem::doesExistFileOrLevel(projectPalettePath)) return;
-  // Creo il nuovo item con il nuovo project folder e lo inserisco nell'albero.
+  // Create the new item with the new project folder and insert it into the tree
   // Items in the ProjectPaletteRoot are refreshed here. Stored in openedItems
-  // as well.
+  // as well
   QTreeWidgetItem *newProjectPaletteItem = createRootItem(projectPalettePath);
   insertTopLevelItem(projectPaletteIndex, newProjectPaletteItem);
 
@@ -673,22 +668,22 @@ void StudioPaletteTreeViewer::setAsDefault() {
   TFilePath srcPath = getCurrentItemPath();
   if (srcPath.isEmpty()) return;
   StudioPalette *studioPalette = StudioPalette::instance();
-  
+
   std::string fileName;
   TFilePath folderPath;
   TFilePath dstPath;
 
-  QString label =
-      QObject::tr("Set As...");
+  QString label = QObject::tr("Set As...");
   QStringList radioButtons;
   radioButtons.append(QString("Default Toonz Raster Palette"));
   radioButtons.append(QString("Default Toonz Vector Palette"));
   radioButtons.append(QString("Default Raster Drawing Palette"));
   radioButtons.append(QString("Default Cleanup Palette"));
-  
-  int type = DVGui::RadioButtonMsgBox(DVGui::QUESTION,label, radioButtons, this);
 
-  switch (type) { 
+  int type =
+      DVGui::RadioButtonMsgBox(DVGui::QUESTION, label, radioButtons, this);
+
+  switch (type) {
   case 1:
     fileName = "Toonz_Raster_Palette.tpl";
     break;
@@ -699,17 +694,17 @@ void StudioPaletteTreeViewer::setAsDefault() {
     fileName = "Raster_Drawing_Palette.tpl";
     break;
   case 4:
-    fileName = "Cleanup_Palette.tpl";
+    fileName   = "Cleanup_Palette.tpl";
     folderPath = studioPalette->getLevelPalettesRoot() + "Default Palettes";
     TSystem::copyFile(folderPath + fileName, srcPath, true);
     return;
-  default :
+  default:
     return;
   }
 
   TPalette *srcPalette = studioPalette->getPalette(srcPath);
   if (!srcPalette) return;
-  
+
   // Remove all Link
   for (int i = 0; i < srcPalette->getPageCount(); ++i) {
     TPalette::Page *page = srcPalette->getPage(i);
@@ -721,12 +716,11 @@ void StudioPaletteTreeViewer::setAsDefault() {
 
   // Save Palette
   folderPath = studioPalette->getProjectPalettesRoot();
-  dstPath = folderPath + fileName;
+  dstPath    = folderPath + fileName;
   if (TSystem::doesExistFileOrLevel(dstPath))
     TSystem::removeFileOrLevel(dstPath);
   TOStream os(dstPath);
-  if(srcPalette)
-      os << srcPalette;
+  if (srcPalette) os << srcPalette;
 
   int policy = DVGui::MsgBox(QString("Apply to Global?"), QString("Yes"),
                              QString("No"), 0, this);
@@ -782,9 +776,9 @@ AdjustPaletteDialog::AdjustPaletteDialog()
   QPushButton *okBtn = new QPushButton(tr("Apply"), this);
   okBtn->setDefault(true);
   QPushButton *cancelBtn = new QPushButton(tr("Cancel"), this);
-  bool ret = connect(okBtn, SIGNAL(clicked()), this, SLOT(accept()));
-  ret      = ret && connect(cancelBtn, SIGNAL(clicked()), this, SLOT(reject()));
-  assert(ret);
+  bool ret1 = connect(okBtn, SIGNAL(clicked()), this, SLOT(accept()));
+  bool ret2 = connect(cancelBtn, SIGNAL(clicked()), this, SLOT(reject()));
+  assert(ret1 && ret2);
 
   addButtonBarWidget(okBtn, cancelBtn);
 }
@@ -828,8 +822,8 @@ that the last operation is the icon refresh...
 
   m_currentLevelHandle->getSimpleLevel()->setDirtyFlag(true);
 
-  //TApp::instance()->getCurrentLevel()->notifyLevelChange();
-  //No need to notice user
+  // TApp::instance()->getCurrentLevel()->notifyLevelChange();
+  // No need to notice user
 
   TUndoManager::manager()->add(new InvalidateIconsUndo(m_currentLevelHandle));
 
@@ -955,7 +949,7 @@ void StudioPaletteTreeViewer::contextMenuEvent(QContextMenuEvent *event) {
 
   StudioPalette *studioPalette = StudioPalette::instance();
 
-  // Menu' per la selezione singola
+  // Menu for single selection
   QList<QTreeWidgetItem *> items = selectedItems();
   int count                      = items.size();
   if (count == 1) {
@@ -1017,7 +1011,7 @@ void StudioPaletteTreeViewer::contextMenuEvent(QContextMenuEvent *event) {
     return;
   }
 
-  // Menu' per la selezione multipla
+  // Menu for multiple selection
   // Verify if click position is in a row containing an item.
   bool areAllPalette      = true;
   bool isClickInSelection = false;
@@ -1088,26 +1082,24 @@ void StudioPaletteTreeViewer::startDragDrop() {
   TRepetitionGuard guard;
   if (!guard.hasLock()) return;
 
-  QDrag *drag         = new QDrag(this);
-  QMimeData *mimeData = new QMimeData;
   QList<QUrl> urls;
-
-  QList<QTreeWidgetItem *> items = selectedItems();
-  int i;
-
-  for (i = 0; i < items.size(); i++) {
-    // Sposto solo le palette.
-    TFilePath path = getItemPath(items[i]);
+  for (QTreeWidgetItem *item : selectedItems()) {
+    TFilePath path = getItemPath(item);
     if (!path.isEmpty() &&
         (path.getType() == "tpl" || path.getType() == "pli" ||
-         path.getType() == "tlv" || path.getType() == "tnz"))
-      urls.append(pathToUrl(path));
+         path.getType() == "tlv" || path.getType() == "tnz")) {
+      urls << pathToUrl(path);
+    }
   }
+
   if (urls.isEmpty()) return;
+
+  QMimeData *mimeData = new QMimeData;
   mimeData->setUrls(urls);
+
+  QDrag *drag = new QDrag(this);
   drag->setMimeData(mimeData);
-  Qt::DropAction dropAction = drag->exec(Qt::CopyAction | Qt::MoveAction);
-  viewport()->update();
+  drag->exec(Qt::CopyAction | Qt::MoveAction);
 }
 
 //-----------------------------------------------------------------------------
@@ -1121,7 +1113,7 @@ void StudioPaletteTreeViewer::dragEnterEvent(QDragEnterEvent *event) {
     int count        = urls.size();
     if (count == 0) return;
 
-    // Controllo che almeno un url del drag sia una palette da spostare.
+    // Check that at least one url in the drag is a palette to move.
     bool isPalette = false;
     int i;
     for (i = 0; i < count; i++) {
