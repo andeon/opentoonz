@@ -190,6 +190,9 @@ public:
   PathAliasPriority getPathAliasPriority() const {
     return PathAliasPriority(getIntValue(pathAliasPriority));
   }
+  bool isLazyLoadRoomsEnabled() {
+      return getBoolValue(lazyLoadRooms);
+  }
 
   // Interface  tab
   QStringList getStyleSheetList() const { return m_styleSheetList; }
@@ -244,7 +247,9 @@ public:
   // Visualization  tab
   bool getShow0ThickLines() const { return getBoolValue(show0ThickLines); }
   bool getRegionAntialias() const { return getBoolValue(regionAntialias); }
-  bool getRasterizeAntialias() const { return getBoolValue(rasterizeAntialias); }
+  bool getRasterizeAntialias() const {
+    return getBoolValue(rasterizeAntialias);
+  }
 
   // Loading  tab
   int getDefaultImportPolicy() { return getIntValue(importPolicy); }
@@ -292,6 +297,7 @@ public:
   int getFfmpegTimeout() { return getIntValue(ffmpegTimeout); }
   QString getFastRenderPath() const { return getStringValue(fastRenderPath); }
   bool getFfmpegMultiThread() const { return getBoolValue(ffmpegMultiThread); }
+  bool isUseQuickTimeBackend() const { return getBoolValue(quickTimeBackend); }
   QString getRhubarbPath() const { return getStringValue(rhubarbPath); }
   int getRhubarbTimeout() { return getIntValue(rhubarbTimeout); }
 
@@ -349,11 +355,9 @@ public:
   bool isCursorOutlineEnabled() const {
     return getBoolValue(cursorOutlineEnabled);
   }
-  bool isUseStrokeEndCursor() const {
-      return getBoolValue(useStrokeEndCursor);
-  }
+  bool isUseStrokeEndCursor() const { return getBoolValue(useStrokeEndCursor); }
   bool isClickTwiceToCreateArcs() {
-      return getBoolValue(clickTwiceToCreateArcs);
+    return getBoolValue(clickTwiceToCreateArcs);
   }
   int getLevelBasedToolsDisplay() const {
     return getIntValue(levelBasedToolsDisplay);
@@ -378,7 +382,9 @@ public:
   bool isXsheetAutopanEnabled() const {
     return getBoolValue(xsheetAutopanEnabled);
   }  //!< Returns whether xsheet pans during playback.
-  int isAlwaysDragFrameCell() const { return getBoolValue(alwaysDragFrameCell); }
+  int isAlwaysDragFrameCell() const {
+    return getBoolValue(alwaysDragFrameCell);
+  }
   int getDragCellsBehaviour() const { return getIntValue(DragCellsBehaviour); }
   int getDeleteCommandBehaviour() const {
     return getIntValue(deleteCommandBehavior);
@@ -396,8 +402,11 @@ public:
   bool isUseArrowKeyToShiftCellSelectionEnabled() const {
     return getBoolValue(useArrowKeyToShiftCellSelection);
   }
+  bool isInputCellsUsingNumpad() const {
+    return getIntValue(cellInputMethod) == 1;
+  }
   bool isInputCellsWithoutDoubleClickingEnabled() const {
-    return getBoolValue(inputCellsWithoutDoubleClickingEnabled);
+    return getIntValue(cellInputMethod) == 2;
   }
   bool isShortcutCommandsWhileRenamingCellEnabled() const {
     return getBoolValue(shortcutCommandsWhileRenamingCellEnabled);

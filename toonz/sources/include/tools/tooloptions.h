@@ -518,9 +518,11 @@ class FillToolOptionsBox final : public ToolOptionsBox {
   int m_targetType;
   QLabel *m_fillDepthLabel;
   ToolOptionCombo *m_colorMode, *m_toolType;
-  ToolOptionCheckbox *m_selectiveMode, *m_segmentMode, *m_onionMode,
-      *m_multiFrameMode, *m_autopaintMode, *m_closeGap, *m_referFill;
+  ToolOptionCheckbox *m_emptyOnly, *m_segmentMode, *m_onionMode,
+      *m_multiFrameMode, *m_autopaintMode,*m_referFill, * m_closeGap,
+      *m_extendFill;
   ToolOptionPairSlider *m_fillDepthField;
+  ToolOptionIntSlider* m_gapCloseDistance;
 
 public:
   FillToolOptionsBox(QWidget *parent, TTool *tool, TPaletteHandle *pltHandle,

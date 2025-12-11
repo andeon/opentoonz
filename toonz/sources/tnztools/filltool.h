@@ -59,6 +59,7 @@ private:
   TPointD m_mousePosition;
   bool m_onion;
   bool m_isLeftButtonPressed;
+  bool m_paintAllAPs;
   bool m_autopaintLines;
 
   int m_bckStyleId;
@@ -96,12 +97,13 @@ class FillTool final : public QObject, public TTool {
   TEnumProperty m_fillType;   // Rect, Polyline etc.
   TBoolProperty m_onion;
   TBoolProperty m_frameRange;
-  TBoolProperty m_selective;
+  TBoolProperty m_emptyOnly;
   TDoublePairProperty m_fillDepth;
   TBoolProperty m_segment;
   TBoolProperty m_closeGap;
   TBoolProperty m_referFill;
   TDoubleProperty m_maxGapDistance;
+  TIntProperty m_gapCloseDistance;
   AreaFillTool *m_areaFillTool;
   NormalLineFillTool *m_normalLineFillTool;
 
@@ -118,11 +120,13 @@ class FillTool final : public QObject, public TTool {
   // For the raster fill tool, autopaint lines is optional and can be temporary
   // disabled
   TBoolProperty m_autopaintLines;
+  TBoolProperty m_extendFill;
 
   SlFidsPairs m_slFidsPairs;
   RefImgTable m_refImgTable;  // imageId
 
   bool m_isAltPressed = false;
+  bool m_restoreEmptyOnly;
 
 public:
   FillTool(int targetType);
@@ -132,7 +136,7 @@ public:
   void updateTranslation() override;
 
   TPropertyGroup *getProperties(int targetType) override { return &m_prop; }
-
+  
   FillParameters getFillParameters() const;
 
   void leftButtonDown(const TPointD &pos, const TMouseEvent &e) override;

@@ -21,21 +21,58 @@ using namespace SkeletonLut;
 //-----------------------------------------------------------------------------
 namespace {  // Utility Function
 //-----------------------------------------------------------------------------
-inline TPoint nearestInkNotDiagonal(const TRasterCM32P &r, const TPoint &p) {
+
+inline std::vector<TPoint> getNeighborInks(const TRasterCM32P &r,
+                                           const TPoint &p) {
   TPixelCM32 *buf = (TPixelCM32 *)r->pixels(p.y) + p.x;
+  std::vector<TPoint> points;
+  std::set<int> inks;
+  TPixelCM32 *pix;
+  int ink;
 
-  if (p.x < r->getLx() - 1 && (!(buf + 1)->isPurePaint()))
-    return TPoint(p.x + 1, p.y);
+  if (p.x < r->getLx() - 1) {
+    pix = buf + 1;
+    if (!pix->isPurePaint()) {
+      ink = pix->getInk();
+      points.push_back(TPoint(p.x + 1, p.y));
+      inks.insert(ink);
+    }
+  }
 
-  if (p.x > 0 && (!(buf - 1)->isPurePaint())) return TPoint(p.x - 1, p.y);
+  if (p.x > 0) {
+    pix = buf - 1;
+    if (!pix->isPurePaint()) {
+      ink = pix->getInk();
+      if (inks.find(ink) == inks.end()) {
+        points.push_back(TPoint(p.x - 1, p.y));
+        inks.insert(ink);
+      }
+    }
+  }
 
-  if (p.y < r->getLy() - 1 && (!(buf + r->getWrap())->isPurePaint()))
-    return TPoint(p.x, p.y + 1);
+  if (p.y < r->getLy() - 1) {
+    pix = buf + r->getWrap();
+    if (!pix->isPurePaint()) {
+      ink = pix->getInk();
+      if (inks.find(ink) == inks.end()) {
+        points.push_back(TPoint(p.x, p.y + 1));
+        inks.insert(ink);
+      }
+    }
+  }
 
-  if (p.y > 0 && (!(buf - r->getWrap())->isPurePaint()))
-    return TPoint(p.x, p.y - 1);
+  if (p.y > 0) {
+    pix = buf - r->getWrap();
+    if (!pix->isPurePaint()) {
+      ink = pix->getInk();
+      if (inks.find(ink) == inks.end()) {
+        points.push_back(TPoint(p.x, p.y - 1));
+        inks.insert(ink);
+      }
+    }
+  }
 
-  return TPoint(-1, -1);
+  return points;
 }
 
 void computeSeeds(const TRasterCM32P &r, TStroke *stroke,
@@ -53,39 +90,6 @@ void computeSeeds(const TRasterCM32P &r, TStroke *stroke,
     oldP = p;
   }
 }
-
-//-----------------------------------------------------------------------------
-
-void fillRegionExcept(const TRasterCM32P &ras, TRegion *r, int positive,
-                      int negative, TPalette *plt, int color, bool fillInks) {
-  TRect bbox = convert(r->getBBox());
-  bbox *= ras->getBounds();
-  ras->lock();
-
-  for (int i = bbox.y0; i <= bbox.y1; i++) {
-    TPixelCM32 *line = ras->pixels(i);
-    std::vector<double> intersections;
-    r->computeScanlineIntersections(i, intersections);
-    assert(!(intersections.size() & 0x1));
-
-    for (UINT j = 0; j < intersections.size(); j += 2) {
-      if (intersections[j] == intersections[j + 1]) continue;
-      int from        = std::max(tfloor(intersections[j]), bbox.x0);
-      int to          = std::min(tceil(intersections[j + 1]), bbox.x1);
-      TPixelCM32 *pix = line + from;
-      for (int k = from; k < to; k++, pix++) {
-        if (fillInks && !pix->isPurePaint())
-          pix->setInk(color);  // Paint all inks
-        // paint auto-paint lines
-        else if (plt && plt->getStyle(pix->getInk())->getFlags() != 0)
-          pix->setInk(color);
-        if (pix->getPaint() != positive) pix->setPaint(negative);
-      }
-    }
-  }
-  ras->unlock();
-}
-
 //-----------------------------------------------------------------------------
 
 void fillOutsideOfStroke(const TRasterCM32P &r, TStroke *stroke, int color) {
@@ -97,7 +101,7 @@ void fillOutsideOfStroke(const TRasterCM32P &r, TStroke *stroke, int color) {
   TPoint oldP;
   FillParameters params;
   params.m_styleId    = color;
-  params.m_prevailing = false;
+  params.m_prevailing = true;
   for (int i = 0; i < length; i++) {
     TPoint p = convert(stroke->getPointAtLength(i));
     if (p == oldP || !bbox.contains(p) ||
@@ -207,7 +211,8 @@ void fillautoInks(TRasterCM32P &rin, TRect &rect, const TRasterCM32P &rbefore,
 //-----------------------------------------------------------------------------
 
 bool AreaFiller::rectFill(const TRect &rect, int color, bool onlyUnfilled,
-                          bool fillPaints, bool fillInks) {
+                          bool fillPaints, bool fillInks,
+                          bool fillAllautoPaintLines) {
   // Viene trattato il caso fillInks
   /*- In case of FillInk only -*/
   m_ras->lock();
@@ -231,7 +236,7 @@ bool AreaFiller::rectFill(const TRect &rect, int color, bool onlyUnfilled,
 
   // fill borders with maxPaint
   FillParameters params;
-  params.m_prevailing = false;
+  params.m_prevailing = true;
   params.m_styleId    = TPixelCM32::getMaxPaint();
 
   int ly = ras->getLy();
@@ -245,12 +250,10 @@ bool AreaFiller::rectFill(const TRect &rect, int color, bool onlyUnfilled,
   bool rightSame    = r.x1 == m_bounds.x1;
 
   int sameCount =
-      Preferences::instance()->getFillOnlySavebox()
-          ? (int)topSame + (int)bottomSame + (int)leftSame + (int)rightSame
-          : 0;
+      (int)topSame + (int)bottomSame + (int)leftSame + (int)rightSame;
 
   // --- Top Edge ---
-  if (!(sameCount != 4 && topSame)) {
+  if (sameCount == 4 ? false : !topSame) {
     TPixelCM32 *upPix = ras->pixels(0);
     for (int x = 1; x < lx - 1; ++x) {
       if (upPix->getPaint() != TPixelCM32::getMaxPaint()) {
@@ -262,7 +265,7 @@ bool AreaFiller::rectFill(const TRect &rect, int color, bool onlyUnfilled,
   }
 
   // --- Bottom Edge ---
-  if (!(sameCount != 4 && bottomSame)) {
+  if (sameCount == 4 ? false : !bottomSame) {
     TPixelCM32 *dnPix = backupRas->pixels(ly - 1);
     for (int x = 1; x < lx - 1; ++x) {
       if (dnPix->getPaint() != TPixelCM32::getMaxPaint()) {
@@ -274,7 +277,7 @@ bool AreaFiller::rectFill(const TRect &rect, int color, bool onlyUnfilled,
   }
 
   // --- Left Edge ---
-  if (!(sameCount != 4 && leftSame)) {
+  if (sameCount == 4 ? false : !leftSame) {
     for (int y = 0; y < ly; ++y) {
       TPixelCM32 *pix = ras->pixels(y);
       if (pix->getPaint() != TPixelCM32::getMaxPaint()) {
@@ -285,7 +288,7 @@ bool AreaFiller::rectFill(const TRect &rect, int color, bool onlyUnfilled,
   }
 
   // --- Right Edge ---
-  if (!(sameCount != 4 && rightSame)) {
+  if (sameCount == 4 ? false : !rightSame) {
     for (int y = 0; y < ly; ++y) {
       TPixelCM32 *pix = ras->pixels(y) + (lx - 1);
       if (pix->getPaint() != TPixelCM32::getMaxPaint()) {
@@ -304,10 +307,22 @@ bool AreaFiller::rectFill(const TRect &rect, int color, bool onlyUnfilled,
       // paint auto-paint lines
       if (fillInks && !pix->isPurePaint())
         pix->setInk(color);  // Paint all inks
-      else if (m_palette && m_palette->getStyle(pix->getInk())->getFlags() != 0)
-        inkFill(ras, TPoint(x, y), color, 0);
       processPixel(*pix, *bak, true, color, onlyUnfilled, fillPaints, fillInks,
                    defRegionWithPaint, usePrevailingReferFill);
+      if (!fillInks && m_palette) {
+        if (pix->getPaint() == color && pix->getTone()) {
+          auto inks = getNeighborInks(ras, TPoint(x, y));
+          for (TPoint pInk : inks) {
+            TPixelCM32 *inkPix = ras->pixels(pInk.y) + pInk.x;
+            int ink            = inkPix->getInk();
+            if (m_palette->getStyle(ink)->getFlags() != 0)
+              inkFill(ras, pInk, color, 0);
+          }
+        }
+      }
+      if (!fillInks && fillAllautoPaintLines && m_palette) {
+        if (m_palette->getStyle(pix->getInk())->getFlags()) pix->setInk(color);
+      }
     }
   }
 
@@ -407,44 +422,109 @@ bool AreaFiller::rectFastFill(const TRect &rect, int color) {
 
 //-----------------------------------------------------------------------------
 
+//-----------------------------------------------------------------------------
+
+void AreaFiller::fillRegionExcept(const TRasterCM32P &ras, TRegion *r,
+                                  int positive, int negative, int color,
+                                  bool fillInks, bool fillAllautoPaintLines) {
+  TRect bbox = convert(r->getBBox());
+  bbox *= ras->getBounds();
+  ras->lock();
+
+  for (int i = bbox.y0; i <= bbox.y1; i++) {
+    TPixelCM32 *line = ras->pixels(i);
+    std::vector<double> intersections;
+    r->computeScanlineIntersections(i, intersections);
+    assert(!(intersections.size() & 0x1));
+
+    for (UINT j = 0; j < intersections.size(); j += 2) {
+      if (intersections[j] == intersections[j + 1]) continue;
+      int from        = std::max(tfloor(intersections[j]), bbox.x0);
+      int to          = std::min(tceil(intersections[j + 1]), bbox.x1);
+      TPixelCM32 *pix = line + from;
+      for (int k = from; k < to; k++, pix++) {
+        if (fillInks && !pix->isPurePaint()) pix->setInk(color);
+        if (!fillInks && fillAllautoPaintLines && m_palette) {
+          if (m_palette->getStyle(pix->getInk())->getFlags())
+            pix->setInk(color);
+        }
+        int oldPaint = pix->getPaint();
+        if (pix->getPaint() != positive) pix->setPaint(negative);
+      }
+    }
+  }
+  ras->unlock();
+}
+
 void AreaFiller::strokeFill(const TRect &rect, TStroke *stroke, int color,
                             const bool onlyUnfilled, const bool fillPaints,
-                            const bool fillInks) {
+                            const bool fillInks, bool fillAllautoPaintLines) {
   TRect box  = rect;
   TRect bbox = m_ras->getBounds();
   box *= bbox;
+  if (color == 0) m_palette = 0;
 
   assert(!box.isEmpty());
+  if (box.isEmpty()) return;
   TRasterCM32P ras       = m_ras->extract(box);
   TRasterCM32P backupRas = ras->clone();
 
   // Put reference image, will be automatically removed by RAII
   RefImageGuard refGuard(m_ras, m_refRas);
 
+  bool defRegionWithPaint     = DEF_REGION_WITH_PAINT;
+  bool usePrevailingReferFill = USE_PREVAILING_REFER_FILL;
+  bool refFill                = m_refRas.getPointer() != nullptr;
+
   // std::vector<std::pair<TPoint, int>> seeds;
   // computeSeeds(m_ras, stroke, seeds);
   fillOutsideOfStroke(ras, stroke, TPixelCM32::getMaxPaint() - 1);
   // Some pixels might be painted to in fillRow(),
   // with PAINT Bounds off and refer/gap on
+  int lx = box.getLx(), ly = box.getLy();
+
+  // Restore those lines painted by fillRow() here
+  if (!defRegionWithPaint && refFill) {
+    TPixelCM32 *pix  = ras->pixels(0);
+    TPixelCM32 *pix1 = ras->pixels(ly - 1) + lx;
+    for (int y = 0; y < ly; ++y) {
+      TPixelCM32 *pix = ras->pixels(y);
+      for (int x = 0; x < lx; ++x, ++pix) {
+        if (pix->getInk() == TPixelCM32::getMaxInk() - 1) {
+          pix->setInk(TPixelCM32::getMaxInk());
+        }
+      }
+    }
+  }
 
   TVectorImage app;
   app.addStroke(stroke);
   app.findRegions();
-  // fillRegionsExcept() also process lines
+
+  // Paint Lines and Areas
   for (UINT i = 0; i < app.getRegionCount(); i++)
     fillRegionExcept(ras, app.getRegion(i), TPixelCM32::getMaxPaint() - 1,
-                     TPixelCM32::getMaxPaint(), m_palette, color, fillInks);
+                     TPixelCM32::getMaxPaint(), color, fillInks,
+                     fillAllautoPaintLines);
   app.removeStroke(0);
 
-  bool defRegionWithPaint     = DEF_REGION_WITH_PAINT;
-  bool usePrevailingReferFill = USE_PREVAILING_REFER_FILL;
-  int lx = box.getLx(), ly = box.getLy();
   for (int y = 0; y < ly; ++y) {
     TPixelCM32 *pix = ras->pixels(y);
     TPixelCM32 *bak = backupRas->pixels(y);
     for (int x = 0; x < lx; ++x, ++pix, ++bak) {
       processPixel(*pix, *bak, false, color, onlyUnfilled, fillPaints, fillInks,
                    defRegionWithPaint, usePrevailingReferFill);
+      if (!fillInks && m_palette) {
+        if (pix->getPaint() == color && pix->getTone()) {
+          auto inks = getNeighborInks(ras, TPoint(x, y));
+          for (TPoint pInk : inks) {
+            TPixelCM32 *inkPix = ras->pixels(pInk.y) + pInk.x;
+            int ink            = inkPix->getInk();
+            if (m_palette->getStyle(ink)->getFlags() != 0)
+              inkFill(ras, pInk, color, 0);
+          }
+        }
+      }
     }
   }
   m_ras->unlock();
@@ -460,8 +540,6 @@ const void AreaFiller::processPixel(TPixelCM32 &pix, const TPixelCM32 &bak,
              : pix.getPaint() == TPixelCM32::getMaxPaint()) {
     /*--- Process refer Lines  ---*/
     // paint refer lines
-    if (!invert && pix.getInk() == TPixelCM32::getMaxInk() - 1)  // !!!!
-      pix.setInk(TPixelCM32::getMaxInk());
     if (pix.getInk() == TPixelCM32::getMaxInk() && !defRegionWithPaint)
       pix.setInk(color);
 

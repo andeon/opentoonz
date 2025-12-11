@@ -44,6 +44,7 @@ public:
   bool m_prevailing;
   bool m_defRegionWithPaint;
   bool m_usePrevailingReferFill;
+  bool m_extendFill;
 
   FillParameters()
       : m_styleId(0)
@@ -56,6 +57,7 @@ public:
       , m_shiftFill(false)
       , m_palette(0)
       , m_prevailing(true)
+      , m_extendFill(false)
       , m_defRegionWithPaint(true)
       , m_usePrevailingReferFill(false) {
     m_defRegionWithPaint     = DEF_REGION_WITH_PAINT;
@@ -72,6 +74,7 @@ public:
       , m_shiftFill(params.m_shiftFill)
       , m_palette(params.m_palette)
       , m_prevailing(params.m_prevailing)
+      , m_extendFill(params.m_extendFill)
       , m_defRegionWithPaint(params.m_defRegionWithPaint)
       , m_usePrevailingReferFill(params.m_usePrevailingReferFill) {}
 };
@@ -140,7 +143,7 @@ else if \b fillInks is false fill only paint delimited by ink;
 else fill ink and paint in rect.
 */
   bool rectFill(const TRect &rect, int color, bool onlyUnfilled,
-                bool fillPaints, bool fillInks);
+                bool fillPaints, bool fillInks, bool fillAllautoPaintLines = false);
 
   // Only for Fill Check
   bool rectFastFill(const TRect &rect, int color);
@@ -152,13 +155,16 @@ else if \b fillInks is false fill only paint delimited by ink;
 else fill ink and paint in region contained in spline.
 */
   void strokeFill(const TRect &rect, TStroke *s, int color, bool onlyUnfilled,
-                  bool fillPaints, bool fillInks);
+                  bool fillPaints, bool fillInks, bool fillAllautoPaintLines);
 
 private:
   const void processPixel(TPixelCM32 &pix, const TPixelCM32 &bak, bool invert,
                           int color, bool onlyUnfilled, bool fillPaints,
                           bool fillInks, bool defRegionWithPaint,
                           bool usePrevailingReferFill);
+  void fillRegionExcept(const TRasterCM32P &ras, TRegion *r, int positive,
+                        int negative, int color, bool fillInks,
+                        bool fillAllautoPaintLines);
 };
 
 class DVAPI FullColorAreaFiller {
@@ -188,13 +194,17 @@ class RefImageGuard {
 public:
   RefImageGuard(const TRasterCM32P &raster, const TRaster32P &Ref)
       : m_r(raster), m_refPlaced(Ref.getPointer() != nullptr) {
+    if (m_refPlaced) {
     m_r->lock();
-    if (m_refPlaced) TRop::putRefImage(const_cast<TRasterCM32P &>(m_r), Ref);
+      TRop::putRefImage(const_cast<TRasterCM32P &>(m_r), Ref);
+  }
   }
 
   ~RefImageGuard() {
+    if (m_refPlaced) {
+      TRop::eraseRefInks(const_cast<TRasterCM32P &>(m_r));
     m_r->unlock();
-    if (m_refPlaced) TRop::eraseRefInks(const_cast<TRasterCM32P &>(m_r));
+    }
   }
 };
 
