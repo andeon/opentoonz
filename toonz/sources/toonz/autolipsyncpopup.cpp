@@ -511,7 +511,7 @@ void AutoLipSyncPopup::updateThumbnail(int index) {
             if (!pm.isNull()) {
               m_pixmaps[index] = pm;
               m_imageLabels[index]->setPixmap(m_pixmaps[index].scaled(
-                  160, 90, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+                  160, 90, Qt::KeepAspectRatio, Qt::FastTransformation));
               m_textLabels[index]->setText(
                   tr("Drawing: ") + QString::number(frameId.getNumber()));
             }

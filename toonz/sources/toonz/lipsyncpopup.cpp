@@ -562,7 +562,7 @@ void LipSyncPopup::updateThumbnail(int index) {
     if (!pm.isNull()) {
       m_pixmaps[index] = pm;
       m_imageLabels[index]->setPixmap(
-          pm.scaled(160, 90, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+          pm.scaled(160, 90, Qt::KeepAspectRatio, Qt::FastTransformation));
       m_textLabels[index]->setText(
           tr("Drawing: ") +
           QString::number(m_activeFrameIds[index].getNumber()));
