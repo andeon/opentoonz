@@ -648,7 +648,15 @@ void AutoLipSyncPopup::showEvent(QShowEvent *event) {
 
 void AutoLipSyncPopup::hideEvent(QHideEvent *event) {
   stopAllSound();
-
+  // Clean up temporary audio file when popup closes
+  if (m_deleteFile && !m_audioPath.isEmpty()) {
+    TFilePath fp(m_audioPath);
+    if (TSystem::doesExistFileOrLevel(fp)) {
+      TSystem::deleteFile(fp);
+    }
+  }
+  m_deleteFile = false;
+  m_audioPath.clear();
   // Disconnect if it was connected
   if (m_iconGeneratorConnected && IconGenerator::instance()) {
     disconnect(IconGenerator::instance(), &IconGenerator::iconGenerated, this,
@@ -1019,11 +1027,6 @@ void AutoLipSyncPopup::onApplyButton() {
 
   std::string strResults = results.toStdString();
   m_startAt->setValue(std::max(1, m_startFrame));
-
-  if (m_deleteFile) {
-    QFile::remove(m_audioPath);
-  }
-  m_deleteFile = false;
 
   m_valid = false;
   m_textLines.clear();
