@@ -65,7 +65,7 @@ public:
 private:
   int m_col;
   int m_startFrame;
-  TXshSimpleLevel *m_sl;
+  TXshLevelP m_sl;
   TXshLevelP m_cl;
   QStringList m_textLines;
   int m_lastFrame;
@@ -697,10 +697,10 @@ void LipSyncPopup::onPathChanged() {
 
     bool ok;
     // make sure the first entry is a number
-    int checkInt = entries.at(0).toInt(&ok);
+    entries.at(0).toInt(&ok);
     if (!ok) continue;
     // make sure the second entry isn't a number;
-    checkInt = entries.at(1).toInt(&ok);
+    entries.at(1).toInt(&ok);
     if (ok) continue;
     m_textLines << entries;
   }

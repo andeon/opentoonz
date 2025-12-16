@@ -83,7 +83,7 @@ public:
 private:
   int m_col;
   int m_startFrame;
-  TXshSimpleLevel *m_sl;
+  TXshLevelP m_sl;
   TXshLevelP m_cl;
   QStringList m_textLines;
   int m_lastFrame;
@@ -127,7 +127,6 @@ void AutoLipSyncUndo::redo() const {
   TXsheet *xsh = TApp::instance()->getCurrentScene()->getScene()->getXsheet();
   int i        = 0;
   int currentLine = 0;
-  int size        = m_textLines.size();
   while (currentLine < m_textLines.size()) {
     int endAt;
     if (currentLine + 2 >= m_textLines.size()) {
@@ -448,12 +447,13 @@ void AutoLipSyncPopup::updateThumbnail(int index) {
   if (index < 0 || index >= 10 || (!m_sl && !m_cl)) return;
 
   TFrameId frameId = m_activeFrameIds[index];
-  const qreal dpr = qApp->devicePixelRatio();
+  const qreal dpr  = qApp->devicePixelRatio();
 
   QPixmap pm;
 
   if (m_sl) {
-    pm = IconGenerator::instance()->getSizedIcon(m_sl, frameId, "", TDimension(160, 90));
+    pm = IconGenerator::instance()->getSizedIcon(m_sl, frameId, "",
+                                                 TDimension(160, 90));
   } else if (m_cl) {
     // Placeholder HiDPI for sub-xsheet
     QImage img(int(160 * dpr), int(90 * dpr), QImage::Format_ARGB32);
@@ -462,7 +462,8 @@ void AutoLipSyncPopup::updateThumbnail(int index) {
 
     QPainter p(&img);
     p.setPen(Qt::black);
-    auto it = std::find(m_levelFrameIds.begin(), m_levelFrameIds.end(), frameId);
+    auto it =
+        std::find(m_levelFrameIds.begin(), m_levelFrameIds.end(), frameId);
     int frameIndex = (it != m_levelFrameIds.end())
                          ? std::distance(m_levelFrameIds.begin(), it) + 1
                          : index + 1;
@@ -476,15 +477,15 @@ void AutoLipSyncPopup::updateThumbnail(int index) {
   if (!pm.isNull()) {
     // Escale one time
     QPixmap scaled = pm.scaled(int(160 * dpr), int(90 * dpr),
-                               Qt::KeepAspectRatio, Qt::FastTransformation);
+                               Qt::KeepAspectRatio, Qt::SmoothTransformation);
     scaled.setDevicePixelRatio(dpr);
 
     m_pixmaps[index] = scaled;
     m_imageLabels[index]->setPixmap(scaled);
 
-    m_textLabels[index]->setText(m_sl
-        ? tr("Drawing: ") + QString::number(frameId.getNumber())
-        : tr("Frame ") + QString::number(index + 1));
+    m_textLabels[index]->setText(
+        m_sl ? tr("Drawing: ") + QString::number(frameId.getNumber())
+             : tr("Frame ") + QString::number(index + 1));
   }
 }
 //-----------------------------------------------------------------------------
@@ -1017,12 +1018,9 @@ void AutoLipSyncPopup::onApplyButton() {
     if (entries.size() != 2) continue;
 
     bool ok;
-    // Make sure the first entry is a number
-    int checkInt = entries.at(0).toInt(&ok);
-    if (!ok) continue;
-    // Make sure the second entry isn't a number
-    checkInt = entries.at(1).toInt(&ok);
-    if (ok) continue;
+    if (!entries.at(0).toInt(&ok) || !ok) continue;  // first must be a number
+    if (entries.at(1).toInt(&ok) && ok) continue;    // second not a number
+
     m_textLines << entries;
   }
 

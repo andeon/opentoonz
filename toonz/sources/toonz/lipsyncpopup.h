@@ -76,11 +76,6 @@ public slots:
   void imageNavClicked(int id);
   void onPathChanged();
   void onStartValueChanged();
-
-private:
-  // Helper methods for initialization
-  void setupLayout();
-  void setupConnections();
 };
 
 #endif  // LIPSYNCPOPUP_H

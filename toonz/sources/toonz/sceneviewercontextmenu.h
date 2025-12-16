@@ -33,17 +33,6 @@ public slots:
   // Vector image group operations (used by CommandManager actions)
   void enterVectorImageGroup();
   void exitVectorImageGroup();
-
-  // Note: The following slots were removed and replaced by lambda connections:
-  // - savePreviewedFrames()
-  // - setGuidedDrawingType(QAction *)
-  // - setGuidedAutoInbetween()
-  // - setGuidedInterpolationState(QAction *)
-  // - onShowHide()
-  // - onSetCurrent()
-  // All removed functionality is now implemented inline with type-safe lambda
-  // connections
-  // TODO/FUTURE: Remove this note once all legacy slots are fully replaced.
 };
 
 // Helper GUI class for toggling zero thickness lines visibility
