@@ -458,7 +458,7 @@ void AutoLipSyncPopup::updateThumbnail(int index) {
 
   if (m_sl) {
     // Generate thumbnail
-    QPixmap pm = IconGenerator::instance()->getSizedIcon(m_sl, frameId, "",
+    QPixmap pm = IconGenerator::instance()->getSizedIcon(m_sl, frameId, "_lips",
                                                          TDimension(160, 90));
 
     if (!pm.isNull()) {
@@ -529,7 +529,6 @@ void AutoLipSyncPopup::showEvent(QShowEvent *event) {
   m_isEditingLevel = app->getCurrentFrame()->isEditingLevel();
   m_startAt->setValue(row + 1);
   m_startAt->clearFocus();
-
 
   if (ThirdParty::checkRhubarb()) {
     m_rhubarbPath = ThirdParty::getRhubarbDir();

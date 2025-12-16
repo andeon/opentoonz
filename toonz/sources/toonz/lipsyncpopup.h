@@ -57,16 +57,18 @@ class LipSyncPopup final : public DVGui::Dialog {
   QStringList m_textLines;
   QCheckBox *m_restToEnd;
 
-  bool m_iconGeneratorConnected;
-
 public:
   LipSyncPopup();
-  ~LipSyncPopup();  // Destructor
+  ~LipSyncPopup() override;
 
 protected:
-  void showEvent(QShowEvent *) override;
-  void hideEvent(QHideEvent *) override;
-  void paintEvent(QPaintEvent *) override;
+  void showEvent(QShowEvent *event) override;
+  void hideEvent(QHideEvent *event) override;
+  void paintEvent(QPaintEvent *event) override;
+
+  // Helper functions
+  void generateThumbnails();
+  void updateThumbnail(int index);
   void onIconGenerated();
 
 public slots:
@@ -74,9 +76,6 @@ public slots:
   void imageNavClicked(int id);
   void onPathChanged();
   void onStartValueChanged();
-
-  void preloadThumbnails();
-  void updateThumbnail(int index);
 
 private:
   // Helper methods for initialization
