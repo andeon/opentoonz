@@ -431,7 +431,7 @@ void LipSyncPopup::updateThumbnail(int index) {
 
   if (m_sl) {
     // Generate thumbnail
-    QPixmap pm = IconGenerator::instance()->getSizedIcon(m_sl, frameId, "_lips",
+    QPixmap pm = IconGenerator::instance()->getSizedIcon(m_sl, frameId, "",
                                                          TDimension(160, 90));
 
     if (!pm.isNull()) {

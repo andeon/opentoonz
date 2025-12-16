@@ -445,50 +445,46 @@ AutoLipSyncPopup::AutoLipSyncPopup()
 //-----------------------------------------------------------------------------
 
 void AutoLipSyncPopup::updateThumbnail(int index) {
-  if (index < 0 || index >= 10) return;
+  if (index < 0 || index >= 10 || (!m_sl && !m_cl)) return;
 
-  if (!m_sl && !m_cl) return;
+  TFrameId frameId = m_activeFrameIds[index];
+  const qreal dpr = qApp->devicePixelRatio();
 
-  TFrameId frameId;
-  if (index < static_cast<int>(m_activeFrameIds.size())) {
-    frameId = m_activeFrameIds[index];
-  } else {
-    return;
-  }
+  QPixmap pm;
 
   if (m_sl) {
-    // Generate thumbnail
-    QPixmap pm = IconGenerator::instance()->getSizedIcon(m_sl, frameId, "_lips",
-                                                         TDimension(160, 90));
-
-    if (!pm.isNull()) {
-      m_pixmaps[index] = pm;
-      m_imageLabels[index]->setPixmap(m_pixmaps[index].scaled(
-          160, 90, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-      m_textLabels[index]->setText(tr("Drawing: ") +
-                                   QString::number(frameId.getNumber()));
-    }
+    pm = IconGenerator::instance()->getSizedIcon(m_sl, frameId, "", TDimension(160, 90));
   } else if (m_cl) {
-    // For child levels, show placeholder
-    QImage img(160, 90, QImage::Format_ARGB32);
+    // Placeholder HiDPI for sub-xsheet
+    QImage img(int(160 * dpr), int(90 * dpr), QImage::Format_ARGB32);
+    img.setDevicePixelRatio(dpr);
     img.fill(Qt::gray);
+
     QPainter p(&img);
     p.setPen(Qt::black);
-
-    // Find frame index
-    auto it =
-        std::find(m_levelFrameIds.begin(), m_levelFrameIds.end(), frameId);
+    auto it = std::find(m_levelFrameIds.begin(), m_levelFrameIds.end(), frameId);
     int frameIndex = (it != m_levelFrameIds.end())
                          ? std::distance(m_levelFrameIds.begin(), it) + 1
                          : index + 1;
-
     p.drawText(img.rect(), tr("SubXSheet Frame ") + QString::number(frameIndex),
                QTextOption(Qt::AlignCenter));
     p.end();
 
-    m_pixmaps[index] = QPixmap::fromImage(img);
-    m_imageLabels[index]->setPixmap(m_pixmaps[index]);
-    m_textLabels[index]->setText(tr("Frame ") + QString::number(frameIndex));
+    pm = QPixmap::fromImage(img);
+  }
+
+  if (!pm.isNull()) {
+    // Escale one time
+    QPixmap scaled = pm.scaled(int(160 * dpr), int(90 * dpr),
+                               Qt::KeepAspectRatio, Qt::FastTransformation);
+    scaled.setDevicePixelRatio(dpr);
+
+    m_pixmaps[index] = scaled;
+    m_imageLabels[index]->setPixmap(scaled);
+
+    m_textLabels[index]->setText(m_sl
+        ? tr("Drawing: ") + QString::number(frameId.getNumber())
+        : tr("Frame ") + QString::number(index + 1));
   }
 }
 //-----------------------------------------------------------------------------
