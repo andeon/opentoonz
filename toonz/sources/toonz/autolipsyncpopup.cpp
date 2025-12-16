@@ -189,7 +189,9 @@ void AutoLipSyncUndo::redo() const {
 AutoLipSyncPopup::AutoLipSyncPopup()
     : Dialog(TApp::instance()->getMainWindow(), true, true, "AutoLipSyncPopup")
     , m_audioFile(nullptr)
-    , m_iconGeneratorConnected(false)  // Init as nullptr
+    , m_childLevel(nullptr)    // Initialize as nullptr
+    , m_playingSound(nullptr)  // Initialize as nullptr
+    , m_deleteFile(false)      // Initialize as false
 {
   setWindowTitle(tr("Auto Lip Sync"));
   setFixedWidth(860);
@@ -442,122 +444,82 @@ AutoLipSyncPopup::AutoLipSyncPopup()
 
 //-----------------------------------------------------------------------------
 
-void AutoLipSyncPopup::onIconGenerated() {
-  // Update only if the popup is visible
-  if (!isVisible()) return;
-
-  for (int i = 0; i < 10; i++) {
-    updateThumbnail(i);
-  }
-  update();
-}
-
-//-----------------------------------------------------------------------------
-
 void AutoLipSyncPopup::updateThumbnail(int index) {
-  if (index < 0 || index >= 10) return;  // fixed: array size
+  if (index < 0 || index >= 10) return;
 
-  // Capture local copies
-  TXshSimpleLevel *sl = m_sl;
-  TXshChildLevel *cl  = m_cl;
+  if (!m_sl && !m_cl) return;
+
   TFrameId frameId;
-  if (index < int(m_activeFrameIds.size()))
+  if (index < static_cast<int>(m_activeFrameIds.size())) {
     frameId = m_activeFrameIds[index];
-  else
-    return;
-
-  // Placeholder immediately
-  QPixmap placeholder(160, 90);
-  placeholder.fill(QColor(240, 240, 240));
-  {
-    QPainter p(&placeholder);
-    p.setPen(Qt::darkGray);
-    p.drawText(placeholder.rect(), Qt::AlignCenter, tr("Loading..."));
-    p.end();
-  }
-  m_pixmaps[index] = placeholder;
-  m_imageLabels[index]->setPixmap(m_pixmaps[index]);
-  m_textLabels[index]->clear();
-
-  if (sl || cl) {
-    auto generateIcon = [this, index, sl, cl, frameId]() {
-      QPixmap pm;
-
-      if (sl) {
-        pm = IconGenerator::instance()->getSizedIcon(sl, frameId, "",
-                                                     TDimension(160, 90));
-      } else if (cl) {
-        auto it =
-            std::find(m_levelFrameIds.begin(), m_levelFrameIds.end(), frameId);
-        int frameIndex = (it != m_levelFrameIds.end())
-                             ? std::distance(m_levelFrameIds.begin(), it)
-                             : 0;
-
-        QImage img(160, 90, QImage::Format_ARGB32);
-        img.fill(Qt::gray);
-        QPainter p(&img);
-        p.setPen(Qt::black);
-        p.drawText(img.rect(),
-                   tr("SubXSheet Frame ") + QString::number(frameIndex + 1),
-                   QTextOption(Qt::AlignCenter));
-        p.end();
-        pm = QPixmap::fromImage(img);
-      }
-
-      // Safe GUI update on main thread
-      QMetaObject::invokeMethod(
-          this,
-          [this, index, pm, frameId]() {
-            if (!pm.isNull()) {
-              m_pixmaps[index] = pm;
-              m_imageLabels[index]->setPixmap(m_pixmaps[index].scaled(
-                  160, 90, Qt::KeepAspectRatio, Qt::FastTransformation));
-              m_textLabels[index]->setText(
-                  tr("Drawing: ") + QString::number(frameId.getNumber()));
-            }
-          },
-          Qt::QueuedConnection);
-    };
-
-    // Run after event loop, safe and avoids QtConcurrent
-    QTimer::singleShot(0, this, generateIcon);
-  }
-}
-
-//-----------------------------------------------------------------------------
-
-void AutoLipSyncPopup::preloadThumbnails() {
-  if (!m_sl && !m_cl) {
-    QImage placeHolder(160, 90, QImage::Format_ARGB32);
-    placeHolder.fill(Qt::gray);
-    for (int i = 0; i < 10; i++) {
-      m_pixmaps[i] = QPixmap::fromImage(placeHolder);
-      m_imageLabels[i]->setPixmap(m_pixmaps[i]);
-      m_textLabels[i]->setText("");
-    }
-    update();
+  } else {
     return;
   }
 
   if (m_sl) {
-    // Generate the thumbnails immediately
-    for (int i = 0; i < 10 && i < static_cast<int>(m_activeFrameIds.size());
-         i++) {
-      IconGenerator::instance()->getSizedIcon(m_sl, m_activeFrameIds[i], "",
-                                              TDimension(160, 90));
-      updateThumbnail(i);
+    // Generate thumbnail
+    QPixmap pm = IconGenerator::instance()->getSizedIcon(m_sl, frameId, "",
+                                                         TDimension(160, 90));
+
+    if (!pm.isNull()) {
+      m_pixmaps[index] = pm;
+      m_imageLabels[index]->setPixmap(m_pixmaps[index].scaled(
+          160, 90, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+      m_textLabels[index]->setText(tr("Drawing: ") +
+                                   QString::number(frameId.getNumber()));
     }
+  } else if (m_cl) {
+    // For child levels, show placeholder
+    QImage img(160, 90, QImage::Format_ARGB32);
+    img.fill(Qt::gray);
+    QPainter p(&img);
+    p.setPen(Qt::black);
+
+    // Find frame index
+    auto it =
+        std::find(m_levelFrameIds.begin(), m_levelFrameIds.end(), frameId);
+    int frameIndex = (it != m_levelFrameIds.end())
+                         ? std::distance(m_levelFrameIds.begin(), it) + 1
+                         : index + 1;
+
+    p.drawText(img.rect(), tr("SubXSheet Frame ") + QString::number(frameIndex),
+               QTextOption(Qt::AlignCenter));
+    p.end();
+
+    m_pixmaps[index] = QPixmap::fromImage(img);
+    m_imageLabels[index]->setPixmap(m_pixmaps[index]);
+    m_textLabels[index]->setText(tr("Frame ") + QString::number(frameIndex));
   }
 }
+//-----------------------------------------------------------------------------
 
+void AutoLipSyncPopup::generateThumbnails() {
+  if (!m_sl && !m_cl) return;
+
+  // Generate all thumbnails
+  for (int i = 0; i < 10 && i < static_cast<int>(m_activeFrameIds.size());
+       i++) {
+    updateThumbnail(i);
+  }
+}
+//-----------------------------------------------------------------------------
+void AutoLipSyncPopup::onIconGenerated() {
+  // Update thumbnails if popup is visible
+  if (!isVisible()) return;
+
+  // Force update of all thumbnails
+  generateThumbnails();
+  update();
+}
 //-----------------------------------------------------------------------------
 
 void AutoLipSyncPopup::showEvent(QShowEvent *event) {
   // Reset state
   m_activeFrameIds.clear();
   m_levelFrameIds.clear();
-  m_sl = nullptr;
-  m_cl = nullptr;
+  m_sl         = nullptr;
+  m_cl         = nullptr;
+  m_childLevel = nullptr;
   m_startAt->setValue(1);
 
   TApp *app    = TApp::instance();
@@ -568,10 +530,6 @@ void AutoLipSyncPopup::showEvent(QShowEvent *event) {
   m_startAt->setValue(row + 1);
   m_startAt->clearFocus();
 
-  // Clear the file field when showing the dialog
-  if (m_audioFile) {
-    m_audioFile->setPath("");
-  }
 
   if (ThirdParty::checkRhubarb()) {
     m_rhubarbPath = ThirdParty::getRhubarbDir();
@@ -581,7 +539,7 @@ void AutoLipSyncPopup::showEvent(QShowEvent *event) {
   m_sl                   = level->getSimpleLevel();
   if (!m_sl) {
     TXshCell cell = xsh->getCell(row, m_col);
-    if (!cell.isEmpty()) {
+    if (!cell.isEmpty() && cell.m_level) {
       m_cl         = cell.m_level->getChildLevel();
       m_childLevel = cell.m_level;
     }
@@ -606,18 +564,26 @@ void AutoLipSyncPopup::showEvent(QShowEvent *event) {
     return;
   }
 
-  level->getLevel()->getFids(m_levelFrameIds);
-  if (!m_levelFrameIds.empty()) {
-    // Use direct assignment instead of push_back loop
-    m_activeFrameIds.assign(m_levelFrameIds.begin(),
-                            m_levelFrameIds.size() > 10
-                                ? m_levelFrameIds.begin() + 10
-                                : m_levelFrameIds.end());
+  // Get frames from the level
+  if (m_sl) {
+    m_sl->getFids(m_levelFrameIds);
+  } else if (m_cl && m_childLevel) {
+    // For child levels, we need a different approach
+    m_levelFrameIds.clear();
+    // Add placeholder frames
+    for (int i = 1; i <= 10; i++) {
+      m_levelFrameIds.push_back(TFrameId(i));
+    }
+  }
 
-    // Fill remaining slots if needed
-    while (m_activeFrameIds.size() < 10) {
-      m_activeFrameIds.push_back(m_levelFrameIds.empty() ? TFrameId()
-                                                         : m_levelFrameIds[0]);
+  if (!m_levelFrameIds.empty()) {
+    // Fill with first 10 frames or repeat the first one
+    for (int i = 0; i < 10; i++) {
+      if (i < static_cast<int>(m_levelFrameIds.size())) {
+        m_activeFrameIds.push_back(m_levelFrameIds[i]);
+      } else {
+        m_activeFrameIds.push_back(m_levelFrameIds[0]);
+      }
     }
   } else {
     // Clear active frame ids if no level frames
@@ -629,16 +595,12 @@ void AutoLipSyncPopup::showEvent(QShowEvent *event) {
   // Call onLevelChanged with the current index to properly set up the UI
   onLevelChanged(m_soundLevels->currentIndex());
 
-  // Connect to the IconGenerator ONLY when the popup is shown
-  if (m_sl && !m_iconGeneratorConnected) {
-    connect(IconGenerator::instance(), &IconGenerator::iconGenerated, this,
-            &AutoLipSyncPopup::onIconGenerated,
-            Qt::QueuedConnection);  // <<< QUEUED!
-    m_iconGeneratorConnected = true;
-  }
+  // Connect to IconGenerator for asynchronous thumbnail updates
+  connect(IconGenerator::instance(), &IconGenerator::iconGenerated, this,
+          &AutoLipSyncPopup::onIconGenerated, Qt::QueuedConnection);
 
-  // Load the thumbnails immediately
-  preloadThumbnails();
+  // Generate initial thumbnails
+  generateThumbnails();
 
   // Call base class implementation
   Dialog::showEvent(event);
@@ -648,7 +610,8 @@ void AutoLipSyncPopup::showEvent(QShowEvent *event) {
 
 void AutoLipSyncPopup::hideEvent(QHideEvent *event) {
   stopAllSound();
-  // Clean up temporary audio file when popup closes
+
+  // Clean up temporary audio file
   if (m_deleteFile && !m_audioPath.isEmpty()) {
     TFilePath fp(m_audioPath);
     if (TSystem::doesExistFileOrLevel(fp)) {
@@ -657,14 +620,12 @@ void AutoLipSyncPopup::hideEvent(QHideEvent *event) {
   }
   m_deleteFile = false;
   m_audioPath.clear();
-  // Disconnect if it was connected
-  if (m_iconGeneratorConnected && IconGenerator::instance()) {
-    disconnect(IconGenerator::instance(), &IconGenerator::iconGenerated, this,
-               &AutoLipSyncPopup::onIconGenerated);
-    m_iconGeneratorConnected = false;  // <<< Important: reset the flag
-  }
 
-  // ALWAYS call the base class implementation
+  // Disconnect from IconGenerator
+  disconnect(IconGenerator::instance(), &IconGenerator::iconGenerated, this,
+             &AutoLipSyncPopup::onIconGenerated);
+
+  // Call base class implementation
   Dialog::hideEvent(event);
 }
 //-----------------------------------------------------------------------------
@@ -1090,6 +1051,15 @@ void AutoLipSyncPopup::onApplyButton() {
   int startFrame = m_startAt->getValue() - 1;
   TXsheet *xsh   = TApp::instance()->getCurrentScene()->getScene()->getXsheet();
 
+  // VERIFY if m_childLevel is still valid
+  if (!m_cl && m_childLevel) {
+    // Update m_childLevel if necessary
+    TXshCell cell = xsh->getCell(startFrame, m_col);
+    if (!cell.isEmpty() && cell.m_level) {
+      m_childLevel = cell.m_level;
+    }
+  }
+
   int lastFrame = m_textLines.at(m_textLines.size() - 2).toInt() + startFrame;
 
   if (m_restToEnd->isChecked()) {
@@ -1119,6 +1089,7 @@ void AutoLipSyncPopup::onApplyButton() {
 }
 
 //-----------------------------------------------------------------------------
+
 void AutoLipSyncPopup::imageNavClicked(int id) {
   if (!m_sl && !m_cl) return;
 
@@ -1156,9 +1127,8 @@ void AutoLipSyncPopup::imageNavClicked(int id) {
 
   m_activeFrameIds[frameNumber] = m_levelFrameIds[newIndex];
 
-  // Update only the changed thumbnail
+  // Update the changed thumbnail
   updateThumbnail(frameNumber);
-  update();
 }
 
 //-----------------------------------------------------------------------------
@@ -1180,11 +1150,6 @@ void AutoLipSyncPopup::onStartValueChanged() {
 //-----------------------------------------------------------------------------
 
 AutoLipSyncPopup::~AutoLipSyncPopup() {
-  if (m_iconGeneratorConnected && IconGenerator::instance()) {
-    disconnect(IconGenerator::instance(), &IconGenerator::iconGenerated, this,
-               &AutoLipSyncPopup::onIconGenerated);
-  }
-
   // Cleanup resources
   stopAllSound();
   if (m_rhubarb && m_rhubarb->state() == QProcess::Running) {

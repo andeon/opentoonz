@@ -77,7 +77,6 @@ class AutoLipSyncPopup final : public DVGui::Dialog {
   QLabel *m_scriptLabel;
   QLabel *m_columnLabel;
   QLabel *m_insertAtLabel;
-  QGroupBox *m_rhubarbBox;
   bool m_deleteFile = false;
   DVGui::ProgressDialog *m_progressDialog;
   QProcess *m_rhubarb;
@@ -86,8 +85,6 @@ class AutoLipSyncPopup final : public DVGui::Dialog {
 
   QTimer m_audioTimeout;
   TXshSoundColumn *m_playingSound;
-
-  bool m_iconGeneratorConnected;
 
 public:
   AutoLipSyncPopup();
@@ -100,6 +97,10 @@ protected:
   void refreshSoundLevels();
   void saveAudio();
   void runRhubarb();
+
+  // New function to generate thumbnails
+  void generateThumbnails();
+  void updateThumbnail(int index);
   void onIconGenerated();
 
 public slots:
@@ -113,12 +114,6 @@ public slots:
   void onMediaStateChanged(QMediaPlayer::State state);
   void onOutputReady();
   void onAudioTimeout();
-
-  void preloadThumbnails();
-  void updateThumbnail(int index);
-
-  // Planned slot for real-time audio position tracking (not implemented)
-  // void updatePlaybackDuration( qint64 duration);
 };
 
 #endif  // AUTOLIPSYNCPOPUP_H
