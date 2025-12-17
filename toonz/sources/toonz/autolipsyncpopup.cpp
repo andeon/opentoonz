@@ -260,7 +260,7 @@ AutoLipSyncPopup::AutoLipSyncPopup()
   rhubarbLayout->addWidget(m_scriptLabel, 2, 0, 1, 3);
   rhubarbLayout->addWidget(m_scriptEdit, 3, 0, 1, 5);
   rhubarbLayout->setSpacing(4);
-  rhubarbLayout->setMargin(10);
+  rhubarbLayout->setContentsMargins(10, 10, 10, 10);
   m_audioFrame->setLayout(rhubarbLayout);
 
   for (int i = 0; i < 10; i++) {
@@ -283,14 +283,14 @@ AutoLipSyncPopup::AutoLipSyncPopup()
   }
 
   //--- Layout
-  m_topLayout->setMargin(0);
+  m_topLayout->setContentsMargins(0, 0, 0, 0);
   m_topLayout->setSpacing(0);
 
   m_topLayout->addWidget(m_audioFrame);
 
   {
     QGridLayout *phonemeLay = new QGridLayout();
-    phonemeLay->setMargin(10);
+    phonemeLay->setContentsMargins(10, 10, 10, 10);
     phonemeLay->setVerticalSpacing(10);
     phonemeLay->setHorizontalSpacing(10);
     int i = 0;  // navButtons
@@ -399,10 +399,10 @@ AutoLipSyncPopup::AutoLipSyncPopup()
   }
 
   QHBoxLayout *optionsLay = new QHBoxLayout();
-  optionsLay->setMargin(10);
+  optionsLay->setContentsMargins(10, 10, 10, 10);
   optionsLay->setSpacing(15);
   QHBoxLayout *insertAtLay = new QHBoxLayout();
-  insertAtLay->setMargin(0);
+  insertAtLay->setContentsMargins(0, 0, 0, 0);
   insertAtLay->setSpacing(4);
   m_insertAtLabel = new QLabel(tr("Insert at Frame: "));
   insertAtLay->addWidget(m_insertAtLabel);
@@ -413,7 +413,7 @@ AutoLipSyncPopup::AutoLipSyncPopup()
   m_topLayout->addLayout(optionsLay);
 
   m_topLayout->setAlignment(Qt::AlignHCenter);
-  m_buttonLayout->setMargin(0);
+  m_buttonLayout->setContentsMargins(0, 0, 0, 0);
   m_buttonLayout->setSpacing(0);
   {
     m_buttonLayout->addStretch();
@@ -453,7 +453,7 @@ void AutoLipSyncPopup::updateThumbnail(int index) {
 
   if (m_sl) {
     pm = IconGenerator::instance()->getSizedIcon(m_sl, frameId, "",
-                                                 TDimension(160, 90));
+                                                 TDimension(1, 1));
   } else if (m_cl) {
     // Placeholder HiDPI for sub-xsheet
     QImage img(int(160 * dpr), int(90 * dpr), QImage::Format_ARGB32);
@@ -475,7 +475,7 @@ void AutoLipSyncPopup::updateThumbnail(int index) {
   }
 
   if (!pm.isNull()) {
-    // Escale one time
+    // Scale the pixmap in memory without affecting the cache
     QPixmap scaled = pm.scaled(int(160 * dpr), int(90 * dpr),
                                Qt::KeepAspectRatio, Qt::SmoothTransformation);
     scaled.setDevicePixelRatio(dpr);

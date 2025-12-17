@@ -432,7 +432,7 @@ void LipSyncPopup::updateThumbnail(int index) {
   if (m_sl) {
     // Generate thumbnail
     QPixmap pm = IconGenerator::instance()->getSizedIcon(m_sl, frameId, "",
-                                                         TDimension(160, 90));
+                                                         TDimension(1, 1));
 
     if (!pm.isNull()) {
       const qreal dpr = qApp->devicePixelRatio();
@@ -456,7 +456,7 @@ void LipSyncPopup::updateThumbnail(int index) {
 
     QPainter p(&img);
     p.setPen(Qt::black);
-
+    
     // Find frame index
     auto it =
         std::find(m_levelFrameIds.begin(), m_levelFrameIds.end(), frameId);
