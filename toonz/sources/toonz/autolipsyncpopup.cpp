@@ -452,8 +452,7 @@ void AutoLipSyncPopup::updateThumbnail(int index) {
   QPixmap pm;
 
   if (m_sl) {
-    pm = IconGenerator::instance()->getSizedIcon(m_sl, frameId, "",
-                                                 TDimension(1, 1));
+    pm = IconGenerator::instance()->getSizedIcon(m_sl, frameId, "");
   } else if (m_cl) {
     // Placeholder HiDPI for sub-xsheet
     QImage img(int(160 * dpr), int(90 * dpr), QImage::Format_ARGB32);
