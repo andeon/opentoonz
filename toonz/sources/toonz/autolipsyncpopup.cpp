@@ -191,6 +191,8 @@ AutoLipSyncPopup::AutoLipSyncPopup()
     , m_childLevel(nullptr)    // Initialize as nullptr
     , m_playingSound(nullptr)  // Initialize as nullptr
     , m_deleteFile(false)      // Initialize as false
+    , m_processRunning(false)  // Initialize as false
+    , m_userCancelled(false)   // Initialize as false
 {
   setWindowTitle(tr("Auto Lip Sync"));
   setFixedWidth(860);
@@ -218,8 +220,9 @@ AutoLipSyncPopup::AutoLipSyncPopup()
 
   m_rhubarb = new QProcess(this);
   m_player  = new QMediaPlayer(this);
-  m_progressDialog =
-      new DVGui::ProgressDialog("Analyzing audio...", "", 1, 100, this);
+  
+  // Initialize progress dialog with cancel button
+  m_progressDialog = new DVGui::ProgressDialog(tr("Analyzing audio..."), tr("Cancel"), 0, 100, this);
   m_progressDialog->hide();
 
   m_soundLevels = new QComboBox(this);
@@ -437,6 +440,10 @@ AutoLipSyncPopup::AutoLipSyncPopup()
           this, &AutoLipSyncPopup::onLevelChanged);
   connect(&m_audioTimeout, &QTimer::timeout, this,
           &AutoLipSyncPopup::onAudioTimeout);
+  
+  // Connect progress dialog cancel signal
+  connect(m_progressDialog, &DVGui::ProgressDialog::canceled,
+          this, &AutoLipSyncPopup::onAnalysisCancelled);
 
   m_rhubarbPath = "";
 }
@@ -517,6 +524,10 @@ void AutoLipSyncPopup::showEvent(QShowEvent *event) {
   m_cl         = nullptr;
   m_childLevel = nullptr;
   m_startAt->setValue(1);
+  
+  // Reset process flags
+  m_processRunning = false;
+  m_userCancelled = false;
 
   TApp *app    = TApp::instance();
   TXsheet *xsh = app->getCurrentScene()->getScene()->getXsheet();
@@ -604,6 +615,18 @@ void AutoLipSyncPopup::showEvent(QShowEvent *event) {
 //-----------------------------------------------------------------------------
 
 void AutoLipSyncPopup::hideEvent(QHideEvent *event) {
+  // If process is running and user closes window, ask if they want to cancel
+  if (m_processRunning && !m_userCancelled) {
+    int ret = DVGui::MsgBox(tr("Lip sync analysis is in progress. Cancel and close?"), 
+                           tr("Yes"), tr("No"));
+    if (ret == 1) { // Yes
+      onAnalysisCancelled();
+    } else {
+      event->ignore(); // Don't close the window
+      return;
+    }
+  }
+  
   stopAllSound();
 
   // Clean up temporary audio file
@@ -951,37 +974,158 @@ void AutoLipSyncPopup::onApplyButton() {
     return;
   }
 
-  runRhubarb();
+  // Reset process flags
+  m_processRunning = true;
+  m_userCancelled = false;
 
+  // Disconnect any previous connections to avoid multiple signals
+  disconnect(m_rhubarb, &QProcess::finished, this, nullptr);
+  disconnect(m_rhubarb, &QProcess::errorOccurred, this, nullptr);
+  
+  // Connect signals for async processing
+  connect(m_rhubarb, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+          this, &AutoLipSyncPopup::onRhubarbFinished);
+  connect(m_rhubarb, &QProcess::errorOccurred,
+          this, &AutoLipSyncPopup::onRhubarbError);
+
+  // Show progress dialog
+  m_progressDialog->setValue(0);
+  m_progressDialog->show();
+  m_progressDialog->raise();
+  m_progressDialog->activateWindow();
+
+  // Get timeout from preferences (default 600 seconds = 10 minutes)
   int rhubarbTimeout = ThirdParty::getRhubarbTimeout();
+  
+  // Start timer for timeout (respect user preference)
   if (rhubarbTimeout > 0) {
-    rhubarbTimeout *= 1000;
-  } else {
-    rhubarbTimeout = -1;
+    QTimer::singleShot(rhubarbTimeout * 1000, this, [this, rhubarbTimeout]() {
+      if (m_processRunning) {
+        DVGui::warning(tr("Rhubarb process timed out after %1 seconds. The process may be stuck.")
+                      .arg(rhubarbTimeout));
+        onAnalysisCancelled();
+      }
+    });
   }
 
-  bool finished = m_rhubarb->waitForFinished(rhubarbTimeout);
+  runRhubarb();
+  
+  // Note: waitForFinished() is NOT called here - process is async
+}
+
+//-----------------------------------------------------------------------------
+// Slot called when Rhubarb process finishes
+void AutoLipSyncPopup::onRhubarbFinished(int exitCode, QProcess::ExitStatus exitStatus) {
+  m_processRunning = false;
   m_progressDialog->hide();
 
-  if (!finished) {
-    DVGui::warning(tr("Rhubarb process timed out."));
+  // If user cancelled, don't process results
+  if (m_userCancelled) {
+    cleanupAfterProcess();
     return;
   }
 
+  if (exitStatus == QProcess::CrashExit) {
+    DVGui::warning(tr("Rhubarb process crashed."));
+    cleanupAfterProcess();
+    return;
+  }
+
+  if (exitCode != 0) {
+    // Error message should have been shown by onOutputReady
+    cleanupAfterProcess();
+    return;
+  }
+
+  // Process the results
+  processRhubarbResults();
+}
+
+//-----------------------------------------------------------------------------
+// Slot called when Rhubarb process has an error
+void AutoLipSyncPopup::onRhubarbError(QProcess::ProcessError error) {
+  m_processRunning = false;
+  m_progressDialog->hide();
+  
+  QString errorMsg;
+  switch (error) {
+    case QProcess::FailedToStart:
+      errorMsg = tr("Rhubarb failed to start. Check if the path is correct.");
+      break;
+    case QProcess::Crashed:
+      errorMsg = tr("Rhubarb crashed during execution.");
+      break;
+    case QProcess::Timedout:
+      errorMsg = tr("Rhubarb process timed out.");
+      break;
+    case QProcess::WriteError:
+    case QProcess::ReadError:
+      errorMsg = tr("Communication error with Rhubarb process.");
+      break;
+    default:
+      errorMsg = tr("Unknown error occurred with Rhubarb.");
+  }
+  
+  DVGui::warning(errorMsg);
+  cleanupAfterProcess();
+}
+
+//-----------------------------------------------------------------------------
+// Slot called when user cancels analysis
+void AutoLipSyncPopup::onAnalysisCancelled() {
+  m_userCancelled = true;
+  
+  if (m_processRunning) {
+    // Update progress dialog to show we're cancelling
+    m_progressDialog->setLabelText(tr("Cancelling..."));
+    m_progressDialog->show();
+    
+    // Try to terminate the process gracefully
+    if (m_rhubarb->state() == QProcess::Running) {
+      m_rhubarb->terminate();
+      
+      // Wait up to 2 seconds for graceful termination
+      if (!m_rhubarb->waitForFinished(2000)) {
+        // Force kill if not responding
+        m_rhubarb->kill();
+        m_rhubarb->waitForFinished(1000);
+      }
+    }
+  }
+  
+  m_progressDialog->hide();
+  cleanupAfterProcess();
+}
+
+//-----------------------------------------------------------------------------
+// Clean up after process completion or cancellation
+void AutoLipSyncPopup::cleanupAfterProcess() {
+  m_processRunning = false;
+  
+  // Clean temporary files
+  if (m_deleteFile && !m_audioPath.isEmpty()) {
+    TFilePath fp(m_audioPath);
+    if (TSystem::doesExistFileOrLevel(fp)) {
+      TSystem::deleteFile(fp);
+    }
+  }
+  
+  // Clean dat file if exists
+  if (!m_datPath.isEmpty() && TSystem::doesExistFileOrLevel(m_datPath)) {
+    TSystem::deleteFile(m_datPath);
+  }
+  
+  m_deleteFile = false;
+  m_progressDialog->hide();
+}
+
+//-----------------------------------------------------------------------------
+// Process Rhubarb results after successful completion
+void AutoLipSyncPopup::processRhubarbResults() {
   QString results = m_rhubarb->readAllStandardError();
   results += m_rhubarb->readAllStandardOutput();
   m_rhubarb->close();
 
-  if (m_rhubarb->exitStatus() == QProcess::NormalExit) {
-    int exitCode = m_rhubarb->exitCode();
-    // onOuputReady will handle displaying any error messages from rhubarb
-    if (exitCode != 0) return;
-  } else {
-    DVGui::warning(tr("Rhubarb process crashed."));
-    return;
-  }
-
-  std::string strResults = results.toStdString();
   m_startAt->setValue(std::max(1, m_startFrame));
 
   m_valid = false;
@@ -990,6 +1134,7 @@ void AutoLipSyncPopup::onApplyButton() {
   QString path = m_datPath.getQString();
   if (path.isEmpty()) {
     DVGui::warning(tr("Please choose a lip sync data file to continue."));
+    cleanupAfterProcess();
     return;
   }
 
@@ -1001,12 +1146,14 @@ void AutoLipSyncPopup::onApplyButton() {
     DVGui::warning(
         tr("Cannot find the file specified. \nPlease choose a valid lip sync "
            "data file to continue."));
+    cleanupAfterProcess();
     return;
   }
 
   QFile file(tempPath.getQString());
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
     DVGui::warning(tr("Unable to open the file: \n") + file.errorString());
+    cleanupAfterProcess();
     return;
   }
 
@@ -1030,12 +1177,14 @@ void AutoLipSyncPopup::onApplyButton() {
         tr("Invalid data file.\n Please choose a valid lip sync data file to "
            "continue."));
     m_valid = false;
+    cleanupAfterProcess();
     return;
   } else {
     m_valid = true;
   }
 
   if (!m_valid || (!m_sl && !m_cl)) {
+    cleanupAfterProcess();
     hide();
     return;
   }
@@ -1077,6 +1226,8 @@ void AutoLipSyncPopup::onApplyButton() {
 
   TUndoManager::manager()->add(undo);
   undo->redo();
+  
+  cleanupAfterProcess();
   hide();
 }
 
@@ -1144,11 +1295,17 @@ void AutoLipSyncPopup::onStartValueChanged() {
 AutoLipSyncPopup::~AutoLipSyncPopup() {
   // Cleanup resources
   stopAllSound();
-  if (m_rhubarb && m_rhubarb->state() == QProcess::Running) {
-    m_rhubarb->terminate();
+  
+  // Kill any running process
+  if (m_processRunning && m_rhubarb->state() == QProcess::Running) {
+    m_rhubarb->kill();
     m_rhubarb->waitForFinished(1000);
   }
-  //  clear date
+  
+  // Clean up temporary files
+  cleanupAfterProcess();
+  
+  // Clear data
   m_activeFrameIds.clear();
   m_levelFrameIds.clear();
   m_textLines.clear();
