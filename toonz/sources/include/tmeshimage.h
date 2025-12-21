@@ -118,7 +118,12 @@ typedef tcg::Vertex<RigidPoint> TTextureVertex;
 //    TTextureMesh (Textured Mesh Type)  declaration
 //***********************************************************************************
 
-class TTextureMesh final  // <-- DVAPI remove to test
+#ifdef _WIN32
+#pragma warning(push)
+#pragma warning(disable: 4661)
+#endif
+
+class DVAPI TTextureMesh final
     : public tcg::TriMesh<TTextureVertex, tcg::Edge, tcg::FaceN<3>>,
       public TSmartObject,
       public TPersist {
@@ -139,6 +144,10 @@ public:
   void saveData(TOStream &os) override;
   void loadData(TIStream &is) override;
 };
+
+#ifdef _WIN32
+#pragma warning(pop)
+#endif
 
 //-----------------------------------------------------------------------------
 
