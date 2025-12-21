@@ -114,9 +114,6 @@ template class DVAPI tcg::Vertex<RigidPoint>;
 
 typedef tcg::Vertex<RigidPoint> TTextureVertex;
 
-template class DVAPI tcg::Mesh<TTextureVertex, tcg::Edge, tcg::FaceN<3>>;
-template class DVAPI tcg::TriMesh<TTextureVertex, tcg::Edge, tcg::FaceN<3>>;
-
 //***********************************************************************************
 //    TTextureMesh (Textured Mesh Type)  declaration
 //***********************************************************************************

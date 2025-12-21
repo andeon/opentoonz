@@ -355,3 +355,10 @@ const std::vector<TTextureMeshP> &TMeshImage::meshes() const {
 //-----------------------------------------------------------------------
 
 std::vector<TTextureMeshP> &TMeshImage::meshes() { return m_imp->m_meshes; }
+
+//******************************************************************************
+//    Explicit template instantiations
+//******************************************************************************
+
+template class DVAPI tcg::Mesh<TTextureVertex, tcg::Edge, tcg::FaceN<3>>;
+template class DVAPI tcg::TriMesh<TTextureVertex, tcg::Edge, tcg::FaceN<3>>;
