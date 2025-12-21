@@ -118,7 +118,7 @@ typedef tcg::Vertex<RigidPoint> TTextureVertex;
 //    TTextureMesh (Textured Mesh Type)  declaration
 //***********************************************************************************
 
-class DVAPI TTextureMesh final
+class TTextureMesh final  // <-- DVAPI remove to test
     : public tcg::TriMesh<TTextureVertex, tcg::Edge, tcg::FaceN<3>>,
       public TSmartObject,
       public TPersist {
