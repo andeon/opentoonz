@@ -6,6 +6,7 @@
 
 #ifdef _WIN32
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #else
 #include <errno.h>
 #include <stdio.h>
@@ -15,6 +16,7 @@
 #include <sys/wait.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 #endif
 
 #include "tthreadmessage.h"
@@ -25,6 +27,7 @@
 #endif
 
 #include <string>
+#include <iostream>
 
 #define MAXHOSTNAME 1024
 
@@ -64,7 +67,6 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
 #ifdef _WIN32
   if ((cnt = recv(sock, buff, sizeof(buff) - 1, 0)) < 0) {
     int err = WSAGetLastError();
-    // GESTIRE L'ERRORE SPECIFICO
     return -1;
   }
 #else
@@ -100,11 +102,7 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
     memset(buff, 0, sizeof(buff));
 
 #ifdef _WIN32
-    if ((cnt = recv(sock, buff, sizeof(buff) - 1, 0)) < 0) {
-      int err = WSAGetLastError();
-      // GESTIRE L'ERRORE SPECIFICO
-      return -1;
-    }
+    if ((cnt = recv(sock, buff, sizeof(buff) - 1, 0)) < 0) return -1;
 #else
     if ((cnt = read(sock, buff, sizeof(buff) - 1)) < 0) {
       printf("socket read failure %d\n", errno);
@@ -113,112 +111,21 @@ int TTcpIpServerImp::readData(int sock, QString &data) {
       return -1;
     }
 #endif
-    else if (cnt == 0) {
-      break;  // break out of loop
-    } else if (cnt < (int)sizeof(buff)) {
+    else if (cnt == 0) break;
+    else if (cnt < (int)sizeof(buff)) {
       buff[cnt] = '\0';
       data += QString(buff);
-      // break;  // break out of loop
     } else {
       data += QString(buff);
     }
-
-#ifdef TRACE
-    std::cout << buff << std::endl << std::endl;
-#endif
 
     size -= cnt;
   }
 
-#ifdef TRACE
-  std::cout << "read " << toString((int)data.length()) << " on " << dataSize << std::endl
-       << std::endl;
-#endif
-
   if (data.size() < dataSize) return -1;
 
-#ifdef TRACE
-  std::cout << data.toStdString() << std::endl;
-#endif
-
   return 0;
 }
-
-#if 0
-int TTcpIpServerImp::readData(int sock, std::string &data)
-{
-  int cnt = 0;
-  char buff[1024];
-
-  do
-  {
-    memset (buff,0,sizeof(buff));
-
-#ifdef _WIN32
-    if (( cnt = recv(sock, buff, sizeof(buff), 0)) < 0 )
-    {
-      int err = WSAGetLastError();
-      // GESTIRE L'ERRORE SPECIFICO
-      return -1;
-    }
-#else
-    if (( cnt = read (sock, buff, sizeof(buff))) < 0 )
-    {
-      printf("socket read failure %d\n", errno);
-      perror("network server");
-      close(sock);
-      return -1;
-    }
-#endif
-    else
-    if (cnt == 0)
-      break;  // break out of loop
-
-    data += std::string(buff);
-  }
-  while (cnt != 0);  // do loop condition
-
-  return 0;
-}
-#endif
-
-//#define PRIMA
-
-#ifdef PRIMA
-int TTcpIpServerImp::readData(int sock, std::string &data) {
-  int cnt = 0;
-  char buff[1024];
-
-  do {
-    memset(buff, 0, sizeof(buff));
-
-#ifdef _WIN32
-    if ((cnt = recv(sock, buff, sizeof(buff), 0)) < 0) {
-      int err = WSAGetLastError();
-      // GESTIRE L'ERRORE SPECIFICO
-      return -1;
-    }
-#else
-    if ((cnt = read(sock, buff, sizeof(buff))) < 0) {
-      printf("socket read failure %d\n", errno);
-      perror("network server");
-      close(sock);
-      return -1;
-    }
-#endif
-    else if (cnt == 0) {
-      break;  // break out of loop
-    } else if (cnt < sizeof(buff)) {
-      data += std::string(buff);
-      // break;  // break out of loop
-    } else {
-      data += std::string(buff);
-    }
-  } while (cnt != 0);  // do loop condition
-
-  return 0;
-}
-#endif
 
 //---------------------------------------------------------------------
 
@@ -233,10 +140,9 @@ TTcpIpServer::TTcpIpServer(int port) : m_imp(new TTcpIpServerImp(port)) {
   m_imp->m_server = this;
 
 #ifdef _WIN32
-  // Windows Socket startup
   WSADATA wsaData;
-  WORD wVersionRequested = MAKEWORD(1, 1);
-  int irc                = WSAStartup(wVersionRequested, &wsaData);
+  WORD wVersionRequested = MAKEWORD(2, 2);
+  int irc = WSAStartup(wVersionRequested, &wsaData);
   if (irc != 0) throw("Windows Socket Startup failed");
 #endif
 }
@@ -249,8 +155,7 @@ TTcpIpServer::~TTcpIpServer() {
     closesocket(m_imp->m_s);
   WSACleanup();
 #else
-    std::cout << "closing socket" << std::endl;
-  close(m_imp->m_s);
+    close(m_imp->m_s);
 #endif
 }
 
@@ -323,67 +228,50 @@ void DataReceiver::run() {
 
 void TTcpIpServer::run() {
   try {
-#ifdef _WIN32
     int err = establish(m_imp->m_port, m_imp->m_s);
     if (!err && m_imp->m_s != -1) {
-      int t;  // client socket
-      while (!shutdownRequested) /* loop for connections */
-      {
-        if ((t = get_connection(m_imp->m_s)) < 0) /* get a connection */
-        {
-          m_exitCode = WSAGetLastError();
-          // GESTIRE LA CONDIZIONE DI ERRORE
-          return;
-        }
-        QString data;
-        int ret = m_imp->readData(t, data);
-        if (ret != -1 && data != "") {
-          if (data == QString("shutdown")) {
-            // DebugBreak();
-            shutdownRequested = 1;
-          } else {
-            // creo un nuovo thread per la gestione dei dati ricevuti
-            TThread::Executor executor;
-            executor.addTask(new DataReceiver(t, data, m_imp));
-          }
-        } else {
-          ::shutdown(t, 1);
-        }
-      }
-    } else {
-      m_exitCode = err;
-      return;
-    }
-#else  // !_WIN32
-    int err = establish(m_imp->m_port, m_imp->m_s);
-    if (!err && m_imp->m_s != -1) {
-      //      signal(SIGCHLD, fireman);           /* this eliminates zombies */
-
+#ifndef _WIN32
       struct sigaction sact;
       sact.sa_handler = shutdown_cb;
       sigemptyset(&sact.sa_mask);
       sact.sa_flags = 0;
       sigaction(SIGUSR1, &sact, 0);
+#endif
 
-      int t;
-      while (!shutdownRequested) /* loop for connections */
-      {
-        if ((t = get_connection(m_imp->m_s)) < 0) /* get a connection */
-        {
-          if (errno == EINTR) /* EINTR might happen on accept(), */
-            continue;         /* try again */
-          perror("accept");   /* bad */
+      while (!shutdownRequested) {
+        int t = get_connection(m_imp->m_s);
+        if (t < 0) {
+#ifndef _WIN32
+          if (errno == EINTR) continue;
+          perror("accept");
           m_exitCode = errno;
+#else
+          m_exitCode = WSAGetLastError();
+#endif
           return;
         }
+
         TThread::Executor executor;
+#ifdef _WIN32
+        QString data;
+        int ret = m_imp->readData(t, data);
+        if (ret != -1 && !data.isEmpty()) {
+          if (data == QString("shutdown")) {
+            shutdownRequested = 1;
+          } else {
+            executor.addTask(new DataReceiver(t, data, m_imp));
+          }
+        } else {
+          ::shutdown(t, 1);
+        }
+#else
         executor.addTask(new DataReader(t, m_imp));
+#endif
       }
     } else {
       m_exitCode = err;
       return;
     }
-#endif  // _WIN32
   } catch (...) {
     m_exitCode = 2000;
     return;
@@ -399,90 +287,126 @@ int TTcpIpServer::getExitCode() const { return m_exitCode; }
 
 void TTcpIpServer::sendReply(int socket, const QString &reply) {
   std::string replyUtf8 = reply.toStdString();
-
   QString header("#$#THS01.00");
   header += QString::number((int)replyUtf8.size());
   header += QString("#$#THE");
-
   std::string packet = header.toStdString() + replyUtf8;
-  //  string packet = reply;;
 
   int nLeft = packet.size();
-  int idx   = 0;
+  int idx = 0;
   while (nLeft > 0) {
 #ifdef _WIN32
     int ret = send(socket, packet.c_str() + idx, nLeft, 0);
 #else
     int ret = write(socket, packet.c_str() + idx, nLeft);
 #endif
-    if (ret == SOCKET_ERROR) {
-      // Error
-    }
+    if (ret == SOCKET_ERROR) break;
     nLeft -= ret;
     idx += ret;
   }
-
   ::shutdown(socket, 1);
 }
 
 //---------------------------------------------------------------------
-//---------------------------------------------------------------------
-
+// Cross-platform establish() using getaddrinfo()
 int establish(unsigned short portnum, int &sock) {
-  char myname[MAXHOSTNAME + 1];
-  struct sockaddr_in sa;
-  struct hostent *hp;
+    char myname[MAXHOSTNAME + 1];
+    memset(myname, 0, sizeof(myname));
 
-  memset(&sa, 0, sizeof(struct sockaddr_in)); /* clear our address */
-  gethostname(myname, MAXHOSTNAME);           /* who are we? */
-  hp = gethostbyname(myname);                 /* get our address info */
-  if (hp == NULL)                             /* we don't exist !? */
-    return (-1);
-
-  sa.sin_family = hp->h_addrtype; /* this is our host address */
-  sa.sin_port   = htons(portnum); /* this is our port number */
-  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) /* create socket */
-  {
 #ifdef _WIN32
-    int err = WSAGetLastError();
-    return err;
-#else
-    return errno;
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) {
+        std::cerr << "WSAStartup failed" << std::endl;
+        return -1;
+    }
 #endif
-  }
 
-  if (::bind(sock, (struct sockaddr *)&sa, sizeof(struct sockaddr_in)) < 0) {
+    if (gethostname(myname, MAXHOSTNAME) != 0) {
 #ifdef _WIN32
-    int err = WSAGetLastError();
-    closesocket(sock);
-    return err;
+        int err = WSAGetLastError();
+        return err;
 #else
-    close(sock);
-    return errno;
+        perror("gethostname");
+        return errno;
 #endif
-  }
+    }
 
-  return listen(sock, 3); /* max # of queued connects */
+    struct addrinfo hints;
+    struct addrinfo *result = nullptr;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;        // IPv4
+    hints.ai_socktype = SOCK_STREAM;  // TCP
+    hints.ai_flags = AI_PASSIVE;      // for bind()
+
+    int res = getaddrinfo(myname, nullptr, &hints, &result);
+    if (res != 0) {
+#ifdef _WIN32
+        WSACleanup();
+#else
+        std::cerr << "getaddrinfo failed: " << gai_strerror(res) << std::endl;
+#endif
+        return -1;
+    }
+
+    sock = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+    if (sock < 0) {
+#ifdef _WIN32
+        int err = WSAGetLastError();
+        freeaddrinfo(result);
+        WSACleanup();
+        return err;
+#else
+        perror("socket");
+        freeaddrinfo(result);
+        return errno;
+#endif
+    }
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr = ((struct sockaddr_in*)result->ai_addr)->sin_addr;
+    addr.sin_port = htons(portnum);
+
+    freeaddrinfo(result);
+
+    if (::bind(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+#ifdef _WIN32
+        int err = WSAGetLastError();
+        closesocket(sock);
+        WSACleanup();
+        return err;
+#else
+        perror("bind");
+        close(sock);
+        return errno;
+#endif
+    }
+
+    if (listen(sock, 3) < 0) {
+#ifdef _WIN32
+        int err = WSAGetLastError();
+        closesocket(sock);
+        WSACleanup();
+        return err;
+#else
+        perror("listen");
+        close(sock);
+        return errno;
+#endif
+    }
+
+    return 0; // success
 }
 
 //-----------------------------------------------------------------------
-/* wait for a connection to occur on a socket created with establish() */
-
 int get_connection(int s) {
-  int t; /* socket of connection */
-
-  if ((t = accept(s, NULL, NULL)) < 0) /* accept connection if there is one */
-    return (-1);
-  return (t);
+  int t = accept(s, nullptr, nullptr);
+  return t < 0 ? -1 : t;
 }
 
 #ifndef _WIN32
-//-----------------------------------------------------------------------
-/* as children die we should get catch their returns or else we get
- * zombies, A Bad Thing.  fireman() catches falling children.
- */
 void fireman(int) {
-  while (waitpid(-1, NULL, WNOHANG) > 0)
-    ;
+  while (waitpid(-1, nullptr, WNOHANG) > 0) ;
 }
 #endif
