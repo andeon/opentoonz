@@ -3,22 +3,22 @@ name: Windows Build
 on:
   push:
     branches:
-      - '**' # any brach
+      - '**' # Run any workflow
+    paths-ignore:
+      - 'appveyor.yml'                           # Ignore changes in AppVeyor
+      - 'README.md'                              # Exclude README
+      - 'doc/**'                                 # Exclude documentation
+      - '**/.github/**'                          # Exclude everything in .github folder
     paths:
-      - '**/*'                                    # Include all files in the repository
-      - '!appveyor.yml'                           # Ignore changes in AppVeyor
-      - '!README.md'                              # Exclude README
-      - '!doc/**'                                 # Exclude documentation
-      - '!**/.github/**'                          # Exclude everything in .github folder
-      - '.github/workflows/workflow_windows.yml'  # Include Windows workflow file
+      - '.github/workflows/workflow_windows.yml' 
   pull_request:
+    paths-ignore:
+      - 'appveyor.yml'
+      - 'README.md'
+      - 'doc/**'
+      - '**/.github/**'
     paths:
-      - '**/*'
-      - '!appveyor.yml'
-      - '!README.md'
-      - '!doc/**'
-      - '!**/.github/**'
-      - '.github/workflows/workflow_windows.yml'
+      - '.github/workflows/workflow_windows.yml' 
 
 jobs:
   Windows:
