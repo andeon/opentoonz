@@ -235,7 +235,8 @@ public:
 
   void readLine(char *buffer, int x0, int x1, int shrink) override {
     if (setjmp(png_jmpbuf(m_png_ptr))) {
-      throw TException("PNG read error");
+      // Ignore error and return to allow partial loading
+      return;
     }
 
     if (m_interlace_type == PNG_INTERLACE_ADAM7) {
@@ -249,7 +250,8 @@ public:
 
   void readLine(short *buffer, int x0, int x1, int shrink) override {
     if (setjmp(png_jmpbuf(m_png_ptr))) {
-      throw TException("PNG read error");
+      // Ignore error and return to allow partial loading
+      return;
     }
 
     if (m_interlace_type == PNG_INTERLACE_ADAM7) {
@@ -263,7 +265,8 @@ public:
 
   int skipLines(int lineCount) override {
     if (setjmp(png_jmpbuf(m_png_ptr))) {
-      throw TException("PNG read error");
+      // Ignore error and return (though for skip, perhaps continue looping)
+      return lineCount;  // Pretend skipped to continue loading
     }
 
     for (int i = 0; i < lineCount; ++i) {
@@ -385,6 +388,11 @@ private:
     int rowNumber = png_get_current_row_number(m_png_ptr);
 
     int desiredPass = (m_y % 8) / 4 + (m_y % 4) / 2 + (m_y % 2);  // Simplified, but use libpng helpers
+
+    if (setjmp(png_jmpbuf(m_png_ptr))) {
+      // Ignore error during interlace reading
+      return;
+    }
 
     while (pass <= 6) {
       png_read_row(m_png_ptr, m_rowBuffer.get(), nullptr);
