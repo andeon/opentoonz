@@ -347,8 +347,7 @@ TOStream &TOStream::operator<<(string v) {
   ostream &os = *(m_imp->m_os);
   int len     = v.length();
   if (len == 0) {
-    os << "\"\""
-       << " ";
+    os << "\"\"" << " ";
     m_imp->m_justStarted = false;
     return *this;
   }
@@ -357,7 +356,7 @@ TOStream &TOStream::operator<<(string v) {
     if ((!iswalnum(v[i]) && v[i] != '_' && v[i] != '%') ||
         v[i] < 32      // Less than ASCII for SPACE
         || v[i] > 126  // Greater than ASCII for ~
-        )
+    )
       break;
   if (i == len)
     os << v << " ";
@@ -376,8 +375,7 @@ TOStream &TOStream::operator<<(QString _v) {
   ostream &os = *(m_imp->m_os);
   int len     = v.length();
   if (len == 0) {
-    os << "\"\""
-       << " ";
+    os << "\"\"" << " ";
     m_imp->m_justStarted = false;
     return *this;
   }
@@ -386,7 +384,7 @@ TOStream &TOStream::operator<<(QString _v) {
     if ((!iswalnum(v[i]) && v[i] != '_' && v[i] != '%') ||
         v[i] < 32      // Less than ASCII for SPACE
         || v[i] > 126  // Greater than ASCII for ~
-        )
+    )
       break;
   if (i == len)
     os << v << " ";
@@ -802,8 +800,7 @@ void TIStream::Imp::skipCurrentTag() {
 
     if (c == '/') {
       // end tag
-      do
-        c = getNextChar();
+      do c = getNextChar();
       while (c >= 0 && c != '>');
       if (c < 0) break;  // unexpected eof
       if (--level <= 0) {
@@ -1285,3 +1282,17 @@ void TIStream::skipCurrentTag() { m_imp->skipCurrentTag(); }
 //---------------------------------------------------------------
 
 std::string TIStream::getCurrentTagName() { return m_imp->m_tagStack.back(); }
+
+//===============================================================
+// MOVE CONSTRUCTORS AND ASSIGNMENTS FOR TIStream
+// (ADD THESE LINES AT THE END OF THE FILE)
+//===============================================================
+
+TIStream::TIStream(TIStream &&other) noexcept : m_imp(std::move(other.m_imp)) {}
+
+TIStream &TIStream::operator=(TIStream &&other) noexcept {
+  if (this != &other) {
+    m_imp = std::move(other.m_imp);
+  }
+  return *this;
+}

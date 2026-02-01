@@ -65,8 +65,8 @@ public:
   ~TIStream();                    //!< Destroys the stream
 
   // Add move operations
-  TIStream(TIStream &&other) noexcept            = default;
-  TIStream &operator=(TIStream &&other) noexcept = default;
+  TIStream(TIStream &&other) noexcept;
+  TIStream &operator=(TIStream &&other) noexcept;
 
   // Explicit bool conversion
   explicit operator bool()
