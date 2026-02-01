@@ -1285,7 +1285,6 @@ std::string TIStream::getCurrentTagName() { return m_imp->m_tagStack.back(); }
 
 //===============================================================
 // MOVE CONSTRUCTORS AND ASSIGNMENTS FOR TIStream
-// (ADD THESE LINES AT THE END OF THE FILE)
 //===============================================================
 
 TIStream::TIStream(TIStream &&other) noexcept : m_imp(std::move(other.m_imp)) {}

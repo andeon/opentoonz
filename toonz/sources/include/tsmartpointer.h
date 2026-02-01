@@ -160,14 +160,69 @@ public:
 
   T* getPointer() const noexcept { return m_pointer; }
 
+  // Comparison operators with raw pointers of same type
   bool operator==(const T* p) const noexcept { return m_pointer == p; }
   bool operator!=(const T* p) const noexcept { return m_pointer != p; }
 
+  // Comparison operators with same type TSmartHolderT
   bool operator==(const TSmartHolderT& other) const noexcept {
     return m_pointer == other.m_pointer;
   }
   bool operator!=(const TSmartHolderT& other) const noexcept {
     return m_pointer != other.m_pointer;
+  }
+
+  // These template comparison operators allow comparing TSmartHolderT<T>
+  // with TSmartHolderT<U> where T and U are different types.
+  // This is essential for comparing TRasterP with TRaster32P, etc.
+
+  // Helper template functions for comparing with raw pointers of different
+  // types
+  template <class TT>
+  bool equal(const TT* p) const {
+    return m_pointer == p;  // Direct pointer comparison
+  }
+
+  template <class TT>
+  bool less(const TT* p) const {
+    return m_pointer < p;  // Direct pointer comparison
+  }
+
+  template <class TT>
+  bool greater(const TT* p) const {
+    return m_pointer > p;  // Direct pointer comparison
+  }
+
+  // Template operators for comparing with TSmartHolderT of different types
+  template <class TT>
+  bool operator==(const TSmartHolderT<TT>& p) const {
+    // Use the other object's equal method with our pointer
+    return p.equal(m_pointer);
+  }
+
+  template <class TT>
+  bool operator!=(const TSmartHolderT<TT>& p) const {
+    return !p.equal(m_pointer);
+  }
+
+  template <class TT>
+  bool operator<(const TSmartHolderT<TT>& p) const {
+    return p.greater(m_pointer);
+  }
+
+  template <class TT>
+  bool operator>(const TSmartHolderT<TT>& p) const {
+    return p.less(m_pointer);
+  }
+
+  template <class TT>
+  bool operator<=(const TSmartHolderT<TT>& p) const {
+    return !p.less(m_pointer);
+  }
+
+  template <class TT>
+  bool operator>=(const TSmartHolderT<TT>& p) const {
+    return !p.greater(m_pointer);
   }
 };
 
@@ -178,8 +233,7 @@ class TSmartPointerConstT : public TSmartHolderT<T> {
   using Base = TSmartHolderT<T>;
 
 public:
-  typedef TSmartHolderT<T>
-      Holder;  // Restaurado para compatibilidade com tmetaimage.h
+  typedef TSmartHolderT<T> Holder;
 
   TSmartPointerConstT() = default;
   TSmartPointerConstT(T* p) : Base(p) {}
@@ -200,8 +254,7 @@ class TSmartPointerT : public TSmartPointerConstT<T> {
   using Base = TSmartPointerConstT<T>;
 
 public:
-  typedef TSmartPointerConstT<T>
-      Const;  // Restaurado para compatibilidade com tmetaimage.h
+  typedef TSmartPointerConstT<T> Const;
 
   TSmartPointerT() = default;
   TSmartPointerT(T* p) : Base(p) {}
