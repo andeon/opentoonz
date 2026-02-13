@@ -87,7 +87,17 @@ jobs:
 
     - name: Run clang-tidy
       run: |
-        find toonz/sources/ -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_all_report.txt || true
+        # Definindo as checagens: removemos tudo (-) e adicionamos apenas o que importa
+        # Focando em: Bugs, Performance, Erros de Diagnóstico e Core Guidelines graves
+        CHECKS="-*,bugprone-*,performance-*,cppcoreguidelines-*,clang-diagnostic-error"
+        # Filtramos para rodar apenas os fontes, ignorando bibliotecas de terceiros
+        # Usamos o '-p' apontando para o build onde está o compile_commands.json
+        find toonz/sources/ -name '*.cpp' | xargs clang-tidy \
+          -p=toonz/build \
+          --checks="$CHECKS" \
+          --header-filter="toonz/sources/.*" \
+          --quiet > clang_tidy_all_report.txt || true
+#        find toonz/sources/ -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_all_report.txt || true
 #        find toonz/sources/common -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_common_report.txt || true
 #        find toonz/sources/ -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_all_report.txt || true
 #        find toonz/sources/stdfx -name '*.cpp' | xargs clang-tidy -p=toonz/build > clang_tidy_stdfx_report.txt || true
@@ -111,7 +121,8 @@ jobs:
           echo "compile_commands.json not found."
           exit 1
         fi
-         jq '[.[] | select(.file | test("rastertapetool.cpp"))]' compile_commands.json > compile_commands_selected.json
+         jq '[.[] | select(.file | test("toonz/sources/tnzbase/"))]' compile_commands.json > compile_commands_selected.json
+#        jq '[.[] | select(.file | test("rastertapetool.cpp"))]' compile_commands.json > compile_commands_selected.json
 #        jq '[.[] | select(.file | test("common/(expressions|psdlib|tapptools|tcache|tcolor|tcore|tvrender|tiio|tcolor)/"))]' compile_commands.json > compile_commands_selected.json
         
     - name: Run Infer Static Analyzer (only _selected)
