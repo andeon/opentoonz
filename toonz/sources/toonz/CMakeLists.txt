@@ -90,6 +90,8 @@ set(MOC_HEADERS
     sceneviewer.h
     sceneviewercontextmenu.h
     scriptconsolepanel.h
+    brushpresetpanel.h
+    toolpropertiespanel.h
     separatecolorspopup.h
     separatecolorsswatch.h
     shortcutpopup.h
@@ -131,6 +133,7 @@ set(MOC_HEADERS
     tooloptionsshortcutinvoker.h
     exportxsheetpdf.h
     custompanelmanager.h
+    toolpresetcommandmanager.h
     custompaneleditorpopup.h
     convertfolderpopup.h
     exportcameratrackpopup.h
@@ -202,6 +205,7 @@ set(HEADERS
     ../include/orientation.h
     ../include/saveloadqsettings.h
     xdtsio.h
+    sxfio.h
     levelcommand.h
 # Tracker file
     ObjectTracker.h
@@ -300,6 +304,8 @@ set(SOURCES
     sceneviewercontextmenu.cpp
     scenesettingspopup.cpp
     scriptconsolepanel.cpp
+    brushpresetpanel.cpp
+    toolpropertiespanel.cpp
     shortcutpopup.cpp
     soundtrackexport.cpp
     startuppopup.cpp
@@ -322,6 +328,7 @@ set(SOURCES
     filmstripcommand.cpp
     iocommand.cpp
     levelcommand.cpp
+    viewercommand.cpp
     print.cpp
     subscenecommand.cpp
     svncleanupdialog.cpp
@@ -383,6 +390,7 @@ set(SOURCES
     separatecolorsswatch.cpp
     separatecolorspopup.cpp
     xdtsio.cpp
+    sxfio.cpp
     ocaio.cpp
     xdtsimportpopup.cpp
     expressionreferencemanager.cpp
@@ -390,6 +398,7 @@ set(SOURCES
     tvpjson_io.cpp
     exportxsheetpdf.cpp
     custompanelmanager.cpp
+    toolpresetcommandmanager.cpp
     custompaneleditorpopup.cpp
     convertfolderpopup.cpp
     exportcameratrackpopup.cpp

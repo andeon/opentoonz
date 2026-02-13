@@ -333,6 +333,8 @@
 
 #define MI_OpenComboViewer "MI_OpenComboViewer"
 #define MI_OpenHistoryPanel "MI_OpenHistoryPanel"
+#define MI_OpenBrushPresetPanel "MI_OpenBrushPresetPanel"
+#define MI_OpenToolPropertiesPanel "MI_OpenToolPropertiesPanel"
 #define MI_ReplaceParentDirectory "MI_ReplaceParentDirectory"
 #define MI_Reframe1 "MI_Reframe1"
 #define MI_Reframe2 "MI_Reframe2"
@@ -458,6 +460,7 @@
 #define MI_OpenReportABug "MI_OpenReportABug"
 
 #define MI_ClearCacheFolder "MI_ClearCacheFolder"
+#define MI_ClearViewerContent "MI_ClearViewerContent"
 
 #define MI_VectorGuidedDrawing "MI_VectorGuidedDrawing"
 #define MI_OpenGuidedDrawingControls "MI_OpenGuidedDrawingControls"
@@ -474,6 +477,7 @@
 #define MI_FlipPrevGuideStroke "MI_FlipPrevGuideStroke"
 
 #define MI_ExportXDTS "MI_ExportXDTS"
+#define MI_ExportSXF "MI_ExportSXF"
 #define MI_ExportOCA "MI_ExportOCA"
 #define MI_ImportOCA "MI_ImportOCA"
 #define MI_ExportTvpJson "MI_ExportTvpJson"
