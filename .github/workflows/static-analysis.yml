@@ -107,10 +107,10 @@ jobs:
 #        name: clang-tidy-report
 #        path: clang_tidy_all_report.txt
         
-    - uses: actions/upload-artifact@v4
-      with:
-        name: clang-tidy-report
-        path: clang_tidy_all_report.txt
+#    - uses: actions/upload-artifact@v4
+#      with:
+#        name: clang-tidy-report
+#        path: clang_tidy_all_report.txt
         
     - name: Install Infer
       run: |
@@ -126,7 +126,7 @@ jobs:
           echo "compile_commands.json not found."
           exit 1
         fi
-         jq '[.[] | select(.file | test("toonz/sources/(toonz|tnztools)/"))]' compile_commands.json > compile_commands_selected.json
+         jq '[.[] | select(.file | test("toonz/sources/(toonzqt|toonzpreview|toonzlib|tnzext)/"))]' compile_commands.json > compile_commands_selected.json
 #        jq '[.[] | select(.file | test("toonz/sources/tnzbase/"))]' compile_commands.json > compile_commands_selected.json
 #        jq '[.[] | select(.file | test("rastertapetool.cpp"))]' compile_commands.json > compile_commands_selected.json
 #        jq '[.[] | select(.file | test("common/(expressions|psdlib|tapptools|tcache|tcolor|tcore|tvrender|tiio|tcolor)/"))]' compile_commands.json > compile_commands_selected.json
