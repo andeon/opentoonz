@@ -145,7 +145,7 @@ jobs:
     - uses: actions/upload-artifact@v4
       with:
         name: infer-report-tvrender
-        path:  toonz/infer-out/toonzreport.txt  # somente o txt
+        path:  toonz/infer-out/report.txt  # somente o txt
 #        path: toonz/infer-out
 
         
