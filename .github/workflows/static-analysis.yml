@@ -126,7 +126,7 @@ jobs:
           echo "compile_commands.json not found."
           exit 1
         fi
-         jq '[.[] | select(.file | test("common/(tsystem|ttoonzimage|tunit|tvrender|twain|txsheet)/"))]' compile_commands.json > compile_commands_selected.json       
+         jq '[.[] | select(.file | test("common/(tsystem|ttoonzimage|tunit|tvectorimage|twain|txsheet)/"))]' compile_commands.json > compile_commands_selected.json       
 #        jq '[.[] | select(.file | test("toonz/sources/(common)/"))]' compile_commands.json > compile_commands_selected.json
 #        jq '[.[] | select(.file | test("toonz/sources/tnzbase/"))]' compile_commands.json > compile_commands_selected.json
 #        jq '[.[] | select(.file | test("rastertapetool.cpp"))]' compile_commands.json > compile_commands_selected.json
