@@ -106,9 +106,13 @@ public:
       , m_imageInfo(imageInfo)
       , m_historyCount(0)
       , m_modified(false)
-      , m_palette(palette) {}
+      , m_palette(palette) {
+    if (m_palette) m_palette->addRef();
+  }
 
-  virtual ~CacheItem() {}
+  virtual ~CacheItem() {
+    if (m_palette) m_palette->release();
+  }
 
   virtual TUINT32 getSize() const = 0;
 
@@ -322,13 +326,19 @@ public:
   UncompressedOnMemoryCacheItem(const TImageP &image) : m_image(image) {
     TRasterImageP ri = m_image;
 
-    if (ri) m_imageInfo = new RasterImageInfo(ri);
+    if (ri) {
+      m_imageInfo = new RasterImageInfo(ri);
+      m_palette   = image->getPalette();
+      if (m_palette) m_palette->addRef();
+    }
 #ifndef TNZCORE_LIGHT
     else {
       TToonzImageP ti = m_image;
-      if (ti)
+      if (ti) {
         m_imageInfo = new ToonzImageInfo(ti);
-      else
+        m_palette   = ti->getPalette();
+        if (m_palette) m_palette->addRef();
+      } else
         m_imageInfo = 0;
     }
 #else
@@ -407,7 +417,7 @@ typedef TDerivedSmartPointerT<CompressedOnMemoryCacheItem, CacheItem>
 //------------------------------------------------------------------------------
 
 CompressedOnMemoryCacheItem::CompressedOnMemoryCacheItem(const TImageP &img)
-    : m_compressedRas() {
+    : CacheItem(0, 0, 0), m_compressedRas() {
   TRasterImageP ri = img;
   if (ri) {
     m_imageInfo     = new RasterImageInfo(ri);
@@ -416,6 +426,7 @@ CompressedOnMemoryCacheItem::CompressedOnMemoryCacheItem(const TImageP &img)
     m_compressedRas =
         TheCodec::instance()->compress(ri->getRaster(), 1, buffSize);
     m_palette = img->getPalette();
+    if (m_palette) m_palette->addRef();
   }
 #ifndef TNZCORE_LIGHT
   else {
@@ -427,6 +438,7 @@ CompressedOnMemoryCacheItem::CompressedOnMemoryCacheItem(const TImageP &img)
       TINT32 buffSize      = 0;
       m_compressedRas = TheCodec::instance()->compress(rasCM32, 1, buffSize);
       m_palette       = ti->getPalette();
+      if (m_palette) m_palette->addRef();
     } else
       assert(false);
   }
@@ -525,7 +537,14 @@ CompressedOnDiskCacheItem::CompressedOnDiskCacheItem(
 
 CompressedOnDiskCacheItem::~CompressedOnDiskCacheItem() {
   delete m_imageInfo;
-  TSystem::deleteFile(m_fp);
+
+  if (m_fp.isEmpty()) return;
+
+  try {
+    TSystem::deleteFile(m_fp);
+  } catch (...) {
+    // Ignore any error do not let it escape the destructor.
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -583,6 +602,7 @@ UncompressedOnDiskCacheItem::UncompressedOnDiskCacheItem(const TFilePath &fp,
     m_imageInfo = new RasterImageInfo(ri);
     ras         = ri->getRaster();
     m_palette   = palette;
+    if (m_palette) m_palette->addRef();
   }
 #ifndef TNZCORE_LIGHT
   else {
@@ -591,6 +611,7 @@ UncompressedOnDiskCacheItem::UncompressedOnDiskCacheItem(const TFilePath &fp,
       m_imageInfo = new ToonzImageInfo(ti);
       ras         = ti->getRaster();
       m_palette   = palette;
+      if (m_palette) m_palette->addRef();
     } else
       assert(false);
   }
@@ -629,7 +650,12 @@ UncompressedOnDiskCacheItem::UncompressedOnDiskCacheItem(const TFilePath &fp,
 
 UncompressedOnDiskCacheItem::~UncompressedOnDiskCacheItem() {
   delete m_imageInfo;
-  TSystem::deleteFile(m_fp);
+  if (m_fp.isEmpty()) return;
+  try {
+    TSystem::deleteFile(m_fp);
+  } catch (...) {
+    // Ignore any error do not let it escape the destructor.
+  }
 }
 
 //------------------------------------------------------------------------------

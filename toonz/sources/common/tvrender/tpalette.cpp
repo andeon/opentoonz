@@ -90,7 +90,7 @@ std::string fidsToString(const std::vector<TFrameId> &fids) {
 // convert loaded string to refLevelFids
 std::vector<TFrameId> strToFids(std::string fidsStr) {
   std::vector<TFrameId> ret;
-  QString str = QString::fromStdString(fidsStr);
+  QString str        = QString::fromStdString(fidsStr);
   QStringList chunks = str.split(',', Qt::SkipEmptyParts);
   for (const auto &chunk : chunks) {
     QStringList nums = chunk.split('-', Qt::SkipEmptyParts);
@@ -120,21 +120,17 @@ TPalette::Page::Page(std::wstring name)
 //-------------------------------------------------------------------
 
 TColorStyle *TPalette::Page::getStyle(int index) const {
-  assert(m_palette);
-  if (0 <= index && index < getStyleCount())
-    return m_palette->getStyle(m_styleIds[index]);
-  else
-    return 0;
+  if (!m_palette) return 0;
+  if (index < 0 || index >= (int)m_styleIds.size()) return 0;
+  return m_palette->getStyle(m_styleIds[index]);
 }
 
 //-------------------------------------------------------------------
 
 int TPalette::Page::getStyleId(int index) const {
-  assert(m_palette);
-  if (0 <= index && index < getStyleCount())
-    return m_styleIds[index];
-  else
-    return -1;
+  if (!m_palette) return -1;
+  if (index < 0 || index >= (int)m_styleIds.size()) return -1;
+  return m_styleIds[index];
 }
 
 //-------------------------------------------------------------------
@@ -350,7 +346,8 @@ void TPalette::setStyle(int styleId, TColorStyle *style) {
       if (style == getStyle(i)) return;
 
     // Substitution can take place
-    if (typeid(*m_styles[styleId].second.getPointer()) != typeid(*style))
+    TColorStyle *current = m_styles[styleId].second.getPointer();
+    if (current && style && typeid(*current) != typeid(*style))
       m_styleAnimationTable.erase(styleId);
 
     m_styles[styleId].second = styleOwner.release();
@@ -370,25 +367,38 @@ int TPalette::getPageCount() const { return int(m_pages.size()); }
 //-------------------------------------------------------------------
 
 TPalette::Page *TPalette::getPage(int pageIndex) {
-  if (0 <= pageIndex && pageIndex < getPageCount()) {
-    Page *page = m_pages[pageIndex];
-    assert(page->getIndex() == pageIndex);
-    assert(page->m_palette == this);
-    return page;
-  } else
-    return 0;
+  // 1. Safety check for the object itself (rcx)
+  if (!this) return nullptr;
+
+  // 2. Assembly check: The 'ub' showed r8 is loaded from [rcx+60h].
+  // If the vector is uninitialized, m_pages.empty() or size() 
+  // will safely handle the internal null pointer.
+  if (m_pages.empty()) return nullptr;
+
+  // 3. Bounds check (edx vs eax in assembly)
+  if (pageIndex < 0 || pageIndex >= (int)m_pages.size()) return nullptr;
+
+  // 4. Final pointer validation
+  Page *page = m_pages[pageIndex];
+  if (!page || page->m_palette != this) return nullptr;
+
+  return page;
 }
 
 //-------------------------------------------------------------------
 
 const TPalette::Page *TPalette::getPage(int pageIndex) const {
-  if (0 <= pageIndex && pageIndex < getPageCount()) {
-    Page *page = m_pages[pageIndex];
-    assert(page->getIndex() == pageIndex);
-    assert(page->m_palette == this);
-    return page;
-  } else
-    return 0;
+  // Constant version of the getter with identical safety guards.
+  if (!this) return nullptr;
+
+  if (m_pages.empty()) return nullptr;
+
+  if (pageIndex < 0 || pageIndex >= (int)m_pages.size()) return nullptr;
+
+  Page *page = m_pages[pageIndex];
+  if (!page || page->m_palette != this) return nullptr;
+
+  return page;
 }
 
 //-------------------------------------------------------------------
@@ -406,11 +416,22 @@ TPalette::Page *TPalette::addPage(std::wstring name) {
 void TPalette::erasePage(int index) {
   Page *page = getPage(index);
   if (!page) return;
+
   m_pages.erase(m_pages.begin() + index);
-  int i;
-  for (i = 0; i < getPageCount(); i++) m_pages[i]->m_index = i;
-  for (i = 0; i < page->getStyleCount(); i++)
-    m_styles[page->getStyleId(i)].first = 0;
+
+  // Recalculate indices of all remaining pages
+  for (int i = 0; i < (int)m_pages.size(); ++i) {
+    if (m_pages[i]) m_pages[i]->m_index = i;
+  }
+
+  // Clear references to styles that were in the removed page
+  for (int i = 0; i < page->getStyleCount(); ++i) {
+    int styleId = page->getStyleId(i);
+    if (styleId >= 0 && styleId < (int)m_styles.size()) {
+      m_styles[styleId].first = 0;
+    }
+  }
+
   page->m_palette = 0;
   delete page;
 }
@@ -1045,28 +1066,34 @@ int TPalette::getFrame() const { return m_currentFrame; }
 
 void TPalette::setFrame(int frame) {
   QMutexLocker muLock(&m_mutex);
-
   if (m_currentFrame == frame) return;
 
   m_currentFrame = frame;
 
-  StyleAnimationTable::iterator sat, saEnd = m_styleAnimationTable.end();
-  for (sat = m_styleAnimationTable.begin(); sat != saEnd; ++sat) {
-    StyleAnimation &animation = sat->second;
-    assert(!animation.empty());
-
-    // Retrieve the associated style to interpolate
+  StyleAnimationTable::iterator sat = m_styleAnimationTable.begin();
+  while (sat != m_styleAnimationTable.end()) {
     int styleId = sat->first;
-    assert(0 <= styleId && styleId < getStyleCount());
+
+    // Remove animation if the style no longer exists
+    if (styleId < 0 || styleId >= getStyleCount() ||
+        !m_styles[styleId].second) {
+      sat = m_styleAnimationTable.erase(sat);
+      continue;
+    }
 
     TColorStyle *cs = getStyle(styleId);
-    assert(cs);
+    if (!cs) {
+      sat = m_styleAnimationTable.erase(sat);
+      continue;
+    }
+
+    StyleAnimation &animation = sat->second;
+    assert(!animation.empty());
 
     // Build the keyframes interval containing frame
     StyleAnimation::iterator j0, j1;
 
-    j1 = animation.lower_bound(
-        frame);  // j1 is the first element:  j1->first >= frame
+    j1 = animation.lower_bound(frame);
     if (j1 == animation.begin())
       cs->copy(*j1->second);
     else {
@@ -1077,11 +1104,12 @@ void TPalette::setFrame(int frame) {
         cs->copy(*j0->second);
       else {
         assert(frame <= j1->first);
-
         cs->assignBlend(*j0->second, *j1->second,
                         (frame - j0->first) / double(j1->first - j0->first));
       }
     }
+
+    ++sat;
   }
 }
 
@@ -1153,11 +1181,15 @@ void TPalette::clearKeyframe(int styleId, int frame) {
 
 int TPalette::getShortcutValue(int key) const {
   assert(Qt::Key_0 <= key && key <= Qt::Key_9);
-
   int shortcutIndex = (key == Qt::Key_0) ? 9 : key - Qt::Key_1;
   int indexInPage   = m_shortcutScopeIndex * 10 + shortcutIndex;
-  // shortcut is available only in the first page
-  return getPage(0)->getStyleId(indexInPage);
+
+  const Page *firstPage = getPage(0);
+  if (!firstPage || indexInPage < 0 ||
+      indexInPage >= firstPage->getStyleCount())
+    return -1;
+
+  return firstPage->getStyleId(indexInPage);
 }
 
 //-------------------------------------------------------------------
@@ -1166,9 +1198,11 @@ int TPalette::getStyleShortcut(int styleId) const {
   assert(0 <= styleId && styleId < getStyleCount());
 
   Page *page = getStylePage(styleId);
-  // shortcut is available only in the first page
   if (!page || page->getIndex() != 0) return -1;
-  int indexInPage   = page->search(styleId);
+
+  int indexInPage = page->search(styleId);
+  if (indexInPage < 0) return -1;
+
   int shortcutIndex = indexInPage - m_shortcutScopeIndex * 10;
   if (shortcutIndex < 0 || shortcutIndex > 9) return -1;
   return (shortcutIndex == 9) ? Qt::Key_0 : Qt::Key_1 + shortcutIndex;
@@ -1207,13 +1241,19 @@ bool TPalette::hasPickedPosStyle() {
 //-------------------------------------------------------------------
 
 void TPalette::nextShortcutScope(bool invert) {
+  Page *page0 = getPage(0);
+  if (!page0) return;
+
+  int styleCount = page0->getStyleCount();
+  if (styleCount == 0) return;
+
   if (invert) {
     if (m_shortcutScopeIndex > 0)
       m_shortcutScopeIndex -= 1;
     else
-      m_shortcutScopeIndex = getPage(0)->getStyleCount() / 10;
+      m_shortcutScopeIndex = styleCount / 10;
   } else {
-    if ((m_shortcutScopeIndex + 1) * 10 < getPage(0)->getStyleCount())
+    if ((m_shortcutScopeIndex + 1) * 10 < styleCount)
       m_shortcutScopeIndex += 1;
     else
       m_shortcutScopeIndex = 0;
