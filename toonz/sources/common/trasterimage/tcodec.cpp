@@ -24,6 +24,7 @@ using namespace std;
 
 namespace {
 class Header {
+public:
   enum RasType {
     Raster32RGBM,
     Raster64RGBM,
@@ -33,11 +34,11 @@ class Header {
     RasterUnknown
   };
 
-public:
   Header(const TRasterP &ras);
   ~Header() {}
   TRasterP createRaster() const;
   int getRasterSize() const;
+  int getPixelSize() const;  // novo método
   int m_lx;
   int m_ly;
   RasType m_rasType;
@@ -129,6 +130,24 @@ int Header::getRasterSize() const {
     assert(0);
     return 0;
     break;
+  }
+}
+
+//------------------------------------------------------------------------------
+
+int Header::getPixelSize() const {
+  switch (m_rasType) {
+    case Raster32RGBM:
+    case Raster32CM:
+      return 4;
+    case Raster64RGBM:
+      return 8;
+    case RasterGR8:
+      return 1;
+    case RasterGR16:
+      return 2;
+    default:
+      return 0;
   }
 }
 //------------------------------------------------------------------------------
@@ -475,37 +494,20 @@ bool TRasterCodecLz4::decompress(const UCHAR *inData, TINT32 inDataSize,
   Header *header = (Header *)inData;
 
   // --- Header validation ---
-  // Dimensions must be positive
   if (header->m_lx <= 0 || header->m_ly <= 0) {
     if (safeMode) return false;
     throw TException("Invalid raster dimensions (zero or negative)");
   }
 
-  // Raster type must be known
-  if (header->m_rasType < Header::Raster32RGBM ||
-      header->m_rasType > Header::RasterGR16) {
+  if (header->m_rasType < Header::Raster32RGBM || header->m_rasType > Header::RasterGR16) {
     if (safeMode) return false;
     throw TException("Invalid raster type");
   }
 
-  // Determine pixel size
-  int pixelSize = 0;
-  switch (header->m_rasType) {
-    case Header::Raster32RGBM:
-    case Header::Raster32CM:
-      pixelSize = 4;
-      break;
-    case Header::Raster64RGBM:
-      pixelSize = 8;
-      break;
-    case Header::RasterGR8:
-      pixelSize = 1;
-      break;
-    case Header::RasterGR16:
-      pixelSize = 2;
-      break;
-    default:
-      pixelSize = 0;
+  int pixelSize = header->getPixelSize();
+  if (pixelSize == 0) {
+    if (safeMode) return false;
+    throw TException("Invalid raster type (unknown pixel size)");
   }
 
   // Compute required bytes, checking for overflow
@@ -584,19 +586,13 @@ void TRasterCodecLz4::decompress(const TRasterP &compressedRas,
   if (header.m_lx <= 0 || header.m_ly <= 0)
     throw TException("Invalid raster dimensions (zero or negative)");
 
-  if (header.m_rasType < Header::Raster32RGBM ||
-      header.m_rasType > Header::RasterGR16)
+  if (header.m_rasType < Header::Raster32RGBM || header.m_rasType > Header::RasterGR16)
     throw TException("Invalid raster type");
 
-  int pixelSize = 0;
-  switch (header.m_rasType) {
-    case Header::Raster32RGBM:
-    case Header::Raster32CM: pixelSize = 4; break;
-    case Header::Raster64RGBM: pixelSize = 8; break;
-    case Header::RasterGR8: pixelSize = 1; break;
-    case Header::RasterGR16: pixelSize = 2; break;
-    default: pixelSize = 0;
-  }
+  int pixelSize = header.getPixelSize();
+  if (pixelSize == 0)
+    throw TException("Invalid raster type (unknown pixel size)");
+
   size_t neededBytes = (size_t)header.m_lx * (size_t)header.m_ly * (size_t)pixelSize;
   const size_t MAX_RASTER_BYTES = 2ULL * 1024 * 1024 * 1024; // 2 GB
   if (neededBytes > MAX_RASTER_BYTES)
@@ -803,21 +799,17 @@ bool TRasterCodecLZO::decompress(const UCHAR *inData, TINT32 inDataSize,
     throw TException("Invalid raster dimensions (zero or negative)");
   }
 
-  if (header->m_rasType < Header::Raster32RGBM ||
-      header->m_rasType > Header::RasterGR16) {
+  if (header->m_rasType < Header::Raster32RGBM || header->m_rasType > Header::RasterGR16) {
     if (safeMode) return false;
     throw TException("Invalid raster type");
   }
 
-  int pixelSize = 0;
-  switch (header->m_rasType) {
-    case Header::Raster32RGBM:
-    case Header::Raster32CM: pixelSize = 4; break;
-    case Header::Raster64RGBM: pixelSize = 8; break;
-    case Header::RasterGR8: pixelSize = 1; break;
-    case Header::RasterGR16: pixelSize = 2; break;
-    default: pixelSize = 0;
+  int pixelSize = header->getPixelSize();
+  if (pixelSize == 0) {
+    if (safeMode) return false;
+    throw TException("Invalid raster type (unknown pixel size)");
   }
+
   size_t neededBytes = (size_t)header->m_lx * (size_t)header->m_ly * (size_t)pixelSize;
   const size_t MAX_RASTER_BYTES = 2ULL * 1024 * 1024 * 1024; // 2 GB
   if (neededBytes > MAX_RASTER_BYTES) {
@@ -884,19 +876,13 @@ void TRasterCodecLZO::decompress(const TRasterP &compressedRas,
   if (header.m_lx <= 0 || header.m_ly <= 0)
     throw TException("Invalid raster dimensions (zero or negative)");
 
-  if (header.m_rasType < Header::Raster32RGBM ||
-      header.m_rasType > Header::RasterGR16)
+  if (header.m_rasType < Header::Raster32RGBM || header.m_rasType > Header::RasterGR16)
     throw TException("Invalid raster type");
 
-  int pixelSize = 0;
-  switch (header.m_rasType) {
-    case Header::Raster32RGBM:
-    case Header::Raster32CM: pixelSize = 4; break;
-    case Header::Raster64RGBM: pixelSize = 8; break;
-    case Header::RasterGR8: pixelSize = 1; break;
-    case Header::RasterGR16: pixelSize = 2; break;
-    default: pixelSize = 0;
-  }
+  int pixelSize = header.getPixelSize();
+  if (pixelSize == 0)
+    throw TException("Invalid raster type (unknown pixel size)");
+
   size_t neededBytes = (size_t)header.m_lx * (size_t)header.m_ly * (size_t)pixelSize;
   const size_t MAX_RASTER_BYTES = 2ULL * 1024 * 1024 * 1024; // 2 GB
   if (neededBytes > MAX_RASTER_BYTES)
