@@ -38,7 +38,7 @@ public:
   ~Header() {}
   TRasterP createRaster() const;
   int getRasterSize() const;
-  int getPixelSize() const;  // novo método
+  int getPixelSize() const;
   int m_lx;
   int m_ly;
   RasType m_rasType;
@@ -490,7 +490,17 @@ TRasterP TRasterCodecLz4::compress(const TRasterP &inRas, int allocUnit,
 
 bool TRasterCodecLz4::decompress(const UCHAR *inData, TINT32 inDataSize,
                                  TRasterP &outRas, bool safeMode) {
+  // --- Input validation ---
+  if (!inData) {
+    if (safeMode) return false;
+    throw TException("Compressed data pointer is null");
+  }
   int headerSize = sizeof(Header);
+  if (inDataSize <= headerSize) {
+    if (safeMode) return false;
+    throw TException("Compressed data too small");
+  }
+
   Header *header = (Header *)inData;
 
   // --- Header validation ---
@@ -532,14 +542,23 @@ bool TRasterCodecLz4::decompress(const UCHAR *inData, TINT32 inDataSize,
     outRas = header->createRaster();
     if (!outRas) {
       if (safeMode) return false;
-      throw TException();
+      throw TException("Failed to create raster");
     }
   } else {
     if (outRas->getLx() != outRas->getWrap()) {
       if (safeMode) return false;
-      throw TException();
+      throw TException("Invalid raster wrap");
     }
   }
+
+  // Verify raster has valid raw data
+  outRas->lock();
+  if (!outRas->getRawData()) {
+    outRas->unlock();
+    if (safeMode) return false;
+    throw TException("Raster raw data is null");
+  }
+  outRas->unlock();
 
   // --- Decompress ---
   LZ4F_decompressionContext_t lz4dctx;
@@ -574,49 +593,91 @@ bool TRasterCodecLz4::decompress(const UCHAR *inData, TINT32 inDataSize,
 
 void TRasterCodecLz4::decompress(const TRasterP &compressedRas,
                                  TRasterP &outRas) {
-  int headerSize = sizeof(Header);
-  assert(compressedRas->getLy() == 1 && compressedRas->getPixelSize() == 1);
+  // --- Input validation ---
+  if (!compressedRas) {
+    throw TException("Compressed raster is null");
+  }
+  if (compressedRas->getLy() != 1 || compressedRas->getPixelSize() != 1) {
+    throw TException("Invalid compressed raster format");
+  }
   UINT inDataSize = compressedRas->getLx();
+  int headerSize = sizeof(Header);
+  if (inDataSize <= headerSize) {
+    throw TException("Compressed raster too small");
+  }
 
   compressedRas->lock();
   UCHAR *inData = compressedRas->getRawData();
+  if (!inData) {
+    compressedRas->unlock();
+    throw TException("Compressed raster has no raw data");
+  }
+
   Header header(inData);
 
   // --- Header validation ---
-  if (header.m_lx <= 0 || header.m_ly <= 0)
+  if (header.m_lx <= 0 || header.m_ly <= 0) {
+    compressedRas->unlock();
     throw TException("Invalid raster dimensions (zero or negative)");
+  }
 
-  if (header.m_rasType < Header::Raster32RGBM || header.m_rasType > Header::RasterGR16)
+  if (header.m_rasType < Header::Raster32RGBM || header.m_rasType > Header::RasterGR16) {
+    compressedRas->unlock();
     throw TException("Invalid raster type");
+  }
 
   int pixelSize = header.getPixelSize();
-  if (pixelSize == 0)
+  if (pixelSize == 0) {
+    compressedRas->unlock();
     throw TException("Invalid raster type (unknown pixel size)");
+  }
 
   size_t neededBytes = (size_t)header.m_lx * (size_t)header.m_ly * (size_t)pixelSize;
   const size_t MAX_RASTER_BYTES = 2ULL * 1024 * 1024 * 1024; // 2 GB
-  if (neededBytes > MAX_RASTER_BYTES)
+  if (neededBytes > MAX_RASTER_BYTES) {
+    compressedRas->unlock();
     throw TException("Raster too large (>2GB)");
+  }
 
   if (TBigMemoryManager::instance()->isActive()) {
     size_t neededKB = (neededBytes + 1023) >> 10;
-    if (TBigMemoryManager::instance()->getAvailableMemoryinKb() < neededKB)
+    if (TBigMemoryManager::instance()->getAvailableMemoryinKb() < neededKB) {
+      compressedRas->unlock();
       throw TException("Not enough memory to decompress image");
+    }
   }
 
   // --- Create raster ---
   if (!outRas) {
     outRas = header.createRaster();
-    if (!outRas) throw TException();
+    if (!outRas) {
+      compressedRas->unlock();
+      throw TException("Failed to create raster");
+    }
   } else {
-    if (outRas->getLx() != outRas->getWrap()) throw TException();
+    if (outRas->getLx() != outRas->getWrap()) {
+      compressedRas->unlock();
+      throw TException("Invalid raster wrap");
+    }
   }
+
+  // Verify raster has valid raw data
+  outRas->lock();
+  if (!outRas->getRawData()) {
+    outRas->unlock();
+    compressedRas->unlock();
+    throw TException("Raster raw data is null");
+  }
+  outRas->unlock();
 
   // --- Decompress ---
   LZ4F_decompressionContext_t lz4dctx;
   LZ4F_errorCode_t err =
       LZ4F_createDecompressionContext(&lz4dctx, LZ4F_VERSION);
-  if (LZ4F_isError(err)) throw TException("compress... something goes bad");
+  if (LZ4F_isError(err)) {
+    compressedRas->unlock();
+    throw TException("compress... something goes bad");
+  }
 
   int outDataSize = header.getRasterSize();
   const char *mc = (const char *)(inData + headerSize);
@@ -790,7 +851,17 @@ TRasterP TRasterCodecLZO::compress(const TRasterP &inRas, int allocUnit,
 
 bool TRasterCodecLZO::decompress(const UCHAR *inData, TINT32 inDataSize,
                                  TRasterP &outRas, bool safeMode) {
+  // --- Input validation ---
+  if (!inData) {
+    if (safeMode) return false;
+    throw TException("Compressed data pointer is null");
+  }
   int headerSize = sizeof(Header);
+  if (inDataSize <= headerSize) {
+    if (safeMode) return false;
+    throw TException("Compressed data too small");
+  }
+
   Header *header = (Header *)inData;
 
   // --- Header validation ---
@@ -830,14 +901,23 @@ bool TRasterCodecLZO::decompress(const UCHAR *inData, TINT32 inDataSize,
     outRas = header->createRaster();
     if (!outRas) {
       if (safeMode) return false;
-      throw TException();
+      throw TException("Failed to create raster");
     }
   } else {
     if (outRas->getLx() != outRas->getWrap()) {
       if (safeMode) return false;
-      throw TException();
+      throw TException("Invalid raster wrap");
     }
   }
+
+  // Verify raster has valid raw data
+  outRas->lock();
+  if (!outRas->getRawData()) {
+    outRas->unlock();
+    if (safeMode) return false;
+    throw TException("Raster raw data is null");
+  }
+  outRas->unlock();
 
   // --- Decompress ---
   int outDataSize = header->getRasterSize();
@@ -864,43 +944,82 @@ bool TRasterCodecLZO::decompress(const UCHAR *inData, TINT32 inDataSize,
 
 void TRasterCodecLZO::decompress(const TRasterP &compressedRas,
                                  TRasterP &outRas) {
-  int headerSize = sizeof(Header);
-  assert(compressedRas->getLy() == 1 && compressedRas->getPixelSize() == 1);
+  // --- Input validation ---
+  if (!compressedRas) {
+    throw TException("Compressed raster is null");
+  }
+  if (compressedRas->getLy() != 1 || compressedRas->getPixelSize() != 1) {
+    throw TException("Invalid compressed raster format");
+  }
   UINT inDataSize = compressedRas->getLx();
+  int headerSize = sizeof(Header);
+  if (inDataSize <= headerSize) {
+    throw TException("Compressed raster too small");
+  }
 
   compressedRas->lock();
   UCHAR *inData = compressedRas->getRawData();
+  if (!inData) {
+    compressedRas->unlock();
+    throw TException("Compressed raster has no raw data");
+  }
+
   Header header(inData);
 
   // --- Header validation ---
-  if (header.m_lx <= 0 || header.m_ly <= 0)
+  if (header.m_lx <= 0 || header.m_ly <= 0) {
+    compressedRas->unlock();
     throw TException("Invalid raster dimensions (zero or negative)");
+  }
 
-  if (header.m_rasType < Header::Raster32RGBM || header.m_rasType > Header::RasterGR16)
+  if (header.m_rasType < Header::Raster32RGBM || header.m_rasType > Header::RasterGR16) {
+    compressedRas->unlock();
     throw TException("Invalid raster type");
+  }
 
   int pixelSize = header.getPixelSize();
-  if (pixelSize == 0)
+  if (pixelSize == 0) {
+    compressedRas->unlock();
     throw TException("Invalid raster type (unknown pixel size)");
+  }
 
   size_t neededBytes = (size_t)header.m_lx * (size_t)header.m_ly * (size_t)pixelSize;
   const size_t MAX_RASTER_BYTES = 2ULL * 1024 * 1024 * 1024; // 2 GB
-  if (neededBytes > MAX_RASTER_BYTES)
+  if (neededBytes > MAX_RASTER_BYTES) {
+    compressedRas->unlock();
     throw TException("Raster too large (>2GB)");
+  }
 
   if (TBigMemoryManager::instance()->isActive()) {
     size_t neededKB = (neededBytes + 1023) >> 10;
-    if (TBigMemoryManager::instance()->getAvailableMemoryinKb() < neededKB)
+    if (TBigMemoryManager::instance()->getAvailableMemoryinKb() < neededKB) {
+      compressedRas->unlock();
       throw TException("Not enough memory to decompress image");
+    }
   }
 
   // --- Create raster ---
   if (!outRas) {
     outRas = header.createRaster();
-    if (!outRas) throw TException();
+    if (!outRas) {
+      compressedRas->unlock();
+      throw TException("Failed to create raster");
+    }
   } else {
-    if (outRas->getLx() != outRas->getWrap()) throw TException();
+    if (outRas->getLx() != outRas->getWrap()) {
+      compressedRas->unlock();
+      throw TException("Invalid raster wrap");
+    }
   }
+
+  // Verify raster has valid raw data
+  outRas->lock();
+  if (!outRas->getRawData()) {
+    outRas->unlock();
+    compressedRas->unlock();
+    throw TException("Raster raw data is null");
+  }
+  outRas->unlock();
 
   // --- Decompress ---
   int outDataSize = header.getRasterSize();
@@ -909,8 +1028,10 @@ void TRasterCodecLZO::decompress(const TRasterP &compressedRas,
 
   size_t outSize = outDataSize;
   QByteArray decompressedBuffer;
-  if (!lzoDecompress(QByteArray(mc, ds), outSize, decompressedBuffer))
+  if (!lzoDecompress(QByteArray(mc, ds), outSize, decompressedBuffer)) {
+    compressedRas->unlock();
     throw TException("LZO decompression failed");
+  }
 
   outRas->lock();
   memcpy(outRas->getRawData(), decompressedBuffer.data(),
