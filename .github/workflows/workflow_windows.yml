@@ -134,7 +134,7 @@ jobs:
           REM Deploy Qt dependencies
           "%QT_PATH%\bin\windeployqt.exe" Opentoonz\Opentoonz.exe --opengl
           
-          del /Q Opentoonz\*.pdb  REM Remove .pdb files
+          # del /Q Opentoonz\*.pdb  REM Remove .pdb files
           del /Q Opentoonz\vc_redist.x64.exe REM Remove vc_redist.x64.exe file
           
           REM Create portablestuff directory and copy stuff folder
