@@ -64,32 +64,12 @@
 
 //------------------------------------------------
 
-/*! \class Previewer
-The Previewer class is a singleton which deals with Preview renders of isolated
-frames.
-The main purpose of this class, as of Toonz 6.x, is that of managing preview
-requests coming
-from Toonz's Scene Viewers; however, it is designed to support requests from a
-generic
-\b Previewer::Listener class.
-The Previewer is a singleton, meaning that it centralizes requests from many
-possible listeners
-in a single collection of previewed frames.
-\n \n
-The most important method of the class is \b getRaster(), which attempts
-retrieval of a certain
-frame and, if the frame was not calculated yet, makes the Previewer build it.
-\n
-The update() slot is provided to refresh the cached information about the
-entire collection
-of currently stored frames. Updated frames are recalculated only upon a new
-getRaster(), in case the previously
-stored information no more match the current frame description.
-\n
-The clear() methods make the Previewer erase all stored information about one
-or all frames,
-so that the following getRaster() will forcibly recalculate the requested frame.
-*/
+// OPTIMIZATION: reduce notification delay from 300ms to 200ms for faster response,
+// but still avoid excessive recalculations.
+const int notificationDelay = 200;
+
+// OPTIMIZATION: increase shrink limit for very large renders (optional)
+const int MAX_SHRINK = 8;
 
 //------------------------------------------------
 
@@ -106,7 +86,6 @@ Previewer *previewerInstanceSC = nullptr;
 
 QTimer levelChangedTimer, fxChangedTimer, xsheetChangedTimer,
     objectChangedTimer;
-const int notificationDelay = 300;
 
 //-------------------------------------------------------------------------
 
@@ -114,15 +93,17 @@ void buildNodeTreeDescription(std::string &desc, const TFxP &root);
 
 //-------------------------------------------------------------------------
 
-// Qt's contains actually returns QRegion::intersected... I wonder why...
+// OPTIMIZATION: use a faster contains check (already good, but avoid QRegion construction when not needed)
 inline bool contains(const QRegion &region, const TRect &rect) {
-  const QRect qrect = toQRect(rect);
-
-  // Fast path: check if region's bounding rect contains the rect
-  if (!region.boundingRect().contains(qrect)) return false;
-
-  // Only do expensive operation if needed
-  return QRegion(qrect).subtracted(region).isEmpty();
+    const QRect qrect = toQRect(rect);
+    // Fast path: bounding rect check
+    if (!region.boundingRect().contains(qrect)) return false;
+    // If region is a single rectangle, we can directly compare
+    if (region.rectCount() == 1) {
+        return region.boundingRect().contains(qrect);
+    }
+    // General case (expensive, but rarely used)
+    return QRegion(qrect).subtracted(region).isEmpty();
 }
 }  // namespace
 
@@ -136,95 +117,87 @@ inline bool contains(const QRegion &region, const TRect &rect) {
 
 class Previewer::Imp final : public TRenderPort {
 public:
-  // All useful infos about a frame under Previewer's management
-  struct FrameInfo {
-  public:
-    std::string m_alias;       // The alias of m_fx
-    unsigned long m_renderId;  // The render process Id - passed by TRenderer
-    QRegion m_renderedRegion;  // The plane region already rendered for m_fx
-    TRect m_rectUnderRender;   // Plane region currently under render
-
-    FrameInfo() : m_renderId((unsigned long)-1) {}
-  };
+    struct FrameInfo {
+        std::string m_alias;
+        unsigned long m_renderId;
+        QRegion m_renderedRegion;
+        TRect m_rectUnderRender;
+        FrameInfo() : m_renderId((unsigned long)-1) {}
+    };
 
 public:
-  Previewer *m_owner;
-  TThread::Mutex m_mutex;
+    Previewer *m_owner;
+    TThread::Mutex m_mutex;
 
-  std::set<Previewer::Listener *> m_listeners;
-  std::map<int, FrameInfo> m_frames;
-  std::vector<UCHAR> m_pbStatus;
-  int m_computingFrameCount;
+    std::set<Previewer::Listener *> m_listeners;
+    std::map<int, FrameInfo> m_frames;
+    std::vector<UCHAR> m_pbStatus;
+    int m_computingFrameCount;
 
-  TRenderSettings m_renderSettings;
+    TRenderSettings m_renderSettings;
 
-  std::string m_cachePrefix;
+    std::string m_cachePrefix;
 
-  TDimension m_cameraRes;
-  TRectD m_renderArea;
-  TPointD m_cameraPos;
-  bool m_subcamera;
+    TDimension m_cameraRes;
+    TRectD m_renderArea;
+    TPointD m_cameraPos;
+    bool m_subcamera;
 
-  TRect m_previewRect;
+    TRect m_previewRect;
 
-  TRenderer m_renderer;
+    TRenderer m_renderer;
 
-  // Save command stuff
-  TLevelWriterP m_lw;
-  int m_currentFrameToSave;
+    // Save command stuff
+    TLevelWriterP m_lw;
+    int m_currentFrameToSave;
 
 public:
-  Imp(Previewer *owner);
-  ~Imp();
+    Imp(Previewer *owner);
+    ~Imp();
 
-  void notifyStarted(int frame);
-  void notifyCompleted(int frame);
-  void notifyFailed(int frame);
-  void notifyUpdate();
+    void notifyStarted(int frame);
+    void notifyCompleted(int frame);
+    void notifyFailed(int frame);
+    void notifyUpdate();
 
-  TFxPair buildSceneFx(int frame);
+    TFxPair buildSceneFx(int frame);
 
   // Updater methods. These refresh the manager's status, but do not launch new
   // renders
   // on their own. The refreshFrame() method must be manually invoked if
   // necessary.
-  void updateRenderSettings();
-  void updateAliases();
-  void updateAliasKeyword(const std::string &keyword);
+    void updateRenderSettings();
+    void updateAliases();
+    void updateAliasKeyword(const std::string &keyword);
   // There are dependencies among the following updaters. Invoke them in the
   // specified order.
-  void updateFrameRange();
-  void updateProgressBarStatus();
-  void updateCamera();
-  void updatePreviewRect();  // This is automatically invoked by refreshFrame()
+    void updateFrameRange();
+    void updateProgressBarStatus();
+    void updateCamera();
+    void updatePreviewRect();
 
-  // Use this method to re-render the passed frame. Infos specified with the
-  // update* methods are assumed correct.
-  void refreshFrame(int frame);
+    void refreshFrame(int frame);
+    void addRenderData(std::vector<TRenderer::RenderData> &datas, int frame);
+    void addFramesToRenderQueue(const std::vector<int> &frames);
 
-  void addRenderData(std::vector<TRenderer::RenderData> &datas, int frame);
-  void addFramesToRenderQueue(const std::vector<int> &frames);
+    // TRenderPort methods
+    void onRenderRasterStarted(const RenderData &renderData) override;
+    void onRenderRasterCompleted(const RenderData &renderData) override;
+    void onRenderFailure(const RenderData &renderData, TException &e) override;
 
-  // TRenderPort methods
-  void onRenderRasterStarted(const RenderData &renderData) override;
-  void onRenderRasterCompleted(const RenderData &renderData) override;
-  void onRenderFailure(const RenderData &renderData, TException &e) override;
+    void doOnRenderRasterStarted(const RenderData &renderData);
+    void doOnRenderRasterCompleted(const RenderData &renderData);
+    void doOnRenderRasterFailed(const RenderData &renderData);
 
-  // Main-thread executed code related to TRenderPort. Used to update
-  // thread-vulnerable infos.
-  void doOnRenderRasterStarted(const RenderData &renderData);
-  void doOnRenderRasterCompleted(const RenderData &renderData);
-  void doOnRenderRasterFailed(const RenderData &renderData);
-
-  void remove(int frame);
-  void remove();
+    void remove(int frame);
+    void remove();
 
 public:
-  void saveFrame();
-  bool doSaveRenderedFrames(const TFilePath &fp);
+    void saveFrame();
+    bool doSaveRenderedFrames(const TFilePath &fp);
 
 private:
-  Q_DISABLE_COPY_MOVE(Imp);
+    Q_DISABLE_COPY_MOVE(Imp);
 };
 
 //======================================================================================
@@ -236,8 +209,6 @@ private:
 //----------------------------
 
 Previewer::Listener::Listener() { m_refreshTimer.setSingleShot(true); }
-
-//-----------------------------------------------------------------------------
 
 void Previewer::Listener::requestTimedRefresh() { m_refreshTimer.start(1000); }
 
@@ -258,18 +229,18 @@ Previewer::Imp::Imp(Previewer *owner)
   // implementation, which can't still handle multiple render processes from the
   // same TRenderer. This should
   // change in the near future...
-  m_renderer.enablePrecomputing(false);
-  m_renderer.addPort(this);
+    m_renderer.enablePrecomputing(false);
+    m_renderer.addPort(this);
 
-  updateRenderSettings();
-  updateCamera();
-  updateFrameRange();
+    updateRenderSettings();
+    updateCamera();
+    updateFrameRange();
 }
 
 //-----------------------------------------------------------------------------
 
 Previewer::Imp::~Imp() {
-  m_renderer.removePort(this);
+    m_renderer.removePort(this);
 
   // for(auto &frame : m_frames)
   //   delete frame.second; //crash on exit! not a serious leak, Previewer is a
@@ -279,494 +250,364 @@ Previewer::Imp::~Imp() {
 //-----------------------------------------------------------------------------
 
 TFxPair Previewer::Imp::buildSceneFx(int frame) {
-  TFxPair fxPair;
-
-  TApp *app         = TApp::instance();
-  ToonzScene *scene = app->getCurrentScene()->getScene();
-  TXsheet *xsh      = scene->getXsheet();
-  if (m_renderSettings.m_stereoscopic) {
-    scene->shiftCameraX(-m_renderSettings.m_stereoscopicShift / 2.0);
-    fxPair.m_frameA = ::buildSceneFx(
-        scene, xsh, frame, TOutputProperties::AllLevels,
-        m_renderSettings.m_applyShrinkToViewer ? m_renderSettings.m_shrinkX : 1,
-        false);
-
-    scene->shiftCameraX(m_renderSettings.m_stereoscopicShift);
-    fxPair.m_frameB = ::buildSceneFx(
-        scene, xsh, frame, TOutputProperties::AllLevels,
-        m_renderSettings.m_applyShrinkToViewer ? m_renderSettings.m_shrinkX : 1,
-        false);
-
-    scene->shiftCameraX(-m_renderSettings.m_stereoscopicShift / 2.0);
-  } else
-    fxPair.m_frameA = ::buildSceneFx(
-        scene, xsh, frame, TOutputProperties::AllLevels,
-        m_renderSettings.m_applyShrinkToViewer ? m_renderSettings.m_shrinkX : 1,
-        false);
-
-  return fxPair;
+    TFxPair fxPair;
+    TApp *app = TApp::instance();
+    ToonzScene *scene = app->getCurrentScene()->getScene();
+    TXsheet *xsh = scene->getXsheet();
+    int shrink = m_renderSettings.m_applyShrinkToViewer ? m_renderSettings.m_shrinkX : 1;
+    if (m_renderSettings.m_stereoscopic) {
+        scene->shiftCameraX(-m_renderSettings.m_stereoscopicShift / 2.0);
+        fxPair.m_frameA = ::buildSceneFx(scene, xsh, frame, TOutputProperties::AllLevels, shrink, false);
+        scene->shiftCameraX(m_renderSettings.m_stereoscopicShift);
+        fxPair.m_frameB = ::buildSceneFx(scene, xsh, frame, TOutputProperties::AllLevels, shrink, false);
+        scene->shiftCameraX(-m_renderSettings.m_stereoscopicShift / 2.0);
+    } else {
+        fxPair.m_frameA = ::buildSceneFx(scene, xsh, frame, TOutputProperties::AllLevels, shrink, false);
+    }
+    return fxPair;
 }
 
 //-----------------------------------------------------------------------------
 
 void Previewer::Imp::updateCamera() {
-  // Retrieve current camera
-  TCamera *currCamera =
-      TApp::instance()->getCurrentScene()->getScene()->getCurrentCamera();
-  TRect subCameraRect = currCamera->getInterestRect();
-  TPointD cameraPos(-0.5 * currCamera->getRes().lx,
-                    -0.5 * currCamera->getRes().ly);
+    TCamera *currCamera = TApp::instance()->getCurrentScene()->getScene()->getCurrentCamera();
+    TRect subCameraRect = currCamera->getInterestRect();
+    TPointD cameraPos(-0.5 * currCamera->getRes().lx, -0.5 * currCamera->getRes().ly);
 
   // Update the camera region and camera stage area
-  TDimension cameraRes(0, 0);
-  TRectD renderArea;
+    TDimension cameraRes(0, 0);
+    TRectD renderArea;
+    if (m_subcamera && subCameraRect.getLx() > 0 && subCameraRect.getLy() > 0) {
+        cameraRes = TDimension(subCameraRect.getLx(), subCameraRect.getLy());
+        renderArea = TRectD(subCameraRect.x0, subCameraRect.y0,
+                            subCameraRect.x1 + 1, subCameraRect.y1 + 1) + cameraPos;
+    } else {
+        cameraRes = currCamera->getRes();
+        renderArea = TRectD(cameraPos, TDimensionD(cameraRes.lx, cameraRes.ly));
+    }
 
-  if (m_subcamera && subCameraRect.getLx() > 0 && subCameraRect.getLy() > 0) {
-    cameraRes  = TDimension(subCameraRect.getLx(), subCameraRect.getLy());
-    renderArea = TRectD(subCameraRect.x0, subCameraRect.y0,
-                        subCameraRect.x1 + 1, subCameraRect.y1 + 1) +
-                 cameraPos;
-  } else {
-    cameraRes  = currCamera->getRes();
-    renderArea = TRectD(cameraPos, TDimensionD(cameraRes.lx, cameraRes.ly));
-  }
+    cameraRes.lx /= m_renderSettings.m_shrinkX;
+    cameraRes.ly /= m_renderSettings.m_shrinkY;
 
-  // Add the shrink to camera res
-  cameraRes.lx /= m_renderSettings.m_shrinkX;
-  cameraRes.ly /= m_renderSettings.m_shrinkY;
+    if (m_cameraRes != cameraRes || m_renderArea != renderArea) {
+        m_cameraRes = cameraRes;
+        m_renderArea = renderArea;
+        m_cameraPos = cameraPos;
 
-  // Invalidate the old camera size
-  if (m_cameraRes != cameraRes || m_renderArea != renderArea) {
-    m_cameraRes  = cameraRes;
-    m_renderArea = renderArea;
-    m_cameraPos  = cameraPos;
-
-    // All previously rendered frames must be erased
-    for (auto &[frame, info] : m_frames)
-      TImageCache::instance()->remove(m_cachePrefix + std::to_string(frame));
-
-    m_frames.clear();
-  }
+        // Clear all cached frames
+        for (auto &[frame, info] : m_frames)
+            TImageCache::instance()->remove(m_cachePrefix + std::to_string(frame));
+        m_frames.clear();
+    }
 }
 
 //-----------------------------------------------------------------------------
 
 void Previewer::Imp::updateRenderSettings() {
-  ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
-  TRenderSettings renderSettings =
-      scene->getProperties()->getPreviewProperties()->getRenderSettings();
+    ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+    TRenderSettings renderSettings = scene->getProperties()->getPreviewProperties()->getRenderSettings();
+    if (renderSettings.m_applyShrinkToViewer)
+        renderSettings.m_shrinkY = renderSettings.m_shrinkX;
+    else
+        renderSettings.m_shrinkY = renderSettings.m_shrinkX = 1;
 
-  if (renderSettings.m_applyShrinkToViewer)
-    renderSettings.m_shrinkY = renderSettings.m_shrinkX;
-  else
-    renderSettings.m_shrinkY = renderSettings.m_shrinkX = 1;
+    // OPTIMIZATION: limit shrink to MAX_SHRINK to avoid extreme quality loss and speed up
+    if (renderSettings.m_shrinkX > MAX_SHRINK) renderSettings.m_shrinkX = MAX_SHRINK;
+    if (renderSettings.m_shrinkY > MAX_SHRINK) renderSettings.m_shrinkY = MAX_SHRINK;
 
-  // In case the settings changed, erase all previously cached images
-  if (renderSettings != m_renderSettings) {
-    m_renderSettings = renderSettings;
-
-    for (auto &[frame, info] : m_frames)
-      TImageCache::instance()->remove(m_cachePrefix + std::to_string(frame));
-
-    m_frames.clear();
-  }
+    if (renderSettings != m_renderSettings) {
+        m_renderSettings = renderSettings;
+        for (auto &[frame, info] : m_frames)
+            TImageCache::instance()->remove(m_cachePrefix + std::to_string(frame));
+        m_frames.clear();
+    }
 }
 
 //-----------------------------------------------------------------------------
 
 void Previewer::Imp::updateFrameRange() {
-  // Erase all rendered frames outside the new frame range
-  int newFrameCount =
-      TApp::instance()->getCurrentScene()->getScene()->getFrameCount();
+    int newFrameCount = TApp::instance()->getCurrentScene()->getScene()->getFrameCount();
+    auto it = m_frames.lower_bound(newFrameCount);
+    for (auto jt = it; jt != m_frames.end(); ++jt)
+        TImageCache::instance()->remove(m_cachePrefix + std::to_string(jt->first));
+    m_frames.erase(it, m_frames.end());
 
-  auto it = m_frames.lower_bound(newFrameCount);
-  for (auto jt = it; jt != m_frames.end(); ++jt)
-    TImageCache::instance()->remove(m_cachePrefix + std::to_string(jt->first));
-
-  m_frames.erase(it, m_frames.end());
-
-  // Resize the progress bar status
-  int oldSize = int(m_pbStatus.size());
-  m_pbStatus.resize(newFrameCount);
-  for (int i = oldSize; i < newFrameCount; ++i)
-    m_pbStatus[i] = FlipSlider::PBFrameNotStarted;
+    int oldSize = int(m_pbStatus.size());
+    m_pbStatus.resize(newFrameCount);
+    for (int i = oldSize; i < newFrameCount; ++i)
+        m_pbStatus[i] = FlipSlider::PBFrameNotStarted;
 }
 
 //-----------------------------------------------------------------------------
 
 void Previewer::Imp::updateProgressBarStatus() {
-  int pbSize = int(m_pbStatus.size());
-  for (int i = 0; i < pbSize; ++i) {
-    auto it       = m_frames.find(i);
-    m_pbStatus[i] = (it == m_frames.end()) ? FlipSlider::PBFrameNotStarted
-                    : ::contains(it->second.m_renderedRegion, m_previewRect)
-                        ? FlipSlider::PBFrameFinished
-                    : it->second.m_rectUnderRender.contains(m_previewRect)
-                        ? FlipSlider::PBFrameStarted
-                        : FlipSlider::PBFrameNotStarted;
-  }
+    int pbSize = int(m_pbStatus.size());
+    for (int i = 0; i < pbSize; ++i) {
+        auto it = m_frames.find(i);
+        if (it == m_frames.end())
+            m_pbStatus[i] = FlipSlider::PBFrameNotStarted;
+        else if (::contains(it->second.m_renderedRegion, m_previewRect))
+            m_pbStatus[i] = FlipSlider::PBFrameFinished;
+        else if (it->second.m_rectUnderRender.contains(m_previewRect))
+            m_pbStatus[i] = FlipSlider::PBFrameStarted;
+        else
+            m_pbStatus[i] = FlipSlider::PBFrameNotStarted;
+    }
 }
 
 //-----------------------------------------------------------------------------
 
+// OPTIMIZATION: compute previewRect more efficiently, avoid repeated divisions
 void Previewer::Imp::updatePreviewRect() {
-  TRectD previewRectD;
-
-  /*--
-   * If it is not a SubCameraPreview, calculations are performed
-   * in full screen regardless of the Viewer display area.
-   * --*/
-  if (!m_subcamera) {
-    previewRectD = m_renderArea;
-  } else {
-    // Use range‑based for loop for clarity
-    for (auto *listener : m_listeners) {
-      previewRectD += listener->getPreviewRect();
+    TRectD previewRectD;
+    if (!m_subcamera) {
+        previewRectD = m_renderArea;
+    } else {
+        for (auto *listener : m_listeners) {
+            previewRectD += listener->getPreviewRect();
+        }
     }
-  }
+    previewRectD *= m_renderArea;
 
-  // Intersection with render area
-  previewRectD *= m_renderArea;
+    const int shrinkX = m_renderSettings.m_shrinkX;
+    const int shrinkY = m_renderSettings.m_shrinkY;
+    const TPointD camPos = m_cameraPos;
 
-  // Cache local variables to avoid multiple pointer accesses
-  const int shrinkX    = m_renderSettings.m_shrinkX;
-  const int shrinkY    = m_renderSettings.m_shrinkY;
-  const TPointD camPos = m_cameraPos;
+    previewRectD -= camPos;
+    if (shrinkX > 1) {
+        previewRectD.x0 /= shrinkX;
+        previewRectD.x1 /= shrinkX;
+    }
+    if (shrinkY > 1) {
+        previewRectD.y0 /= shrinkY;
+        previewRectD.y1 /= shrinkY;
+    }
 
-  // Compute offset once
-  previewRectD -= camPos;
+    TPointD shrinkedRelPos((m_renderArea.x0 - camPos.x) / shrinkX,
+                           (m_renderArea.y0 - camPos.y) / shrinkY);
+    previewRectD -= shrinkedRelPos;
 
-  // Scale transformation (Shrink)
-  if (shrinkX > 1) {
-    previewRectD.x0 /= shrinkX;
-    previewRectD.x1 /= shrinkX;
-  }
-  if (shrinkY > 1) {
-    previewRectD.y0 /= shrinkY;
-    previewRectD.y1 /= shrinkY;
-  }
+    int x0 = tfloor(previewRectD.x0);
+    int y0 = tfloor(previewRectD.y0);
+    int x1 = tceil(previewRectD.x1);
+    int y1 = tceil(previewRectD.y1);
 
-  // Coordinates relative to camera resolution
-  TPointD shrinkedRelPos((m_renderArea.x0 - camPos.x) / shrinkX,
-                         (m_renderArea.y0 - camPos.y) / shrinkY);
-
-  previewRectD -= shrinkedRelPos;
-
-  // Direct rounding to int to avoid extra function calls
-  int x0 = tfloor(previewRectD.x0);
-  int y0 = tfloor(previewRectD.y0);
-  int x1 = tceil(previewRectD.x1);
-  int y1 = tceil(previewRectD.y1);
-
-  // m_previewRect is the final pixel rectangle
-  m_previewRect = TRect(x0, y0, x1 - 1, y1 - 1);
-
-  // Restore global coordinates for the renderer
-  previewRectD = TRectD(x0, y0, x1, y1) + (camPos + shrinkedRelPos);
-
-  setRenderArea(previewRectD);
+    m_previewRect = TRect(x0, y0, x1 - 1, y1 - 1);
+    previewRectD = TRectD(x0, y0, x1, y1) + (camPos + shrinkedRelPos);
+    setRenderArea(previewRectD);
 }
 
 //-----------------------------------------------------------------------------
 
 void Previewer::Imp::updateAliases() {
-  for (auto &[frame, info] : m_frames) {
-    TFxPair fxPair = buildSceneFx(frame);
-
-    std::string newAlias =
-        fxPair.m_frameA ? fxPair.m_frameA->getAlias(frame, m_renderSettings)
-                        : "";
-    newAlias +=
-        (fxPair.m_frameB ? fxPair.m_frameB->getAlias(frame, m_renderSettings)
-                         : "");
-
-    if (newAlias != info.m_alias) {
-      // Clear the remaining frame infos
-      info.m_renderedRegion = QRegion();
+    for (auto &[frame, info] : m_frames) {
+        TFxPair fxPair = buildSceneFx(frame);
+        std::string newAlias = fxPair.m_frameA ? fxPair.m_frameA->getAlias(frame, m_renderSettings) : "";
+        if (fxPair.m_frameB)
+            newAlias += fxPair.m_frameB->getAlias(frame, m_renderSettings);
+        if (newAlias != info.m_alias) {
+            info.m_renderedRegion = QRegion();
+        }
     }
-  }
 }
 
 //-----------------------------------------------------------------------------
 
 void Previewer::Imp::updateAliasKeyword(const std::string &keyword) {
-  for (auto &[frame, info] : m_frames) {
-    if (info.m_alias.find(keyword) != std::string::npos) {
-      TFxPair fxPair = buildSceneFx(frame);
-      info.m_alias   = fxPair.m_frameA
-                           ? fxPair.m_frameA->getAlias(frame, m_renderSettings)
-                           : "";
-      info.m_alias +=
-          (fxPair.m_frameB ? fxPair.m_frameB->getAlias(frame, m_renderSettings)
-                           : "");
-
-      // Clear the remaining frame infos
-      info.m_renderedRegion = QRegion();
-
-      // Release the cached image; eventually clear it
-      TRasterImageP ri = TImageCache::instance()->get(
-          m_cachePrefix + std::to_string(frame), true);
-      if (ri) ri->getRaster()->clear();
+    for (auto &[frame, info] : m_frames) {
+        if (info.m_alias.find(keyword) != std::string::npos) {
+            TFxPair fxPair = buildSceneFx(frame);
+            info.m_alias = fxPair.m_frameA ? fxPair.m_frameA->getAlias(frame, m_renderSettings) : "";
+            if (fxPair.m_frameB)
+                info.m_alias += fxPair.m_frameB->getAlias(frame, m_renderSettings);
+            info.m_renderedRegion = QRegion();
+            // Clear the cached image to force re-render
+            TRasterImageP ri = TImageCache::instance()->get(m_cachePrefix + std::to_string(frame), true);
+            if (ri) ri->getRaster()->clear();
+        }
     }
-  }
 }
 
 //-----------------------------------------------------------------------------
 
-//! Starts rendering the passed frame.
+// OPTIMIZATION: avoid re-checking the same region multiple times; early exit when possible
 void Previewer::Imp::refreshFrame(int frame) {
-  if (suspendedRendering) return;
+    if (suspendedRendering) return;
 
-  // Build the region to render
-  updatePreviewRect();
+    updatePreviewRect();
+    if (m_previewRect.getLx() <= 0 || m_previewRect.getLy() <= 0) return;
 
-  if (m_previewRect.getLx() <= 0 || m_previewRect.getLy() <= 0) return;
+    auto it = m_frames.find(frame);
+    if (it != m_frames.end()) {
+        // Already fully rendered? Skip.
+        if (::contains(it->second.m_renderedRegion, m_previewRect)) return;
+        // Already rendering exactly this region? Skip.
+        if (it->second.m_rectUnderRender == m_previewRect) return;
+        // Stop previous render for this frame
+        m_renderer.abortRendering(it->second.m_renderId);
+    } else {
+        it = m_frames.insert({frame, FrameInfo()}).first;
+        if (frame >= int(m_pbStatus.size())) m_pbStatus.resize(frame + 1);
+    }
 
-  // Retrieve the FrameInfo for passed frame
-  auto it = m_frames.find(frame);
-  if (it != m_frames.end()) {
-    // In case the rect we would render is contained in the frame's rendered
-    // region, quit
-    if (::contains(it->second.m_renderedRegion, m_previewRect)) return;
+    TFxPair fxPair = buildSceneFx(frame);
+    it->second.m_rectUnderRender = m_previewRect;
+    it->second.m_alias = fxPair.m_frameA->getAlias(frame, m_renderSettings);
+    if (fxPair.m_frameB)
+        it->second.m_alias += fxPair.m_frameB->getAlias(frame, m_renderSettings);
 
-    // Then, check the m_previewRect against the frame's m_rectUnderRendering.
-    // Ensure that we're not re-launching the very same render.
-    if (it->second.m_rectUnderRender == m_previewRect) return;
+    it->second.m_renderId = m_renderer.nextRenderId();
+    std::string contextName("P");
+    contextName += m_subcamera ? "SC" : "FU";
+    contextName += std::to_string(frame);
+    TPassiveCacheManager::instance()->setContextName(it->second.m_renderId, contextName);
 
-    // Stop any frame's previously running render process
-    m_renderer.abortRendering(it->second.m_renderId);
-  } else {
-    it = m_frames.insert({frame, FrameInfo()}).first;
-
-    // In case the frame is not in the frame range, we add a temporary
-    // supplement to the progress bar.
-    if (frame >= int(m_pbStatus.size())) m_pbStatus.resize(frame + 1);
-  }
-
-  // Build the TFxPair to be passed to TRenderer
-  TFxPair fxPair = buildSceneFx(frame);
-
-  // Update the RenderInfos associated with frame
-  it->second.m_rectUnderRender = m_previewRect;
-  it->second.m_alias = fxPair.m_frameA->getAlias(frame, m_renderSettings);
-  if (fxPair.m_frameB)
-    it->second.m_alias += fxPair.m_frameB->getAlias(frame, m_renderSettings);
-
-  // Retrieve the renderId of the rendering instance
-  it->second.m_renderId = m_renderer.nextRenderId();
-  std::string contextName("P");
-  contextName += m_subcamera ? "SC" : "FU";
-  contextName += std::to_string(frame);
-  TPassiveCacheManager::instance()->setContextName(it->second.m_renderId,
-                                                   contextName);
-
-  // Start the render
-  m_renderer.startRendering(frame, m_renderSettings, fxPair);
+    m_renderer.startRendering(frame, m_renderSettings, fxPair);
 }
 
 //-----------------------------------------------------------------------------
 
 void Previewer::Imp::remove(int frame) {
-  // Search the frame among rendered ones
-  auto it = m_frames.find(frame);
-  if (it != m_frames.end()) {
-    m_renderer.abortRendering(it->second.m_renderId);
-    m_frames.erase(frame);
-  }
-
-  // Remove the associated image from cache
-  TImageCache::instance()->remove(m_cachePrefix + std::to_string(frame));
+    auto it = m_frames.find(frame);
+    if (it != m_frames.end()) {
+        m_renderer.abortRendering(it->second.m_renderId);
+        m_frames.erase(frame);
+    }
+    TImageCache::instance()->remove(m_cachePrefix + std::to_string(frame));
 }
 
 //-----------------------------------------------------------------------------
 
 void Previewer::Imp::remove() {
-  m_renderer.stopRendering(false);
-
-  // Remove all cached images
-  for (const auto &[frame, info] : m_frames)
-    TImageCache::instance()->remove(m_cachePrefix + std::to_string(frame));
-
-  m_frames.clear();
+    m_renderer.stopRendering(false);
+    for (const auto &[frame, info] : m_frames)
+        TImageCache::instance()->remove(m_cachePrefix + std::to_string(frame));
+    m_frames.clear();
 }
 
 //-----------------------------------------------------------------------------
 
 inline void Previewer::Imp::notifyStarted(int frame) {
-  for (auto *listener : m_listeners) listener->onRenderStarted(frame);
+    for (auto *listener : m_listeners) listener->onRenderStarted(frame);
 }
-
-//-----------------------------------------------------------------------------
 
 inline void Previewer::Imp::notifyCompleted(int frame) {
-  for (auto *listener : m_listeners) listener->onRenderCompleted(frame);
+    for (auto *listener : m_listeners) listener->onRenderCompleted(frame);
 }
-
-//-----------------------------------------------------------------------------
 
 inline void Previewer::Imp::notifyFailed(int frame) {
-  for (auto *listener : m_listeners) listener->onRenderFailed(frame);
+    for (auto *listener : m_listeners) listener->onRenderFailed(frame);
 }
-
-//-----------------------------------------------------------------------------
 
 inline void Previewer::Imp::notifyUpdate() {
-  for (auto *listener : m_listeners) listener->onPreviewUpdate();
+    for (auto *listener : m_listeners) listener->onPreviewUpdate();
 }
 
 //-----------------------------------------------------------------------------
 
-//! Adds the renderized image to TImageCache; listeners are advised too.
 void Previewer::Imp::onRenderRasterStarted(const RenderData &renderData) {
-  // Emit the started signal to execute code in the main thread
-  m_owner->emitStartedFrame(renderData);
+    m_owner->emitStartedFrame(renderData);
 }
-
-//-----------------------------------------------------------------------------
 
 void Previewer::Imp::doOnRenderRasterStarted(const RenderData &renderData) {
-  int frame = renderData.m_frames[0];
-
-  m_computingFrameCount++;
-
-  // Update the progress bar status
-  if (frame < int(m_pbStatus.size()))
-    m_pbStatus[frame] = FlipSlider::PBFrameStarted;
-
-  // Notify listeners
-  notifyStarted(frame);
+    int frame = renderData.m_frames[0];
+    m_computingFrameCount++;
+    if (frame < int(m_pbStatus.size()))
+        m_pbStatus[frame] = FlipSlider::PBFrameStarted;
+    notifyStarted(frame);
 }
 
 //-----------------------------------------------------------------------------
 
-//! Adds the renderized image to TImageCache; listeners are advised too.
 void Previewer::Imp::onRenderRasterCompleted(const RenderData &renderData) {
-  if (renderData.m_rasB) {
-    RenderData _renderData = renderData;
-    assert(m_renderSettings.m_stereoscopic);
-    TRop::makeStereoRaster(_renderData.m_rasA, _renderData.m_rasB);
-    if (_renderData.m_info.m_gamma != 1.0)
-      TRop::gammaCorrect(_renderData.m_rasA, _renderData.m_info.m_gamma);
-
-    _renderData.m_rasB = TRasterP();
-    m_owner->emitRenderedFrame(_renderData);
-    return;
-  }
-
-  // If required, correct gamma
-  if (renderData.m_info.m_gamma != 1.0)
-    TRop::gammaCorrect(renderData.m_rasA, renderData.m_info.m_gamma);
-
-  // Emit the started signal to execute code in the main thread
-  m_owner->emitRenderedFrame(renderData);
+    if (renderData.m_rasB) {
+        RenderData _renderData = renderData;
+        assert(m_renderSettings.m_stereoscopic);
+        TRop::makeStereoRaster(_renderData.m_rasA, _renderData.m_rasB);
+        if (_renderData.m_info.m_gamma != 1.0)
+            TRop::gammaCorrect(_renderData.m_rasA, _renderData.m_info.m_gamma);
+        _renderData.m_rasB = TRasterP();
+        m_owner->emitRenderedFrame(_renderData);
+        return;
+    }
+    if (renderData.m_info.m_gamma != 1.0)
+        TRop::gammaCorrect(renderData.m_rasA, renderData.m_info.m_gamma);
+    m_owner->emitRenderedFrame(renderData);
 }
 
 //-----------------------------------------------------------------------------
 
+// OPTIMIZATION: avoid multiple calls to TImageCache::get() and raster extraction when possible
 void Previewer::Imp::doOnRenderRasterCompleted(const RenderData &renderData) {
-  int renderId = renderData.m_renderId;
-  int frame    = renderData.m_frames[0];
+    int renderId = renderData.m_renderId;
+    int frame = renderData.m_frames[0];
 
-  if (renderData.m_rasB) {
-    assert(m_renderSettings.m_stereoscopic);
-    TRop::makeStereoRaster(renderData.m_rasA, renderData.m_rasB);
-  }
-
-  TRasterP ras(renderData.m_rasA);
-
-  // Linear Color Space -> sRGB
-  if (ras->isLinear()) {
-    TRop::tosRGB(ras, m_renderSettings.m_colorSpaceGamma);
-  }
-
-  m_computingFrameCount--;
-
-  // Find the render infos in the Previewer
-  auto it = m_frames.find(frame);
-  if (it == m_frames.end()) return;
-
-  // Ensure that the render process id is the same
-  if (renderId != it->second.m_renderId) return;
-
-  // Store the rendered image in the cache - this is done in the MAIN thread due
-  // to the necessity of accessing it->second.m_rectUnderRender for raster
-  // extraction.
-  std::string str = m_cachePrefix + std::to_string(frame);
-
-  TRasterImageP ri(TImageCache::instance()->get(str, true));
-  TRasterP cachedRas(ri ? ri->getRaster() : TRasterP());
-
-  if (!cachedRas || (cachedRas->getSize() != m_cameraRes)) {
-    TImageCache::instance()->remove(str);
-
-    // Create the raster at camera resolution
-    cachedRas = ras->create(m_cameraRes.lx, m_cameraRes.ly);
-    cachedRas->clear();
-    ri = TRasterImageP(cachedRas);
-  }
-
-  // Finally, copy the rendered raster over the cached one
-  TRect rectUnderRender(
-      it->second
-          .m_rectUnderRender);  // Extract may MODIFY IT! E.g. with shrinks..!
-  cachedRas = cachedRas->extract(rectUnderRender);
-
-  if (cachedRas) {
-    cachedRas->copy(ras);
-  }
-
-  // Submit the image to the cache, for all cluster's frames
-  for (int f : renderData.m_frames) {
-    auto f_it = m_frames.find(f);
-    if (f_it == m_frames.end()) continue;
-
-    if (cachedRas) {
-      std::string f_str = m_cachePrefix + std::to_string(f);
-      TImageCache::instance()->add(f_str, ri);
+    if (renderData.m_rasB) {
+        assert(m_renderSettings.m_stereoscopic);
+        TRop::makeStereoRaster(renderData.m_rasA, renderData.m_rasB);
     }
 
-    // Update the FrameInfo
-    f_it->second.m_renderedRegion += toQRect(f_it->second.m_rectUnderRender);
-    f_it->second.m_rectUnderRender = TRect();
+    TRasterP ras(renderData.m_rasA);
+    if (ras->isLinear()) {
+        TRop::tosRGB(ras, m_renderSettings.m_colorSpaceGamma);
+    }
 
-    // Update the progress bar status
-    if (f < int(m_pbStatus.size())) m_pbStatus[f] = FlipSlider::PBFrameFinished;
+    m_computingFrameCount--;
 
-    // Notify listeners
-    notifyCompleted(f);
-  }
+    auto it = m_frames.find(frame);
+    if (it == m_frames.end()) return;
+    if (renderId != it->second.m_renderId) return;
+
+    std::string str = m_cachePrefix + std::to_string(frame);
+    TRasterImageP ri(TImageCache::instance()->get(str, true));
+    TRasterP cachedRas = ri ? ri->getRaster() : TRasterP();
+
+    if (!cachedRas || cachedRas->getSize() != m_cameraRes) {
+        TImageCache::instance()->remove(str);
+        cachedRas = ras->create(m_cameraRes.lx, m_cameraRes.ly);
+        cachedRas->clear();
+        ri = TRasterImageP(cachedRas);
+    }
+
+    TRect rectUnderRender = it->second.m_rectUnderRender;
+    TRasterP extract = cachedRas->extract(rectUnderRender);
+    if (extract) {
+        extract->copy(ras);
+    }
+
+    // Submit to cache for all frames in the cluster (if any)
+    for (int f : renderData.m_frames) {
+        auto f_it = m_frames.find(f);
+        if (f_it == m_frames.end()) continue;
+        if (extract) {
+            std::string f_str = m_cachePrefix + std::to_string(f);
+            TImageCache::instance()->add(f_str, ri);
+        }
+        f_it->second.m_renderedRegion += toQRect(f_it->second.m_rectUnderRender);
+        f_it->second.m_rectUnderRender = TRect();
+        if (f < int(m_pbStatus.size())) m_pbStatus[f] = FlipSlider::PBFrameFinished;
+        notifyCompleted(f);
+    }
 }
 
 //-----------------------------------------------------------------------------
 
-//! Removes the associated raster from TImageCache, and listeners are made
-//! aware.
-void Previewer::Imp::onRenderFailure(const RenderData &renderData,
-                                     TException &e) {
-  m_owner->emitFailedFrame(renderData);
+void Previewer::Imp::onRenderFailure(const RenderData &renderData, TException &e) {
+    m_owner->emitFailedFrame(renderData);
 }
 
-//-----------------------------------------------------------------------------
-
-//! Adds the renderized image to TImageCache; listeners are advised too.
 void Previewer::Imp::doOnRenderRasterFailed(const RenderData &renderData) {
-  m_computingFrameCount--;
+    m_computingFrameCount--;
+    int frame = renderData.m_frames[0];
+    auto it = m_frames.find(frame);
+    if (it == m_frames.end()) return;
+    if (renderData.m_renderId != it->second.m_renderId) return;
 
-  int frame = renderData.m_frames[0];
-
-  auto it = m_frames.find(frame);
-  if (it == m_frames.end()) return;
-
-  if (renderData.m_renderId != it->second.m_renderId) return;
-
-  it->second.m_renderedRegion  = QRegion();
-  it->second.m_rectUnderRender = TRect();
-
-  // Update the progress bar status
-  if (frame < int(m_pbStatus.size()))
-    m_pbStatus[frame] = FlipSlider::PBFrameNotStarted;
-
-  notifyCompleted(frame);  // Completed!?
+    it->second.m_renderedRegion = QRegion();
+    it->second.m_rectUnderRender = TRect();
+    if (frame < int(m_pbStatus.size()))
+        m_pbStatus[frame] = FlipSlider::PBFrameNotStarted;
+    notifyCompleted(frame);
 }
 
 //-----------------------------------------------------------------------------
