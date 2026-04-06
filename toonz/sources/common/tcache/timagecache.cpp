@@ -724,13 +724,13 @@ public:
     m_reservedMemory = (TINT64)(TSystem::getMemorySize(true) * 0.10);
     if (m_reservedMemory < 64 * 1024) m_reservedMemory = 64 * 1024;
 
-    // IMPROVEMENT: Set max cache size to 80% of physical RAM (or 80% of reserved? Use total RAM)
+    // Set max cache size to 90% of physical RAM (or 90% of reserved? Use total RAM)
     TINT64 totalRAM = TSystem::getMemorySize(true); // in KB
     if (totalRAM <= 0) totalRAM = 4 * 1024 * 1024; // fallback 4GB
-    m_maxCacheBytes = (TUINT64)(totalRAM * 0.80); // 80% of total RAM
+    m_maxCacheBytes = (TUINT64)(totalRAM * 0.90); // 90% of total RAM
     if (m_maxCacheBytes < 64 * 1024) m_maxCacheBytes = 64 * 1024; // minimum 64 MB
     // Target for aggressive reduction: 70% of max (i.e., 56% of total RAM)
-    m_targetCacheBytes = (TUINT64)(m_maxCacheBytes * 0.85);
+    m_targetCacheBytes = (TUINT64)(m_maxCacheBytes * 0.95);
   }
 
   ~Imp() {
@@ -784,7 +784,7 @@ public:
                                                          // id, value is main id
   // memoria fisica totale della macchina che non puo' essere utilizzata;
   TINT64 m_reservedMemory;
-  // IMPROVEMENT: new members for cache limits
+  // new members for cache limits
   TUINT64 m_maxCacheBytes;     // maximum allowed memory usage (uncompressed + compressed-in-mem)
   TUINT64 m_targetCacheBytes;  // target after reduction
   TThread::Mutex m_mutex;
@@ -940,7 +940,7 @@ bool TImageCache::Imp::ensureMemoryFor(TUINT32 neededBytes) {
 void TImageCache::Imp::doCompress() {
   TThread::MutexLocker sl(&m_mutex);
 
-  // IMPROVEMENT: compress also if total memory exceeds max cache size
+  // compress also if total memory exceeds max cache size
   bool memLow = notEnoughMemory();
   if (!memLow && getTotalMemUsage() <= m_maxCacheBytes)
     return; // no need to compress
@@ -1283,7 +1283,7 @@ void TImageCache::Imp::add(const std::string &id, const TImageP &img,
                            bool overwrite) {
   TThread::MutexLocker sl(&m_mutex);
 
-  // IMPROVEMENT: if the new image is uncompressed, estimate its size and ensure memory
+  // if the new image is uncompressed, estimate its size and ensure memory
   TUINT32 newImageSize = 0;
   {
     TRasterImageP ri = img;
