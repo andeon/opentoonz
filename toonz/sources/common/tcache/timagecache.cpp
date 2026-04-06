@@ -525,7 +525,12 @@ CompressedOnDiskCacheItem::CompressedOnDiskCacheItem(
 
 CompressedOnDiskCacheItem::~CompressedOnDiskCacheItem() {
   delete m_imageInfo;
-  TSystem::deleteFile(m_fp);
+  if (m_fp.isEmpty()) return;
+  try {
+    TSystem::deleteFile(m_fp);
+  } catch (...) {
+    // Ignore any error do not let it escape the destructor.
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -629,7 +634,12 @@ UncompressedOnDiskCacheItem::UncompressedOnDiskCacheItem(const TFilePath &fp,
 
 UncompressedOnDiskCacheItem::~UncompressedOnDiskCacheItem() {
   delete m_imageInfo;
-  TSystem::deleteFile(m_fp);
+  if (m_fp.isEmpty()) return;
+  try {
+    TSystem::deleteFile(m_fp);
+  } catch (...) {
+    // Ignore any error do not let it escape the destructor.
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -713,6 +723,14 @@ public:
 
     m_reservedMemory = (TINT64)(TSystem::getMemorySize(true) * 0.10);
     if (m_reservedMemory < 64 * 1024) m_reservedMemory = 64 * 1024;
+
+    // IMPROVEMENT: Set max cache size to 80% of physical RAM (or 80% of reserved? Use total RAM)
+    TINT64 totalRAM = TSystem::getMemorySize(true); // in KB
+    if (totalRAM <= 0) totalRAM = 4 * 1024 * 1024; // fallback 4GB
+    m_maxCacheBytes = (TUINT64)(totalRAM * 0.80); // 80% of total RAM
+    if (m_maxCacheBytes < 64 * 1024) m_maxCacheBytes = 64 * 1024; // minimum 64 MB
+    // Target for aggressive reduction: 70% of max (i.e., 56% of total RAM)
+    m_targetCacheBytes = (TUINT64)(m_maxCacheBytes * 0.85);
   }
 
   ~Imp() {
@@ -726,6 +744,15 @@ public:
     else
       return TSystem::memoryShortage();
   }
+
+  // IMPROVEMENT: compute total memory used by uncompressed + compressed-in-memory items
+  TUINT64 getTotalMemUsage() const;
+
+  // IMPROVEMENT: ensure memory usage is below target (compress/move to disk)
+  void reduceMemoryToLimit();
+
+  // IMPROVEMENT: ensure we have enough free memory for a new allocation (called before adding)
+  bool ensureMemoryFor(TUINT32 neededBytes);
 
   void doCompress();
   void doCompress(std::string id);
@@ -757,6 +784,9 @@ public:
                                                          // id, value is main id
   // memoria fisica totale della macchina che non puo' essere utilizzata;
   TINT64 m_reservedMemory;
+  // IMPROVEMENT: new members for cache limits
+  TUINT64 m_maxCacheBytes;     // maximum allowed memory usage (uncompressed + compressed-in-mem)
+  TUINT64 m_targetCacheBytes;  // target after reduction
   TThread::Mutex m_mutex;
 
   static int m_fileid;
@@ -800,21 +830,125 @@ inline TINT32 hasExternalReferences(const TImageP &img) {
   return std::max(refCount, img->getRefCount()) > 1;
 }
 }  // namespace
+
+//------------------------------------------------------------------------------
+// IMPROVEMENT: implementation of getTotalMemUsage
+TUINT64 TImageCache::Imp::getTotalMemUsage() const {
+  TUINT64 total = 0;
+  for (const auto &item : m_uncompressedItems) {
+    total += item.second->getSize();
+  }
+  for (const auto &item : m_compressedItems) {
+    // Only count compressed items that are in memory (CompressedOnMemoryCacheItem)
+    CompressedOnMemoryCacheItemP cmem = item.second;
+    if (cmem) {
+      total += item.second->getSize();
+    }
+    // CompressedOnDiskCacheItem and UncompressedOnDiskCacheItem have getSize() == 0
+  }
+  return total;
+}
+
+//------------------------------------------------------------------------------
+// IMPROVEMENT: reduce memory to target by compressing oldest items
+void TImageCache::Imp::reduceMemoryToLimit() {
+  // We compress items until total memory <= m_targetCacheBytes OR no more compressible items
+  bool compressedAny = false;
+  do {
+    compressedAny = false;
+    // First try to compress uncompressed items (oldest first)
+    std::map<TUINT32, std::string>::iterator itu = m_itemHistory.begin();
+    while (itu != m_itemHistory.end() && getTotalMemUsage() > m_targetCacheBytes) {
+      std::map<std::string, CacheItemP>::iterator it =
+          m_uncompressedItems.find(itu->second);
+      if (it == m_uncompressedItems.end()) {
+        ++itu;
+        continue;
+      }
+      CacheItemP item = it->second;
+      UncompressedOnMemoryCacheItemP uitem = item;
+      if (item->m_cantCompress ||
+          (uitem && (!uitem->m_image || hasExternalReferences(uitem->m_image)))) {
+        ++itu;
+        continue;
+      }
+      std::string id = it->first;
+      // Compress this item (similar to doCompress but forced)
+#ifdef _WIN32
+      assert(itu->first == it->second->m_historyCount);
+      itu = m_itemHistory.erase(itu);
+      m_itemsByImagePointer.erase(getPointer(item->getImage()));
+      m_uncompressedItems.erase(it);
+#else
+      std::map<TUINT32, std::string>::iterator itu2 = itu;
+      itu++;
+      m_itemHistory.erase(itu2);
+      m_itemsByImagePointer.erase(item->getImage().getPointer());
+      m_uncompressedItems.erase(it);
+#endif
+      if (m_compressedItems.find(id) == m_compressedItems.end()) {
+        assert(uitem);
+        item->m_cantCompress = true;
+        CacheItemP newItem = new CompressedOnMemoryCacheItem(item->getImage());
+        item->m_cantCompress = false;
+        if (newItem->getSize() == 0) {
+          // Not enough memory for compressed buffer, write to disk
+          assert(m_rootDir != TFilePath());
+          TFilePath fp = m_rootDir + TFilePath(std::to_string(TImageCache::Imp::m_fileid++));
+          newItem = new UncompressedOnDiskCacheItem(fp, item->getImage(),
+                                                    item->getImage()->getPalette());
+        }
+        m_compressedItems[id] = newItem;
+      }
+      compressedAny = true;
+      // Restart scanning from beginning because iterators invalidated
+      itu = m_itemHistory.begin();
+    }
+
+    // If still above target, move compressed-in-memory items to disk
+    if (getTotalMemUsage() > m_targetCacheBytes) {
+      std::map<std::string, CacheItemP>::iterator itc = m_compressedItems.begin();
+      for (; itc != m_compressedItems.end() && getTotalMemUsage() > m_targetCacheBytes; ++itc) {
+        CacheItemP item = itc->second;
+        if (item->m_cantCompress) continue;
+        CompressedOnMemoryCacheItemP citem = itc->second;
+        if (citem) {
+          assert(m_rootDir != TFilePath());
+          TFilePath fp = m_rootDir + TFilePath(std::to_string(TImageCache::Imp::m_fileid++));
+          CacheItemP newItem = new CompressedOnDiskCacheItem(
+              fp, citem->m_compressedRas, citem->m_builder->clone(),
+              citem->m_imageInfo->clone(), citem->m_palette);
+          itc->second = newItem;
+          compressedAny = true;
+        }
+      }
+    }
+  } while (compressedAny && getTotalMemUsage() > m_targetCacheBytes);
+}
+
+//------------------------------------------------------------------------------
+// IMPROVEMENT: ensure we can add an image of given size without exceeding max
+bool TImageCache::Imp::ensureMemoryFor(TUINT32 neededBytes) {
+  if (getTotalMemUsage() + neededBytes <= m_maxCacheBytes)
+    return true;
+  reduceMemoryToLimit();
+  return (getTotalMemUsage() + neededBytes <= m_maxCacheBytes);
+}
+
 //------------------------------------------------------------------------------
 
 void TImageCache::Imp::doCompress() {
-  // se la memoria usata per mantenere le immagini decompresse e' superiore
-  // a un dato valore, comprimo alcune immagini non compresse non checked-out
-  // in modo da liberare memoria
-
-  // per il momento scorre tutte le immagini alla ricerca di immagini
-  // non compresse non checked-out
-
   TThread::MutexLocker sl(&m_mutex);
 
+  // IMPROVEMENT: compress also if total memory exceeds max cache size
+  bool memLow = notEnoughMemory();
+  if (!memLow && getTotalMemUsage() <= m_maxCacheBytes)
+    return; // no need to compress
+
+  // Use the same logic as before but with combined condition
   std::map<TUINT32, std::string>::iterator itu = m_itemHistory.begin();
 
-  for (; itu != m_itemHistory.end() && notEnoughMemory();) {
+  for (; itu != m_itemHistory.end() && (memLow || getTotalMemUsage() > m_maxCacheBytes);) {
     std::map<std::string, CacheItemP>::iterator it =
         m_uncompressedItems.find(itu->second);
     assert(it != m_uncompressedItems.end());
@@ -860,22 +994,21 @@ void TImageCache::Imp::doCompress() {
       m_compressedItems[id] = newItem;
       item                  = CacheItemP();
       uitem                 = UncompressedOnMemoryCacheItemP();
-      // doCompress();//restart, since iterators could have been changed (see
-      // comment above)
-      // return;
+      // restart scanning
       itu = m_itemHistory.begin();
     }
+    // Re-check conditions after each compression
+    memLow = notEnoughMemory();
   }
 
   // se il quantitativo di memoria utilizzata e' superiore a un dato valore,
-  // sposto
-  // su disco alcune immagini compresse in modo da liberare memoria
+  // sposto su disco alcune immagini compresse in modo da liberare memoria
 
-  if (itu != m_itemHistory.end())  // memory is enough!
+  if (!memLow && getTotalMemUsage() <= m_maxCacheBytes)
     return;
 
   std::map<std::string, CacheItemP>::iterator itc = m_compressedItems.begin();
-  for (; itc != m_compressedItems.end() && notEnoughMemory(); ++itc) {
+  for (; itc != m_compressedItems.end() && (memLow || getTotalMemUsage() > m_maxCacheBytes); ++itc) {
     CacheItemP item = itc->second;
     if (item->m_cantCompress) continue;
 
@@ -892,6 +1025,7 @@ void TImageCache::Imp::doCompress() {
       itc->second                   = 0;
       m_compressedItems[itc->first] = newItem;
     }
+    memLow = notEnoughMemory();
   }
 }
 
@@ -954,38 +1088,6 @@ void TImageCache::Imp::doCompress(std::string id) {
   uitem                 = UncompressedOnMemoryCacheItemP();
 }
 
-/*
-  // se il quantitativo di memoria utilizzata e' superiore a un dato valore,
-  sposto
-  // su disco alcune immagini compresse in modo da liberare memoria
-
-  if (itu != m_itemHistory.end()) //memory is enough!
-    return;
-
-  std::map<std::string, CacheItemP>::iterator itc = m_compressedItems.begin();
-  for ( ; itc != m_compressedItems.end() && notEnoughMemory(); ++itc)
-        {
-          CacheItemP item = itc->second;
-          if (item->m_cantCompress)
-                  continue;
-
-          CompressedOnMemoryCacheItemP citem = itc->second;
-          if (citem)
-                {
-                  assert(m_rootDir!=TFilePath());
-                  TFilePath fp = m_rootDir +
-  TFilePath(toString(TImageCache::Imp::m_fileid++));
-
-                  CacheItemP newItem = new CompressedOnDiskCacheItem(fp,
-  citem->m_compressedRas,
-                                                                                                                                                                                                                           citem->m_builder->clone(), citem->m_imageInfo->clone());
-
-                  itc->second = 0;
-                  m_compressedItems[itc->first] = newItem;
-                }
-        }
-  */
-
 //------------------------------------------------------------------------------
 
 UCHAR *TImageCache::Imp::compressAndMalloc(TUINT32 size) {
@@ -994,11 +1096,6 @@ UCHAR *TImageCache::Imp::compressAndMalloc(TUINT32 size) {
   TThread::MutexLocker sl(&m_mutex);
 
   TheCodec::instance()->reset();
-
-  // if (size!=0)
-  //  size = size>>10;
-
-  // assert(size==0 || TBigMemoryManager::instance()->isActive());
 
   std::map<TUINT32, std::string>::iterator itu = m_itemHistory.begin();
   while (
@@ -1185,6 +1282,30 @@ void TImageCache::add(const std::string &id, const TImageP &img,
 void TImageCache::Imp::add(const std::string &id, const TImageP &img,
                            bool overwrite) {
   TThread::MutexLocker sl(&m_mutex);
+
+  // IMPROVEMENT: if the new image is uncompressed, estimate its size and ensure memory
+  TUINT32 newImageSize = 0;
+  {
+    TRasterImageP ri = img;
+    if (ri && ri->getRaster()) {
+      newImageSize = ri->getRaster()->getLy() * ri->getRaster()->getRowSize();
+    }
+#ifndef TNZCORE_LIGHT
+    else {
+      TToonzImageP ti = img;
+      if (ti) {
+        TDimension size = ti->getSize();
+        newImageSize = size.lx * size.ly * sizeof(TPixelCM32);
+      }
+    }
+#endif
+  }
+  // If we are going to add as uncompressed (which we always do initially), check memory
+  if (newImageSize > 0 && !ensureMemoryFor(newImageSize)) {
+    // Not enough memory even after reduction: refuse to add? Or force compress later.
+    // We'll still add but then doCompress will handle it. For safety, call reduceMemoryToLimit again.
+    reduceMemoryToLimit();
+  }
 
 #ifdef LEVO
   std::map<std::string, CacheItemP>::iterator it1 = m_uncompressedItems.begin();
