@@ -1867,66 +1867,78 @@ void TXshSimpleLevel::invalidateFrame(const TFrameId& fid) {
 
 void TXshSimpleLevel::initializePalette() {
   ToonzScene* scene = getScene();
-  assert(scene);
+  if (!scene) {
+    setPalette(new TPalette());
+    return;
+  }
 
-  TFilePath fullPath;
   TPalette* palette = nullptr;
   int type          = getType();
-  switch (type) {
-  case TZP_XSHLEVEL:
-    fullPath =
-        scene->decodeFilePath(TFilePath("+palettes\\Toonz_Raster_Palette.tpl"));
-    if (TSystem::doesExistFileOrLevel(fullPath)) {
-      palette = new TPalette();
-      TIStream is(fullPath);
-      is >> palette;
-    } else {
-      TFilePath globalPath(
-          ToonzFolder::getStudioPaletteFolder().getQString().append(
-              "\\Global Palettes\\Default "
-              "Palettes\\Toonz_Raster_Palette.tpl"));
-      if (TSystem::doesExistFileOrLevel(globalPath)) {
+
+  // Safely attempt to load palette from template files (exception-safe)
+  try {
+    if (type == TZP_XSHLEVEL) {
+      TFilePath fullPath = scene->decodeFilePath(
+          TFilePath("+palettes\\Toonz_Raster_Palette.tpl"));
+      if (TSystem::doesExistFileOrLevel(fullPath)) {
         palette = new TPalette();
-        TIStream is(globalPath);
+        TIStream is(fullPath);
         is >> palette;
-        TSystem::copyFile(fullPath, globalPath);
+      } else {
+        TFilePath globalPath(
+            ToonzFolder::getStudioPaletteFolder().getQString().append(
+                "\\Global Palettes\\Default "
+                "Palettes\\Toonz_Raster_Palette.tpl"));
+        if (TSystem::doesExistFileOrLevel(globalPath)) {
+          palette = new TPalette();
+          TIStream is(globalPath);
+          is >> palette;
+          TSystem::copyFile(fullPath, globalPath);
+        }
       }
-    }
-    break;
-  case PLI_XSHLEVEL:
-    fullPath =
-        scene->decodeFilePath(TFilePath("+palettes\\Toonz_Vector_Palette.tpl"));
-    if (TSystem::doesExistFileOrLevel(fullPath)) {
-      palette = new TPalette();
-      TIStream is(fullPath);
-      is >> palette;
-    } else {
-      TFilePath globalPath(
-          ToonzFolder::getStudioPaletteFolder().getQString().append(
-              "\\Global Palettes\\Default "
-              "Palettes\\Toonz_Vector_Palette.tpl"));
-      if (TSystem::doesExistFileOrLevel(globalPath)) {
+    } else if (type == PLI_XSHLEVEL) {
+      TFilePath fullPath = scene->decodeFilePath(
+          TFilePath("+palettes\\Toonz_Vector_Palette.tpl"));
+      if (TSystem::doesExistFileOrLevel(fullPath)) {
         palette = new TPalette();
-        TIStream is(globalPath);
+        TIStream is(fullPath);
         is >> palette;
-        TSystem::copyFile(fullPath, globalPath);
+      } else {
+        TFilePath globalPath(
+            ToonzFolder::getStudioPaletteFolder().getQString().append(
+                "\\Global Palettes\\Default "
+                "Palettes\\Toonz_Vector_Palette.tpl"));
+        if (TSystem::doesExistFileOrLevel(globalPath)) {
+          palette = new TPalette();
+          TIStream is(globalPath);
+          is >> palette;
+          TSystem::copyFile(fullPath, globalPath);
+        }
       }
+    } else if (type == OVL_XSHLEVEL) {
+      palette = FullColorPalette::instance()->getPalette(getScene());
     }
-    break;
-  case OVL_XSHLEVEL:
-    palette = FullColorPalette::instance()->getPalette(getScene());
-  default:
-    break;
+  } catch (...) {
+    // Ignore any exceptions during file loading; fallback will be used
+    palette = nullptr;
   }
 
+  // Fallback: create an empty palette if needed
+  if (!palette && (type == TZP_XSHLEVEL || type == PLI_XSHLEVEL)) {
+    palette = new TPalette();
+  }
+  if (!palette && type == OVL_XSHLEVEL) {
+    palette = new TPalette();
+  }
+
+  // Assign the palette (guarantee it is never null)
   if (palette) {
-    if (type != OVL_XSHLEVEL) {
-      palette->setPaletteName(getName());
-    }
+    if (type != OVL_XSHLEVEL) palette->setPaletteName(getName());
     setPalette(palette);
+  } else {
+    setPalette(new TPalette());
   }
 }
-
 //-----------------------------------------------------------------------------
 
 void TXshSimpleLevel::initializeResolutionAndDpi(const TDimension& dim,
