@@ -51,7 +51,7 @@
 #include <QStackedWidget>
 #include <QSettings>
 #include <QApplication>
-#include <QGLPixelBuffer>
+#include <QOpenGLFramebufferObject>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QButtonGroup>
@@ -1238,7 +1238,7 @@ void MainWindow::onCurrentRoomChanged(int newRoomIndex) {
     Room *room = getRoom(i);
     DockLayout *layout = room->dockLayout();
     if (!layout) continue;
-    
+
     // Iterate only through docked panels (shallow traversal, not recursive)
     for (int j = 0; j < layout->count(); j++) {
       TPanel *panel = static_cast<TPanel *>(layout->itemAt(j)->widget());
@@ -1251,7 +1251,7 @@ void MainWindow::onCurrentRoomChanged(int newRoomIndex) {
   // Process room-bound panels (only visibility changes, no reparenting)
   for (TPanel *panel : panelsToUpdate) {
     QString boundRoomName = panel->getBoundRoomName();
-    
+
     if (boundRoomName == newRoomName) {
       // Show panel when entering its bound room
       if (panel->isHidden()) {
@@ -1294,7 +1294,7 @@ void MainWindow::onCurrentRoomChanged(int newRoomIndex) {
       pane->show();
     }
   }
-  
+
   // Handle room-bound persistent popups (DVGui::Dialog-based)
   // AudioRecordingPopup
   AudioRecordingPopup *audioPopup = findChild<AudioRecordingPopup *>();
@@ -1310,7 +1310,7 @@ void MainWindow::onCurrentRoomChanged(int newRoomIndex) {
       }
     }
   }
-  
+
   // PltGizmoPopup
   PltGizmoPopup *pltGizmoPopup = findChild<PltGizmoPopup *>();
   if (pltGizmoPopup && pltGizmoPopup->isRoomBound()) {
@@ -1325,7 +1325,7 @@ void MainWindow::onCurrentRoomChanged(int newRoomIndex) {
       }
     }
   }
-  
+
   m_oldRoomIndex = newRoomIndex;
   TSelection::setCurrent(0);
 }
@@ -1344,7 +1344,7 @@ void MainWindow::updatePanelVisibility() {
     Room *room = getRoom(i);
     DockLayout *layout = room->dockLayout();
     if (!layout) continue;
-    
+
     // Iterate only through docked panels (shallow, not recursive)
     for (int j = 0; j < layout->count(); j++) {
       TPanel *panel = static_cast<TPanel *>(layout->itemAt(j)->widget());
@@ -1357,7 +1357,7 @@ void MainWindow::updatePanelVisibility() {
   // Update visibility of all room-bound panels
   for (TPanel *panel : panelsToUpdate) {
     QString boundRoomName = panel->getBoundRoomName();
-    
+
     if (boundRoomName == currentRoomName) {
       // Show panel in its bound room
       if (panel->isHidden()) {
@@ -1425,20 +1425,20 @@ void MainWindow::deleteRoom(int index) {
 
 void MainWindow::renameRoom(int index, const QString name) {
   Room *room = getRoom(index);
-  
+
   // Store the old name before renaming
   QString oldName = room->getName();
-  
+
   // Rename the room
   room->setName(name);
-  
+
   // Update all room-bound panels with the new room name
   // This ensures the panel-room link persists after renaming
   for (int i = 0; i < m_stackedWidget->count(); i++) {
     Room *currentRoom = getRoom(i);
     DockLayout *layout = currentRoom->dockLayout();
     if (!layout) continue;
-    
+
     // Iterate through all docked panels
     for (int j = 0; j < layout->count(); j++) {
       TPanel *panel = static_cast<TPanel *>(layout->itemAt(j)->widget());
@@ -1450,10 +1450,10 @@ void MainWindow::renameRoom(int index, const QString name) {
       }
     }
   }
-  
+
   // Update visibility immediately to reflect the change
   updatePanelVisibility();
-  
+
   if (m_saveSettingsOnQuit) room->save();
 }
 
@@ -1477,7 +1477,6 @@ void MainWindow::onMenuCheckboxChanged() {
   else if (cm->getAction(MI_FieldGuide) == action)
     FieldGuideToggleAction = isChecked;
   else if (cm->getAction(MI_RasterizePli) == action) {
-    if (!QGLPixelBuffer::hasOpenGLPbuffers()) isChecked = 0;
     RasterizePliToggleAction = isChecked;
   } else if (cm->getAction(MI_SafeArea) == action)
     SafeAreaToggleAction = isChecked;
@@ -2454,12 +2453,9 @@ void MainWindow::defineActions() {
   createToggle(MI_VectorGuidedDrawing, QT_TR_NOOP("Vector Guided Drawing"), "",
                Preferences::instance()->isGuidedDrawingEnabled(),
                MenuViewCommandType, "view_guided_drawing");
-  if (QGLPixelBuffer::hasOpenGLPbuffers())
-    createToggle(MI_RasterizePli, QT_TR_NOOP("&Visualize Vector As Raster"), "",
-                 RasterizePliToggleAction ? 1 : 0, MenuViewCommandType,
-                 "view_vector_as_raster");
-  else
-    RasterizePliToggleAction = 0;
+  createToggle(MI_RasterizePli, QT_TR_NOOP("&Visualize Vector As Raster"), "",
+               RasterizePliToggleAction ? 1 : 0, MenuViewCommandType,
+               "view_vector_as_raster");
 
   // Menu - Windows
 
